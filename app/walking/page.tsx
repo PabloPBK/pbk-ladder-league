@@ -3,38 +3,9 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CourtCard } from "@/components/courts/CourtCard";
+import { mockCourts, type Court } from "@/lib/mock/courts";
 
-type Court = {
-  id: number;
-  players: [string, string, string, string];
-};
-
-const courts: Court[] = [
-  {
-    id: 1,
-    players: ["John", "Mike", "Steve", "Bob"],
-  },
-  {
-    id: 2,
-    players: ["Sarah", "Emily", "Carlos", "David"],
-  },
-  {
-    id: 3,
-    players: ["Lisa", "Mark", "Rachel", "Tom"],
-  },
-  {
-    id: 4,
-    players: ["Kevin", "Maria", "Chris", "Amanda"],
-  },
-  {
-    id: 5,
-    players: ["Jason", "Nicole", "Brian", "Jessica"],
-  },
-  {
-    id: 6,
-    players: ["Daniel", "Ashley", "Eric", "Michelle"],
-  },
-];
+const courts = mockCourts;
 
 function createPairings(players: Court["players"]) {
   const [playerA, playerB, playerC, playerD] = players;
@@ -57,6 +28,7 @@ function createPairings(players: Court["players"]) {
 
 export default function WalkingPage() {
   const [currentCourtIndex, setCurrentCourtIndex] = useState(0);
+
   const [confirmedPairings, setConfirmedPairings] = useState<
     Record<number, number>
   >({});
