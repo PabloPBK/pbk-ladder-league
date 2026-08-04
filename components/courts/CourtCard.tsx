@@ -1,8 +1,4 @@
-"use client";
-
-import { useState } from "react";
-
-type Pairing = {
+type PairingOption = {
   team1: [string, string];
   team2: [string, string];
 };
@@ -11,8 +7,8 @@ type CourtCardProps = {
   courtNumber: number;
   totalCourts: number;
   players: string[];
-  pairings: Pairing[];
-  onSelect: (index: number) => void;
+  pairings: PairingOption[];
+  onSelect: (pairingIndex: number) => void;
 };
 
 export function CourtCard({
@@ -22,73 +18,85 @@ export function CourtCard({
   pairings,
   onSelect,
 }: CourtCardProps) {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-
-  function handleSelect(index: number) {
-    if (selectedIndex !== null) return;
-
-    setSelectedIndex(index);
-    onSelect(index);
-  }
-
   return (
-    <div className="mx-auto max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-lg">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Court {courtNumber}</h2>
+    <section className="mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+      <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Current Court
+          </p>
 
-        <span className="text-zinc-400">
+          <h2 className="text-xl font-bold text-yellow-400">
+            Court {courtNumber}
+          </h2>
+        </div>
+
+        <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs font-semibold text-zinc-300">
           {courtNumber} of {totalCourts}
         </span>
+      </header>
+
+      <div className="border-b border-zinc-800 px-4 py-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Players
+        </p>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {players.map((player, index) => (
+            <div
+              key={`${player}-${index}`}
+              className="truncate rounded-lg bg-zinc-800 px-3 py-2 text-center text-sm font-semibold text-white"
+            >
+              {player}
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="mb-6 space-y-2">
-        {players.map((player) => (
-          <div
-            key={player}
-            className="rounded-lg bg-zinc-800 px-4 py-2 text-lg"
-          >
-            {player}
-          </div>
-        ))}
-      </div>
+      <div className="p-3">
+        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Select Partnership
+        </p>
 
-      <div className="space-y-4">
-        {pairings.map((pairing, index) => {
-          const isSelected = selectedIndex === index;
-
-          return (
+        <div className="grid gap-2">
+          {pairings.map((pairing, index) => (
             <button
               key={index}
               type="button"
-              disabled={selectedIndex !== null}
-              onClick={() => handleSelect(index)}
-              className={`w-full rounded-xl border p-4 text-left transition ${
-                isSelected
-                  ? "border-green-500 bg-green-500/15"
-                  : "border-zinc-700 hover:border-blue-500 hover:bg-zinc-800"
-              } disabled:cursor-default`}
+              onClick={() => onSelect(index)}
+              className="grid min-h-16 w-full grid-cols-[28px_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-left transition hover:border-blue-500 hover:bg-zinc-800 focus:border-blue-500"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="font-semibold">
-                    {pairing.team1[0]} + {pairing.team1[1]}
-                  </div>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                {index + 1}
+              </span>
 
-                  <div className="mt-1 text-zinc-400">
-                    {pairing.team2[0]} + {pairing.team2[1]}
-                  </div>
-                </div>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-blue-300">
+                  {pairing.team1[0]}
+                </span>
 
-                {isSelected && (
-                  <span className="text-lg font-bold text-green-400">
-                    ✓ Confirmed
-                  </span>
-                )}
-              </div>
+                <span className="block truncate text-sm font-semibold text-blue-300">
+                  {pairing.team1[1]}
+                </span>
+              </span>
+
+              <span className="px-1 text-xs font-bold text-zinc-500">
+                VS
+              </span>
+
+              <span className="min-w-0 text-right">
+                <span className="block truncate text-sm font-semibold text-yellow-300">
+                  {pairing.team2[0]}
+                </span>
+
+                <span className="block truncate text-sm font-semibold text-yellow-300">
+                  {pairing.team2[1]}
+                </span>
+              </span>
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
