@@ -131,11 +131,13 @@ type SaveCourtScoreResponse = {
 export async function saveCourtScore({
   eventId,
   courtNumber,
+  roundNumber,
   team1Score,
   team2Score,
 }: {
   eventId: string;
   courtNumber: number;
+  roundNumber?: number;
   team1Score: number;
   team2Score: number;
 }) {
@@ -150,6 +152,7 @@ export async function saveCourtScore({
         Accept: "application/json",
       },
       body: JSON.stringify({
+        roundNumber,
         team1Score,
         team2Score,
       }),

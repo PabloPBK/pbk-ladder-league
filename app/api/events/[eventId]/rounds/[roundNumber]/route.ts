@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 type RouteContext = {
   params: Promise<{
     eventId: string;
+    roundNumber: string;
   }>;
 };
 
@@ -13,16 +14,24 @@ export async function GET(
   context: RouteContext,
 ) {
   try {
-    const { eventId } = await context.params;
+    const {
+      eventId,
+      roundNumber: roundNumberText,
+    } = await context.params;
 
-    if (!eventId) {
+    const roundNumber = Number(roundNumberText);
+
+    if (
+      !eventId ||
+      !Number.isInteger(roundNumber) ||
+      roundNumber < 1
+    ) {
       return NextResponse.json(
         {
-          error: "A league event ID is required.",
+          error:
+            "The league event ID or round number is invalid.",
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
 
@@ -37,41 +46,35 @@ export async function GET(
 
     if (eventError || !event) {
       return NextResponse.json(
-        {
-          error: "The league event was not found.",
-        },
-        {
-          status: 404,
-        },
+        { error: "The league event was not found." },
+        { status: 404 },
       );
     }
 
-    const { data: round, error: roundError } =
-      await supabaseAdmin
-        .from("rounds")
-        .select(
-          "id, event_id, round_number, status",
-        )
-        .eq("event_id", eventId)
-        .order("round_number", {
-          ascending: false,
-        })
-        .limit(1)
-        .maybeSingle();
+    const {
+      data: allRounds,
+      error: allRoundsError,
+    } = await supabaseAdmin
+      .from("rounds")
+      .select("id, event_id, round_number, status")
+      .eq("event_id", eventId)
+      .order("round_number", { ascending: true });
 
-    if (roundError) {
-      throw roundError;
+    if (allRoundsError) {
+      throw allRoundsError;
     }
+
+    const round = (allRounds ?? []).find(
+      (candidate) =>
+        candidate.round_number === roundNumber,
+    );
 
     if (!round) {
       return NextResponse.json(
         {
-          error:
-            "No saved round was found for this league event.",
+          error: `Round ${roundNumber} was not found.`,
         },
-        {
-          status: 404,
-        },
+        { status: 404 },
       );
     }
 
@@ -92,74 +95,69 @@ export async function GET(
           `,
         )
         .eq("round_id", round.id)
-        .order("court_number", {
-          ascending: true,
-        });
+        .order("court_number", { ascending: true });
 
     if (courtsError) {
       throw courtsError;
     }
 
     const savedCourts = courts ?? [];
-
-    if (savedCourts.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "No courts were found for the current round.",
-        },
-        {
-          status: 404,
-        },
-      );
-    }
-
     const courtIds = savedCourts.map(
       (court) => court.id,
     );
 
-    const {
-      data: courtPlayers,
-      error: courtPlayersError,
-    } = await supabaseAdmin
-      .from("court_players")
-      .select(
-        "id, court_id, event_player_id, slot_number, team_number",
-      )
-      .in("court_id", courtIds)
-      .order("slot_number", {
-        ascending: true,
-      });
+    let courtPlayers: {
+      court_id: string;
+      event_player_id: string;
+      slot_number: number;
+      team_number: number | null;
+    }[] = [];
 
-    if (courtPlayersError) {
-      throw courtPlayersError;
+    if (courtIds.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from("court_players")
+        .select(
+          "court_id, event_player_id, slot_number, team_number",
+        )
+        .in("court_id", courtIds)
+        .order("slot_number", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      courtPlayers = data ?? [];
     }
-
-    const savedCourtPlayers = courtPlayers ?? [];
 
     const eventPlayerIds = [
       ...new Set(
-        savedCourtPlayers.map(
+        courtPlayers.map(
           (courtPlayer) =>
             courtPlayer.event_player_id,
         ),
       ),
     ];
 
-    const {
-      data: eventPlayers,
-      error: eventPlayersError,
-    } = await supabaseAdmin
-      .from("event_players")
-      .select("id, player_id")
-      .in("id", eventPlayerIds);
+    let eventPlayers: {
+      id: string;
+      player_id: string;
+    }[] = [];
 
-    if (eventPlayersError) {
-      throw eventPlayersError;
+    if (eventPlayerIds.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from("event_players")
+        .select("id, player_id")
+        .in("id", eventPlayerIds);
+
+      if (error) {
+        throw error;
+      }
+
+      eventPlayers = data ?? [];
     }
 
     const playerIdByEventPlayerId = new Map(
-      (eventPlayers ?? []).map((eventPlayer) => [
+      eventPlayers.map((eventPlayer) => [
         eventPlayer.id,
         eventPlayer.player_id,
       ]),
@@ -167,32 +165,38 @@ export async function GET(
 
     const playerIds = [
       ...new Set(
-        (eventPlayers ?? []).map(
+        eventPlayers.map(
           (eventPlayer) => eventPlayer.player_id,
         ),
       ),
     ];
 
-    const { data: players, error: playersError } =
-      await supabaseAdmin
+    let players: {
+      id: string;
+      name: string;
+      dupr: number;
+    }[] = [];
+
+    if (playerIds.length > 0) {
+      const { data, error } = await supabaseAdmin
         .from("players")
         .select("id, name, dupr")
         .in("id", playerIds);
 
-    if (playersError) {
-      throw playersError;
+      if (error) {
+        throw error;
+      }
+
+      players = data ?? [];
     }
 
     const playerById = new Map(
-      (players ?? []).map((player) => [
-        player.id,
-        player,
-      ]),
+      players.map((player) => [player.id, player]),
     );
 
     const responseCourts = savedCourts.map(
       (court) => {
-        const assignments = savedCourtPlayers
+        const assignments = courtPlayers
           .filter(
             (courtPlayer) =>
               courtPlayer.court_id === court.id,
@@ -222,10 +226,8 @@ export async function GET(
               databasePlayerId: player.id,
               name: player.name,
               dupr: Number(player.dupr),
-              slotNumber:
-                courtPlayer.slot_number,
-              teamNumber:
-                courtPlayer.team_number,
+              slotNumber: courtPlayer.slot_number,
+              teamNumber: courtPlayer.team_number,
             };
           });
 
@@ -243,41 +245,25 @@ export async function GET(
       },
     );
 
-    const { data: availableRoundData, error: availableRoundsError } =
-      await supabaseAdmin
-        .from("rounds")
-        .select("round_number")
-        .eq("event_id", eventId)
-        .order("round_number", { ascending: true });
-
-    if (availableRoundsError) {
-      throw availableRoundsError;
-    }
-
     return NextResponse.json({
       event,
       round,
       courts: responseCourts,
-      availableRounds: (availableRoundData ?? []).map(
+      availableRounds: (allRounds ?? []).map(
         (savedRound) => savedRound.round_number,
       ),
     });
   } catch (error) {
-    console.error(
-      "Unable to load current round:",
-      error,
-    );
+    console.error("Unable to load saved round:", error);
 
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Unable to load the current round.",
+            : "Unable to load the saved round.",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }

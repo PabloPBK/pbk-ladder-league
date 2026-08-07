@@ -23,6 +23,11 @@ type SaveRoundResponse = {
   round?: SavedRoundRecord;
   courtCount?: number;
   playerCount?: number;
+  regenerated?: boolean;
+  currentRoundNumber?: number;
+  requiresConfirmation?: boolean;
+  laterRoundNumbers?: number[];
+  message?: string;
   error?: string;
 };
 
@@ -104,4 +109,79 @@ export async function generateSavedNextRound(
   }
 
   return result;
+}
+
+export type RegenerateLaterRoundsResult = {
+  round?: SavedRoundRecord;
+  courtCount?: number;
+  playerCount?: number;
+  regenerated?: boolean;
+  currentRoundNumber?: number;
+  requiresConfirmation: boolean;
+  laterRoundNumbers: number[];
+  message?: string;
+};
+
+export async function regenerateLaterRounds({
+  eventId,
+  editedRoundNumber,
+  force = false,
+}: {
+  eventId: string;
+  editedRoundNumber: number;
+  force?: boolean;
+}): Promise<RegenerateLaterRoundsResult> {
+  const response = await fetch(
+    `/api/events/${encodeURIComponent(
+      eventId,
+    )}/rounds/regenerate-after`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        editedRoundNumber,
+        force,
+      }),
+    },
+  );
+
+  const result =
+    await readRoundResponse(response);
+
+  if (
+    response.status === 409 &&
+    result.requiresConfirmation
+  ) {
+    return {
+      requiresConfirmation: true,
+      laterRoundNumbers:
+        result.laterRoundNumbers ?? [],
+    };
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ??
+        "Unable to regenerate later rounds.",
+    );
+  }
+
+  return {
+    round: result.round,
+    courtCount: result.courtCount,
+    playerCount: result.playerCount,
+    regenerated:
+      result.regenerated ??
+      Boolean(result.round),
+    currentRoundNumber:
+      result.currentRoundNumber ??
+      result.round?.round_number,
+    requiresConfirmation: false,
+    laterRoundNumbers: [],
+    message: result.message,
+  };
 }

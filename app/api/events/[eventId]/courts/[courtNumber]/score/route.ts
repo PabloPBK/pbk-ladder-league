@@ -10,6 +10,7 @@ type RouteContext = {
 };
 
 type SaveScoreRequest = {
+  roundNumber?: number;
   team1Score?: number;
   team2Score?: number;
 };
@@ -26,6 +27,7 @@ export async function POST(
       (await request.json()) as SaveScoreRequest;
 
     const courtNumber = Number(courtNumberText);
+    const requestedRoundNumber = Number(body.roundNumber);
     const team1Score = Number(body.team1Score);
     const team2Score = Number(body.team2Score);
 
@@ -125,7 +127,12 @@ export async function POST(
         .from("rounds")
         .select("id, round_number")
         .eq("event_id", eventId)
-        .eq("round_number", event.current_round)
+        .eq(
+          "round_number",
+          Number.isInteger(requestedRoundNumber) && requestedRoundNumber > 0
+            ? requestedRoundNumber
+            : event.current_round,
+        )
         .single();
 
     if (roundError || !round) {

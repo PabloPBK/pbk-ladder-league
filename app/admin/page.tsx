@@ -33,6 +33,7 @@ import {
   saveFirstRound,
 } from "@/lib/data/rounds";
 import { generateInitialCourts } from "@/lib/ladder/generateInitialCourts";
+import { deleteLeagueSession } from "@/lib/data/sessionControls";
 import type { GeneratedCourt } from "@/types/court";
 import type { Player } from "@/types/player";
 
@@ -148,6 +149,8 @@ export default function AdminPage() {
   const [isGeneratingNextRound, setIsGeneratingNextRound] =
     useState(false);
   const [isCompletingLeagueNight, setIsCompletingLeagueNight] =
+    useState(false);
+  const [isDeletingSession, setIsDeletingSession] =
     useState(false);
   const [roundSaved, setRoundSaved] =
     useState(false);
@@ -645,6 +648,49 @@ export default function AdminPage() {
     }
   }
 
+  async function handleDeleteLeagueSession() {
+    if (!activeEvent || isDeletingSession) {
+      return;
+    }
+
+    const confirmation = window.prompt(
+      `Delete ${activeEvent.name}? This permanently removes the session, roster, rounds, courts, pairings, and scores. Players, leagues, and seasons will remain. Type DELETE to continue.`,
+    );
+
+    if (confirmation !== "DELETE") {
+      return;
+    }
+
+    try {
+      setIsDeletingSession(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await deleteLeagueSession(activeEvent.id);
+
+      resetLeague();
+      setAvailableActiveEvent(null);
+      setSelectedLeagueId("");
+      setSelectedSeasonId("");
+      setEventDate(getLocalDateValue());
+      setSessionNumber(1);
+      setSessionNote("");
+      setRoundSaved(false);
+      setRoundComplete(false);
+      setSuccessMessage(
+        "The mistaken league session was deleted.",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete the league session.",
+      );
+    } finally {
+      setIsDeletingSession(false);
+    }
+  }
+
   function handleStartNewLeagueNight() {
     resetLeague();
     setSelectedLeagueId("");
@@ -815,6 +861,36 @@ export default function AdminPage() {
                 />
               </div>
             )}
+
+            <section className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/5 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">
+                Session Controls
+              </p>
+
+              <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    Delete Mistaken Session
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+                    Permanently removes this active session, its roster, rounds, courts, pairings, and scores. Saved players, leagues, and seasons are not deleted.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isDeletingSession}
+                  onClick={() =>
+                    void handleDeleteLeagueSession()
+                  }
+                  className="min-h-12 shrink-0 rounded-xl border border-red-500/50 bg-red-600 px-6 py-3 font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  {isDeletingSession
+                    ? "Deleting..."
+                    : "Delete Session"}
+                </button>
+              </div>
+            </section>
           </>
         )}
       </div>
