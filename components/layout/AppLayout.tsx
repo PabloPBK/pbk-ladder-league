@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Navigation } from "@/components/navigation/Navigation";
 
 type AppLayoutProps = {
@@ -17,9 +18,9 @@ export function AppLayout({
 }: AppLayoutProps) {
   if (!showNavigation) {
     return (
-      <main className="min-h-screen bg-[#09090b] text-white">
-        <section className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6">
-          <div className="mb-5">
+      <main className="min-h-screen bg-zinc-950 text-white">
+        <section className="w-full px-4 pb-24 pt-6 sm:px-6 md:px-8 md:pb-10 md:pt-8 xl:px-10">
+          <div className="mb-6 border-b border-zinc-800 pb-5">
             <h1 className="text-2xl font-bold text-white sm:text-3xl">
               {title}
             </h1>
@@ -38,11 +39,11 @@ export function AppLayout({
   }
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
-      <div className="mx-auto min-h-screen max-w-[1700px] md:grid md:grid-cols-[230px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-zinc-800 bg-zinc-950 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-          <div className="border-b border-zinc-800 px-5 py-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-400">
+    <main className="min-h-screen bg-zinc-950 text-white">
+      <div className="grid min-h-screen md:grid-cols-[230px_minmax(0,1fr)]">
+        <aside className="hidden border-r border-zinc-800 bg-zinc-950 md:flex md:h-screen md:flex-col md:sticky md:top-0">
+          <div className="border-b border-zinc-800 p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-400">
               Pickleball Kingdom
             </p>
 
@@ -74,6 +75,8 @@ export function AppLayout({
                   League system ready
                 </p>
               </div>
+
+              <SignOutButton />
             </div>
           </div>
         </aside>
