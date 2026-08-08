@@ -20,7 +20,6 @@ import {
 } from "@/lib/data/events";
 import {
   getMatchCenter,
-  type MatchCenterCourt,
   type MatchCenterData,
 } from "@/lib/data/matchCenter";
 
@@ -28,57 +27,53 @@ function formatDifferential(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function getCourtStatus(court: MatchCenterCourt) {
-  if (court.complete) {
-    return "Final";
-  }
-
-  if (
-    court.team1.length === 2 &&
-    court.team2.length === 2
-  ) {
-    return "Playing";
-  }
-
-  return "Waiting";
-}
-
-function getStandingsColumnCount(playerCount: number) {
-  if (playerCount > 24) {
-    return 2;
-  }
-
-  return 1;
-}
-
 export default function TVPage() {
-  const [leagues, setLeagues] =
-    useState<LeagueRecord[]>([]);
+  const [leagues, setLeagues] = useState<
+    LeagueRecord[]
+  >([]);
 
-  const [seasons, setSeasons] =
-    useState<SeasonRecord[]>([]);
+  const [seasons, setSeasons] = useState<
+    SeasonRecord[]
+  >([]);
 
-  const [selectedLeagueId, setSelectedLeagueId] =
-    useState("");
+  const [
+    selectedLeagueId,
+    setSelectedLeagueId,
+  ] = useState("");
 
-  const [selectedSeasonId, setSelectedSeasonId] =
-    useState("");
+  const [
+    selectedSeasonId,
+    setSelectedSeasonId,
+  ] = useState("");
 
-  const [selectedEvent, setSelectedEvent] =
-    useState<LeagueEventRecord | null>(null);
+  const [
+    selectedEvent,
+    setSelectedEvent,
+  ] = useState<LeagueEventRecord | null>(
+    null,
+  );
 
   const [matchCenter, setMatchCenter] =
     useState<MatchCenterData | null>(null);
 
-  const [isLoadingSelections, setIsLoadingSelections] =
-    useState(true);
+  const [
+    isLoadingSelections,
+    setIsLoadingSelections,
+  ] = useState(true);
 
-  const [isLoadingDisplay, setIsLoadingDisplay] =
-    useState(false);
+  const [
+    isLoadingDisplay,
+    setIsLoadingDisplay,
+  ] = useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
+  /*
+   * Load available leagues.
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -132,6 +127,9 @@ export default function TVPage() {
     };
   }, []);
 
+  /*
+   * Load seasons when the league changes.
+   */
   useEffect(() => {
     if (!selectedLeagueId) {
       setSeasons([]);
@@ -205,6 +203,10 @@ export default function TVPage() {
     };
   }, [selectedLeagueId]);
 
+  /*
+   * Find the active event/session for the
+   * selected league and season.
+   */
   useEffect(() => {
     if (!selectedSeasonId) {
       setSelectedEvent(null);
@@ -239,6 +241,7 @@ export default function TVPage() {
         if (!cancelled) {
           setSelectedEvent(null);
           setMatchCenter(null);
+
           setErrorMessage(
             error instanceof Error
               ? error.message
@@ -262,8 +265,15 @@ export default function TVPage() {
     selectedSeasonId,
   ]);
 
-  const eventId = selectedEvent?.id ?? "";
+  const eventId =
+    selectedEvent?.id ?? "";
 
+  /*
+   * Load current-session standings.
+   *
+   * Match Center now returns standings for
+   * only the selected active league event.
+   */
   const loadTVData = useCallback(
     async (showLoading = false) => {
       if (!eventId) {
@@ -295,6 +305,10 @@ export default function TVPage() {
     [eventId],
   );
 
+  /*
+   * Refresh the TV automatically every
+   * three seconds.
+   */
   useEffect(() => {
     if (!eventId) {
       return;
@@ -312,6 +326,11 @@ export default function TVPage() {
     };
   }, [eventId, loadTVData]);
 
+  /*
+   * Current round completion count is still
+   * useful in the compact header even though
+   * court cards are no longer displayed.
+   */
   const completedCourtCount = useMemo(
     () =>
       matchCenter?.courts.filter(
@@ -320,16 +339,27 @@ export default function TVPage() {
     [matchCenter],
   );
 
-  const standingsColumns = useMemo(() => {
-  const standings =
-    matchCenter?.standings ?? [];
+  /*
+   * Up to 48 players:
+   *
+   * Column 1 = 1–16
+   * Column 2 = 17–32
+   * Column 3 = 33–48
+   */
+  const standingsColumns =
+    useMemo(() => {
+      const standings =
+        matchCenter?.standings ?? [];
 
-  return [
-    standings.slice(0, 16),
-    standings.slice(16, 32),
-    standings.slice(32, 48),
-  ];
-}, [matchCenter]);
+      return [
+        standings.slice(0, 16),
+        standings.slice(16, 32),
+        standings.slice(32, 48),
+      ].filter(
+        (column) => column.length > 0,
+      );
+    }, [matchCenter]);
+
   const selectedLeague =
     leagues.find(
       (league) =>
@@ -353,7 +383,8 @@ export default function TVPage() {
   return (
     <main className="h-screen overflow-hidden bg-zinc-950 p-2 text-white">
       <div className="flex h-full flex-col gap-2">
-        <header className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2">
+        {/* TOP STATUS BAR */}
+        <header className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-400">
@@ -361,14 +392,14 @@ export default function TVPage() {
               </p>
 
               <div className="mt-0.5 flex min-w-0 items-baseline gap-3">
-                <h1 className="truncate text-lg font-black text-yellow-400">
+                <h1 className="truncate text-xl font-black text-yellow-400">
                   {matchCenter?.event.name ??
                     selectedEvent?.name ??
                     "League TV"}
                 </h1>
 
                 {selectedEvent && (
-                  <span className="shrink-0 text-xs font-semibold text-zinc-400">
+                  <span className="shrink-0 text-sm font-semibold text-zinc-400">
                     {sessionLabel}
                   </span>
                 )}
@@ -426,6 +457,7 @@ export default function TVPage() {
                     <p className="text-[9px] uppercase tracking-wide text-zinc-500">
                       Round
                     </p>
+
                     <p className="text-xl font-black leading-none text-white">
                       {
                         matchCenter.round
@@ -438,6 +470,7 @@ export default function TVPage() {
                     <p className="text-[9px] uppercase tracking-wide text-zinc-500">
                       Complete
                     </p>
+
                     <p className="text-xl font-black leading-none text-white">
                       {completedCourtCount}/
                       {
@@ -475,12 +508,14 @@ export default function TVPage() {
           )}
         </header>
 
+        {/* ERROR */}
         {errorMessage && (
           <div className="shrink-0 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-300">
             {errorMessage}
           </div>
         )}
 
+        {/* LOADING */}
         {(isLoadingSelections ||
           isLoadingDisplay) &&
         !matchCenter ? (
@@ -490,6 +525,9 @@ export default function TVPage() {
             </p>
           </div>
         ) : !selectedEvent ? (
+          /*
+           * NO ACTIVE SESSION
+           */
           <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-8 text-center">
             <div>
               <h2 className="text-2xl font-bold text-yellow-300">
@@ -512,258 +550,142 @@ export default function TVPage() {
             </div>
           </div>
         ) : !matchCenter ? null : (
-          <div className="grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(360px,0.72fr)_minmax(0,1.75fr)]">
-            <section className="flex min-h-0 min-w-0 flex-col">
-              <div className="mb-1 flex shrink-0 items-center justify-between px-1">
-                <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-300">
-                  Courts
+          /*
+           * STANDINGS ONLY
+           */
+          <section className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-2 flex shrink-0 items-center justify-between px-1">
+              <div>
+                <h2 className="text-lg font-black uppercase tracking-[0.18em] text-zinc-100">
+                  Live Standings
                 </h2>
 
-                <span className="text-[10px] text-zinc-500">
-                  Updates every 3 seconds
-                </span>
+                <p className="text-xs text-zinc-500">
+                  Current session only
+                </p>
               </div>
 
-              <div className="grid min-h-0 flex-1 grid-cols-2 auto-rows-fr gap-1.5">
-                {matchCenter.courts.map(
-                  (court) => {
-                    const teamsReady =
-                      court.team1.length ===
-                        2 &&
-                      court.team2.length ===
-                        2;
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-bold text-green-300">
+                  Auto Refresh · 3 sec
+                </span>
 
-                    const status =
-                      getCourtStatus(court);
+                <span className="rounded-full bg-blue-500/15 px-3 py-1 text-xs font-bold text-blue-300">
+                  {
+                    matchCenter.standings
+                      .length
+                  }{" "}
+                  Players
+                </span>
+              </div>
+            </div>
 
-                    return (
-                      <article
-                        key={
-                          court.databaseCourtId
-                        }
-                        className="flex min-h-0 flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-900"
-                      >
-                        <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-2 py-1">
-                          <h3 className="text-xs font-black text-yellow-400">
-                            Court{" "}
-                            {
-                              court.courtNumber
-                            }
-                          </h3>
+            {matchCenter.standings.length ===
+            0 ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 p-6 text-center text-lg text-zinc-400">
+                Standings will appear after
+                the first completed match.
+              </div>
+            ) : (
+              <div
+                className="grid min-h-0 flex-1 gap-2"
+                style={{
+                  gridTemplateColumns: `repeat(${standingsColumns.length}, minmax(0, 1fr))`,
+                }}
+              >
+                {standingsColumns.map(
+                  (
+                    standings,
+                    columnIndex,
+                  ) => (
+                    <div
+                      key={columnIndex}
+                      className="min-h-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900"
+                    >
+                      <table className="h-full w-full table-fixed border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-700 bg-zinc-800/80 text-zinc-300">
+                            <th className="w-12 px-3 py-2 text-left text-sm">
+                              #
+                            </th>
 
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                              court.complete
-                                ? "bg-green-500/15 text-green-300"
-                                : teamsReady
-                                  ? "bg-blue-500/15 text-blue-300"
-                                  : "bg-yellow-500/15 text-yellow-300"
-                            }`}
-                          >
-                            {status}
-                          </span>
-                        </header>
+                            <th className="px-3 py-2 text-left text-sm">
+                              Player
+                            </th>
 
-                        {!teamsReady ? (
-                          <div className="flex min-h-0 flex-1 items-center justify-center px-2 text-center">
-                            <p className="text-[10px] font-semibold text-yellow-300">
-                              Pairing Pending
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="grid min-h-0 flex-1 grid-rows-2 divide-y divide-zinc-800">
-                            <div
-                              className={`grid grid-cols-[minmax(0,1fr)_30px] items-center gap-1 px-2 py-1 ${
-                                court.complete &&
-                                court.winnerTeam ===
-                                  1
-                                  ? "bg-green-500/10"
-                                  : ""
-                              }`}
-                            >
-                              <div className="min-w-0">
-                                {court.team1.map(
-                                  (player) => (
-                                    <p
-                                      key={
-                                        player.playerId
-                                      }
-                                      className="truncate text-[10px] font-semibold leading-tight"
-                                    >
-                                      {
-                                        player.name
-                                      }
-                                    </p>
-                                  ),
-                                )}
-                              </div>
+                            <th className="w-12 px-2 py-2 text-center text-sm">
+                              W
+                            </th>
 
-                              <span className="text-right text-lg font-black text-blue-300">
-                                {court.team1Score ??
-                                  "—"}
-                              </span>
-                            </div>
+                            <th className="w-12 px-2 py-2 text-center text-sm">
+                              L
+                            </th>
 
-                            <div
-                              className={`grid grid-cols-[minmax(0,1fr)_30px] items-center gap-1 px-2 py-1 ${
-                                court.complete &&
-                                court.winnerTeam ===
-                                  2
-                                  ? "bg-green-500/10"
-                                  : ""
-                              }`}
-                            >
-                              <div className="min-w-0">
-                                {court.team2.map(
-                                  (player) => (
-                                    <p
-                                      key={
-                                        player.playerId
-                                      }
-                                      className="truncate text-[10px] font-semibold leading-tight"
-                                    >
-                                      {
-                                        player.name
-                                      }
-                                    </p>
-                                  ),
-                                )}
-                              </div>
+                            <th className="w-16 px-3 py-2 text-right text-sm">
+                              +/-
+                            </th>
+                          </tr>
+                        </thead>
 
-                              <span className="text-right text-lg font-black text-yellow-300">
-                                {court.team2Score ??
-                                  "—"}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </article>
-                    );
-                  },
+                        <tbody>
+                          {standings.map(
+                            (standing) => (
+                              <tr
+                                key={
+                                  standing.playerId
+                                }
+                                className="border-b border-zinc-800 last:border-0"
+                              >
+                                <td className="px-3 py-1.5 text-lg font-black text-yellow-400">
+                                  {
+                                    standing.rank
+                                  }
+                                </td>
+
+                                <td className="truncate px-3 py-1.5 text-lg font-bold text-white">
+                                  {
+                                    standing.name
+                                  }
+                                </td>
+
+                                <td className="px-2 py-1.5 text-center text-lg font-black text-green-400">
+                                  {
+                                    standing.wins
+                                  }
+                                </td>
+
+                                <td className="px-2 py-1.5 text-center text-lg font-black text-red-400">
+                                  {
+                                    standing.losses
+                                  }
+                                </td>
+
+                                <td
+                                  className={`px-3 py-1.5 text-right text-lg font-black ${
+                                    standing.pointDifferential >
+                                    0
+                                      ? "text-green-400"
+                                      : standing.pointDifferential <
+                                          0
+                                        ? "text-red-400"
+                                        : "text-zinc-400"
+                                  }`}
+                                >
+                                  {formatDifferential(
+                                    standing.pointDifferential,
+                                  )}
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ),
                 )}
               </div>
-            </section>
-
-            <section className="flex min-h-0 min-w-0 flex-col">
-              <div className="mb-1 flex shrink-0 items-center justify-between px-1">
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-zinc-200">
-                    Live Standings
-                  </h2>
-                  <p className="text-[10px] text-zinc-500">
-                    Only the selected active
-                    league event
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-300">
-                  Auto Refresh
-                </span>
-              </div>
-
-              {matchCenter.standings.length ===
-              0 ? (
-                <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 p-6 text-center text-base text-zinc-400">
-                  Standings will appear after
-                  the first completed match.
-                </div>
-              ) : (
-                <div
-                  className="grid min-h-0 flex-1 gap-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${standingsColumns.length}, minmax(0, 1fr))`,
-                  }}
-                >
-                  {standingsColumns.map(
-                    (
-                      standings,
-                      columnIndex,
-                    ) => (
-                      <div
-                        key={columnIndex}
-                        className="min-h-0 overflow-hidden rounded-md border border-zinc-800 bg-zinc-900"
-                      >
-                        <table className="h-full w-full table-fixed border-collapse text-sm">
-                          <thead>
-                            <tr className="border-b border-zinc-700 bg-zinc-800/80 text-zinc-300">
-                              <th className="w-10 px-2 py-2 text-left">
-                                #
-                              </th>
-                              <th className="px-2 py-2 text-left">
-                                Player
-                              </th>
-                              <th className="w-11 px-2 py-2 text-center">
-                                W
-                              </th>
-                              <th className="w-11 px-2 py-2 text-center">
-                                L
-                              </th>
-                              <th className="w-14 px-2 py-2 text-right">
-                                +/-
-                              </th>
-                            </tr>
-                          </thead>
-
-                          <tbody>
-                            {standings.map(
-                              (standing) => (
-                                <tr
-                                  key={
-                                    standing.playerId
-                                  }
-                                  className="border-b border-zinc-800 last:border-0"
-                                >
-                                  <td className="px-2 py-1.5 text-base font-black text-yellow-400">
-                                    {
-                                      standing.rank
-                                    }
-                                  </td>
-
-                                  <td className="truncate px-2 py-1.5 text-base font-bold text-white">
-                                    {
-                                      standing.name
-                                    }
-                                  </td>
-
-                                  <td className="px-2 py-1.5 text-center text-base font-black text-green-400">
-                                    {
-                                      standing.wins
-                                    }
-                                  </td>
-
-                                  <td className="px-2 py-1.5 text-center text-base font-black text-red-400">
-                                    {
-                                      standing.losses
-                                    }
-                                  </td>
-
-                                  <td
-                                    className={`px-2 py-1.5 text-right text-base font-black ${
-                                      standing.pointDifferential >
-                                      0
-                                        ? "text-green-400"
-                                        : standing.pointDifferential <
-                                            0
-                                          ? "text-red-400"
-                                          : "text-zinc-400"
-                                    }`}
-                                  >
-                                    {formatDifferential(
-                                      standing.pointDifferential,
-                                    )}
-                                  </td>
-                                </tr>
-                              ),
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    ),
-                  )}
-                </div>
-              )}
-            </section>
-          </div>
+            )}
+          </section>
         )}
       </div>
     </main>
