@@ -24,17 +24,17 @@ import {
 } from "@/lib/data/matchCenter";
 
 function formatDifferential(value: number) {
-  return value > 0 ? `+${value}` : String(value);
+  return value > 0
+    ? `+${value}`
+    : String(value);
 }
 
 export default function TVPage() {
-  const [leagues, setLeagues] = useState<
-    LeagueRecord[]
-  >([]);
+  const [leagues, setLeagues] =
+    useState<LeagueRecord[]>([]);
 
-  const [seasons, setSeasons] = useState<
-    SeasonRecord[]
-  >([]);
+  const [seasons, setSeasons] =
+    useState<SeasonRecord[]>([]);
 
   const [
     selectedLeagueId,
@@ -53,8 +53,12 @@ export default function TVPage() {
     null,
   );
 
-  const [matchCenter, setMatchCenter] =
-    useState<MatchCenterData | null>(null);
+  const [
+    matchCenter,
+    setMatchCenter,
+  ] = useState<MatchCenterData | null>(
+    null,
+  );
 
   const [
     isLoadingSelections,
@@ -72,7 +76,7 @@ export default function TVPage() {
   ] = useState("");
 
   /*
-   * Load available leagues.
+   * LOAD LEAGUES
    */
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +103,8 @@ export default function TVPage() {
         const initialLeague =
           leagueData.find(
             (league) =>
-              league.id === storedLeagueId,
+              league.id ===
+              storedLeagueId,
           ) ?? leagueData[0];
 
         setSelectedLeagueId(
@@ -128,7 +133,7 @@ export default function TVPage() {
   }, []);
 
   /*
-   * Load seasons when the league changes.
+   * LOAD SEASONS
    */
   useEffect(() => {
     if (!selectedLeagueId) {
@@ -170,11 +175,13 @@ export default function TVPage() {
         const activeSeason =
           seasonData.find(
             (season) =>
-              season.id === storedSeasonId,
+              season.id ===
+              storedSeasonId,
           ) ??
           seasonData.find(
             (season) =>
-              season.status === "active",
+              season.status ===
+              "active",
           ) ??
           seasonData[0];
 
@@ -204,8 +211,7 @@ export default function TVPage() {
   }, [selectedLeagueId]);
 
   /*
-   * Find the active event/session for the
-   * selected league and season.
+   * LOAD ACTIVE SESSION
    */
   useEffect(() => {
     if (!selectedSeasonId) {
@@ -269,10 +275,7 @@ export default function TVPage() {
     selectedEvent?.id ?? "";
 
   /*
-   * Load current-session standings.
-   *
-   * Match Center now returns standings for
-   * only the selected active league event.
+   * LOAD CURRENT SESSION STANDINGS
    */
   const loadTVData = useCallback(
     async (showLoading = false) => {
@@ -306,8 +309,7 @@ export default function TVPage() {
   );
 
   /*
-   * Refresh the TV automatically every
-   * three seconds.
+   * AUTO REFRESH
    */
   useEffect(() => {
     if (!eventId) {
@@ -326,25 +328,23 @@ export default function TVPage() {
     };
   }, [eventId, loadTVData]);
 
-  /*
-   * Current round completion count is still
-   * useful in the compact header even though
-   * court cards are no longer displayed.
-   */
-  const completedCourtCount = useMemo(
-    () =>
-      matchCenter?.courts.filter(
-        (court) => court.complete,
-      ).length ?? 0,
-    [matchCenter],
-  );
+  const completedCourtCount =
+    useMemo(
+      () =>
+        matchCenter?.courts.filter(
+          (court) =>
+            court.complete,
+        ).length ?? 0,
+      [matchCenter],
+    );
 
   /*
-   * Up to 48 players:
+   * 48 PLAYERS
    *
-   * Column 1 = 1–16
-   * Column 2 = 17–32
-   * Column 3 = 33–48
+   * Column 1 = 1–12
+   * Column 2 = 13–24
+   * Column 3 = 25–36
+   * Column 4 = 37–48
    */
   const standingsColumns =
     useMemo(() => {
@@ -352,28 +352,30 @@ export default function TVPage() {
         matchCenter?.standings ?? [];
 
       return [
-        standings.slice(0, 16),
-        standings.slice(16, 32),
-        standings.slice(32, 48),
-      ].filter(
-        (column) => column.length > 0,
-      );
+        standings.slice(0, 12),
+        standings.slice(12, 24),
+        standings.slice(24, 36),
+        standings.slice(36, 48),
+      ];
     }, [matchCenter]);
 
   const selectedLeague =
     leagues.find(
       (league) =>
-        league.id === selectedLeagueId,
+        league.id ===
+        selectedLeagueId,
     ) ?? null;
 
   const selectedSeason =
     seasons.find(
       (season) =>
-        season.id === selectedSeasonId,
+        season.id ===
+        selectedSeasonId,
     ) ?? null;
 
   const sessionNumber =
-    selectedEvent?.session_number ?? 1;
+    selectedEvent?.session_number ??
+    1;
 
   const sessionLabel =
     selectedEvent?.session_note
@@ -381,32 +383,37 @@ export default function TVPage() {
       : `Session ${sessionNumber}`;
 
   return (
-    <main className="h-screen overflow-hidden bg-zinc-950 p-2 text-white">
-      <div className="flex h-full flex-col gap-2">
-        {/* TOP STATUS BAR */}
-        <header className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2">
-          <div className="flex items-center justify-between gap-4">
+    <main className="h-[100dvh] overflow-hidden bg-zinc-950 p-1 text-white">
+      <div className="flex h-full min-h-0 flex-col gap-1">
+        {/* COMPACT HEADER */}
+        <header className="shrink-0 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-400">
-                Pickleball Kingdom
-              </p>
-
-              <div className="mt-0.5 flex min-w-0 items-baseline gap-3">
-                <h1 className="truncate text-xl font-black text-yellow-400">
+              <div className="flex items-baseline gap-2">
+                <h1 className="truncate text-base font-black leading-none text-yellow-400">
                   {matchCenter?.event.name ??
                     selectedEvent?.name ??
                     "League TV"}
                 </h1>
 
                 {selectedEvent && (
-                  <span className="shrink-0 text-sm font-semibold text-zinc-400">
+                  <span className="text-[10px] font-semibold text-zinc-400">
                     {sessionLabel}
                   </span>
                 )}
               </div>
+
+              <p className="mt-0.5 text-[8px] leading-none text-zinc-500">
+                {selectedLeague?.name ??
+                  "League"}
+
+                {selectedSeason
+                  ? ` · ${selectedSeason.name}`
+                  : ""}
+              </p>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1">
               <select
                 value={selectedLeagueId}
                 onChange={(event) =>
@@ -415,16 +422,18 @@ export default function TVPage() {
                   )
                 }
                 aria-label="Select league"
-                className="h-9 max-w-56 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs font-semibold text-white outline-none focus:border-blue-500"
+                className="h-6 max-w-44 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px] font-semibold text-white"
               >
-                {leagues.map((league) => (
-                  <option
-                    key={league.id}
-                    value={league.id}
-                  >
-                    {league.name}
-                  </option>
-                ))}
+                {leagues.map(
+                  (league) => (
+                    <option
+                      key={league.id}
+                      value={league.id}
+                    >
+                      {league.name}
+                    </option>
+                  ),
+                )}
               </select>
 
               <select
@@ -439,140 +448,118 @@ export default function TVPage() {
                   !selectedLeagueId ||
                   seasons.length === 0
                 }
-                className="h-9 max-w-52 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs font-semibold text-white outline-none focus:border-blue-500 disabled:opacity-50"
+                className="h-6 max-w-36 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px] font-semibold text-white"
               >
-                {seasons.map((season) => (
-                  <option
-                    key={season.id}
-                    value={season.id}
-                  >
-                    {season.name}
-                  </option>
-                ))}
+                {seasons.map(
+                  (season) => (
+                    <option
+                      key={season.id}
+                      value={season.id}
+                    >
+                      {season.name}
+                    </option>
+                  ),
+                )}
               </select>
 
               {matchCenter && (
                 <>
-                  <div className="rounded-md bg-zinc-800 px-3 py-1 text-center">
-                    <p className="text-[9px] uppercase tracking-wide text-zinc-500">
+                  <div className="rounded bg-zinc-800 px-2 py-0.5 text-center">
+                    <p className="text-[6px] uppercase leading-none text-zinc-500">
                       Round
                     </p>
 
-                    <p className="text-xl font-black leading-none text-white">
+                    <p className="text-sm font-black leading-none">
                       {
-                        matchCenter.round
+                        matchCenter
+                          .round
                           .round_number
                       }
                     </p>
                   </div>
 
-                  <div className="rounded-md bg-zinc-800 px-3 py-1 text-center">
-                    <p className="text-[9px] uppercase tracking-wide text-zinc-500">
+                  <div className="rounded bg-zinc-800 px-2 py-0.5 text-center">
+                    <p className="text-[6px] uppercase leading-none text-zinc-500">
                       Complete
                     </p>
 
-                    <p className="text-xl font-black leading-none text-white">
+                    <p className="text-sm font-black leading-none">
                       {completedCourtCount}/
                       {
-                        matchCenter.courts
+                        matchCenter
+                          .courts
                           .length
                       }
                     </p>
                   </div>
 
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
                       matchCenter.roundComplete
                         ? "bg-green-500/20 text-green-300"
                         : "bg-blue-500/20 text-blue-300"
                     }`}
                   >
                     {matchCenter.roundComplete
-                      ? "Round Complete"
+                      ? "Complete"
                       : "Live"}
                   </span>
                 </>
               )}
             </div>
           </div>
-
-          {(selectedLeague ||
-            selectedSeason) && (
-            <p className="mt-1 text-[10px] text-zinc-500">
-              {selectedLeague?.name ??
-                "League"}
-              {selectedSeason
-                ? ` · ${selectedSeason.name}`
-                : ""}
-            </p>
-          )}
         </header>
 
-        {/* ERROR */}
         {errorMessage && (
-          <div className="shrink-0 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-300">
+          <div className="shrink-0 rounded border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[9px] text-yellow-300">
             {errorMessage}
           </div>
         )}
 
-        {/* LOADING */}
         {(isLoadingSelections ||
           isLoadingDisplay) &&
         !matchCenter ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900">
-            <p className="text-lg font-semibold text-blue-300">
-              Loading selected league...
-            </p>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            Loading...
           </div>
         ) : !selectedEvent ? (
-          /*
-           * NO ACTIVE SESSION
-           */
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-8 text-center">
+          <div className="flex min-h-0 flex-1 items-center justify-center text-center">
             <div>
-              <h2 className="text-2xl font-bold text-yellow-300">
-                No active event for this
-                league and season
+              <h2 className="text-xl font-bold text-yellow-300">
+                No Active Session
               </h2>
-
-              <p className="mt-2 text-zinc-300">
-                Choose another league or
-                season, or start the session
-                in Admin.
-              </p>
 
               <Link
                 href="/admin"
-                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 font-semibold text-white"
+                className="mt-4 inline-flex rounded-lg bg-blue-600 px-5 py-2 font-semibold"
               >
                 Open Admin
               </Link>
             </div>
           </div>
         ) : !matchCenter ? null : (
-          /*
-           * STANDINGS ONLY
-           */
           <section className="flex min-h-0 flex-1 flex-col">
-            <div className="mb-2 flex shrink-0 items-center justify-between px-1">
+            {/* STANDINGS BAR */}
+            <div className="flex shrink-0 items-center justify-between px-1 py-0.5">
               <div>
-                <h2 className="text-lg font-black uppercase tracking-[0.18em] text-zinc-100">
+                <h2 className="text-xs font-black uppercase leading-none tracking-[0.15em]">
                   Live Standings
                 </h2>
 
-                <p className="text-xs text-zinc-500">
+                <p className="mt-0.5 text-[8px] leading-none text-zinc-500">
                   Current session only
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-bold text-green-300">
-                  Auto Refresh · 3 sec
+              <div className="flex gap-1">
+                <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[8px] font-bold text-green-300">
+                  Auto · 3 sec
                 </span>
 
-                <span className="rounded-full bg-blue-500/15 px-3 py-1 text-xs font-bold text-blue-300">
+                <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[8px] font-bold text-blue-300">
                   {
-                    matchCenter.standings
+                    matchCenter
+                      .standings
                       .length
                   }{" "}
                   Players
@@ -582,17 +569,11 @@ export default function TVPage() {
 
             {matchCenter.standings.length ===
             0 ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 p-6 text-center text-lg text-zinc-400">
-                Standings will appear after
-                the first completed match.
+              <div className="flex min-h-0 flex-1 items-center justify-center text-zinc-400">
+                Waiting for results...
               </div>
             ) : (
-              <div
-                className="grid min-h-0 flex-1 gap-2"
-                style={{
-                  gridTemplateColumns: `repeat(${standingsColumns.length}, minmax(0, 1fr))`,
-                }}
-              >
+              <div className="grid min-h-0 flex-1 grid-cols-4 gap-1">
                 {standingsColumns.map(
                   (
                     standings,
@@ -600,68 +581,89 @@ export default function TVPage() {
                   ) => (
                     <div
                       key={columnIndex}
-                      className="min-h-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900"
+                      className="flex min-h-0 flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-900"
                     >
-                      <table className="h-full w-full table-fixed border-collapse">
-                        <thead>
-                          <tr className="border-b border-zinc-700 bg-zinc-800/80 text-zinc-300">
-                            <th className="w-12 px-3 py-2 text-left text-sm">
-                              #
-                            </th>
+                      {/* COLUMN HEADER */}
+                      <div className="grid shrink-0 grid-cols-[30px_minmax(0,1fr)_30px_30px_42px] items-center border-b border-zinc-700 bg-zinc-800/80 px-1 py-1 text-[9px] font-bold leading-none text-zinc-300">
+                        <div>#</div>
 
-                            <th className="px-3 py-2 text-left text-sm">
-                              Player
-                            </th>
+                        <div className="px-1">
+                          Player
+                        </div>
 
-                            <th className="w-12 px-2 py-2 text-center text-sm">
-                              W
-                            </th>
+                        <div className="text-center">
+                          W
+                        </div>
 
-                            <th className="w-12 px-2 py-2 text-center text-sm">
-                              L
-                            </th>
+                        <div className="text-center">
+                          L
+                        </div>
 
-                            <th className="w-16 px-3 py-2 text-right text-sm">
-                              +/-
-                            </th>
-                          </tr>
-                        </thead>
+                        <div className="text-right">
+                          +/-
+                        </div>
+                      </div>
 
-                        <tbody>
-                          {standings.map(
-                            (standing) => (
-                              <tr
+                      {/* 12 EQUAL ROWS */}
+                      <div
+                        className="grid min-h-0 flex-1"
+                        style={{
+                          gridTemplateRows:
+                            "repeat(12, minmax(0, 1fr))",
+                        }}
+                      >
+                        {Array.from(
+                          {
+                            length: 12,
+                          },
+                          (_, rowIndex) => {
+                            const standing =
+                              standings[
+                                rowIndex
+                              ];
+
+                            if (!standing) {
+                              return (
+                                <div
+                                  key={`empty-${columnIndex}-${rowIndex}`}
+                                  className="border-b border-zinc-800 last:border-0"
+                                />
+                              );
+                            }
+
+                            return (
+                              <div
                                 key={
                                   standing.playerId
                                 }
-                                className="border-b border-zinc-800 last:border-0"
+                                className="grid min-h-0 grid-cols-[30px_minmax(0,1fr)_30px_30px_42px] items-center overflow-hidden border-b border-zinc-800 px-1 last:border-0"
                               >
-                                <td className="px-3 py-1.5 text-lg font-black text-yellow-400">
+                                <div className="text-xs font-black leading-none text-yellow-400">
                                   {
                                     standing.rank
                                   }
-                                </td>
+                                </div>
 
-                                <td className="truncate px-3 py-1.5 text-lg font-bold text-white">
+                                <div className="min-w-0 truncate px-1 text-xs font-bold leading-none text-white">
                                   {
                                     standing.name
                                   }
-                                </td>
+                                </div>
 
-                                <td className="px-2 py-1.5 text-center text-lg font-black text-green-400">
+                                <div className="text-center text-xs font-black leading-none text-green-400">
                                   {
                                     standing.wins
                                   }
-                                </td>
+                                </div>
 
-                                <td className="px-2 py-1.5 text-center text-lg font-black text-red-400">
+                                <div className="text-center text-xs font-black leading-none text-red-400">
                                   {
                                     standing.losses
                                   }
-                                </td>
+                                </div>
 
-                                <td
-                                  className={`px-3 py-1.5 text-right text-lg font-black ${
+                                <div
+                                  className={`text-right text-xs font-black leading-none ${
                                     standing.pointDifferential >
                                     0
                                       ? "text-green-400"
@@ -674,12 +676,12 @@ export default function TVPage() {
                                   {formatDifferential(
                                     standing.pointDifferential,
                                   )}
-                                </td>
-                              </tr>
-                            ),
-                          )}
-                        </tbody>
-                      </table>
+                                </div>
+                              </div>
+                            );
+                          },
+                        )}
+                      </div>
                     </div>
                   ),
                 )}
