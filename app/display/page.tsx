@@ -203,9 +203,10 @@ export default function DisplayPage() {
 
   return (
     <AppLayout
-      title="Club Display"
-      description="Live cumulative season standings."
-    >
+  title="Club Display"
+  description="Live cumulative season standings."
+  showNavigation={false}
+>
       <div className="space-y-4">
         {/* League + Season */}
         <div className="grid grid-cols-2 gap-3">
