@@ -514,6 +514,7 @@ export default function AdminPage() {
 
       const targetIndex = checkedIndexes[targetPosition];
       const next = [...currentPlayers];
+      [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
       return next;
     });
   }
