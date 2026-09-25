@@ -128,11 +128,9 @@ function isWaitlisted(row: ParsedCsvRow) {
 }
 
 function parseDupr(value: string) {
+  if (!value.trim()) return 0;
   const parsed = Number(value);
-
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : null;
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 8 ? parsed : null;
 }
 
 export default function AdminPlayersPage() {
@@ -140,6 +138,7 @@ export default function AdminPlayersPage() {
     players,
     setPlayers,
     reloadPlayers,
+    playerDatabaseIds,
   } = useLeague();
 
   const [fileName, setFileName] = useState("");
@@ -167,6 +166,8 @@ export default function AdminPlayersPage() {
     useState("");
   const [isAddingWalkIn, setIsAddingWalkIn] =
     useState(false);
+  const [duprIdDrafts, setDuprIdDrafts] = useState<Record<number, string>>({});
+  const [savingDuprPlayerId, setSavingDuprPlayerId] = useState<number | null>(null);
 
   const selectedRows = useMemo(
     () => rosterRows.filter((row) => row.selected),
@@ -176,7 +177,7 @@ export default function AdminPlayersPage() {
   const selectedInvalidCount = useMemo(
     () =>
       selectedRows.filter(
-        (row) => !parseDupr(row.duprText),
+        (row) => parseDupr(row.duprText) === null,
       ).length,
     [selectedRows],
   );
@@ -287,6 +288,14 @@ export default function AdminPlayersPage() {
         })
         .filter((row) => row.name);
 
+      mappedRows.sort((a, b) => {
+        if (a.selected !== b.selected) return a.selected ? -1 : 1;
+        const ratingA = parseDupr(a.duprText) ?? 0;
+        const ratingB = parseDupr(b.duprText) ?? 0;
+        if (ratingB !== ratingA) return ratingB - ratingA;
+        return a.name.localeCompare(b.name);
+      });
+
       setFileName(file.name);
       setRosterRows(mappedRows);
       setSearchText("");
@@ -369,6 +378,25 @@ export default function AdminPlayersPage() {
     );
   }
 
+  function moveRosterPlayer(rowId: number, direction: "up" | "down") {
+    setRosterRows((currentRows) => {
+      const currentIndex = currentRows.findIndex((row) => row.rowId === rowId);
+      if (currentIndex < 0 || !currentRows[currentIndex]?.selected) return currentRows;
+
+      const selectedIndexes = currentRows
+        .map((row, index) => (row.selected ? index : -1))
+        .filter((index) => index >= 0);
+      const selectedPosition = selectedIndexes.indexOf(currentIndex);
+      const targetPosition = direction === "up" ? selectedPosition - 1 : selectedPosition + 1;
+      if (targetPosition < 0 || targetPosition >= selectedIndexes.length) return currentRows;
+
+      const targetIndex = selectedIndexes[targetPosition];
+      const nextRows = [...currentRows];
+      [nextRows[currentIndex], nextRows[targetIndex]] = [nextRows[targetIndex], nextRows[currentIndex]];
+      return nextRows;
+    });
+  }
+
   async function handleImportSelected() {
     if (
       selectedRows.length === 0 ||
@@ -399,14 +427,25 @@ export default function AdminPlayersPage() {
 
       await reloadPlayers();
 
+      const selectedOrder = new Map(
+        selectedRows.map((row, index) => [normalizeName(row.name), index]),
+      );
+
       window.setTimeout(() => {
         setPlayers((currentPlayers) =>
-          currentPlayers.map((player) => ({
-            ...player,
-            checkedIn: selectedNames.has(
-              normalizeName(player.name),
-            ),
-          })),
+          currentPlayers
+            .map((player) => ({
+              ...player,
+              checkedIn: selectedNames.has(normalizeName(player.name)),
+            }))
+            .sort((a, b) => {
+              const orderA = selectedOrder.get(normalizeName(a.name));
+              const orderB = selectedOrder.get(normalizeName(b.name));
+              if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+              if (orderA !== undefined) return -1;
+              if (orderB !== undefined) return 1;
+              return b.dupr - a.dupr || a.name.localeCompare(b.name);
+            }),
         );
       }, 0);
 
@@ -426,6 +465,33 @@ export default function AdminPlayersPage() {
     }
   }
 
+  async function saveDuprId(playerId: number) {
+    const databaseId = playerDatabaseIds[playerId];
+    if (!databaseId) {
+      setErrorMessage("Unable to find this player in the database.");
+      return;
+    }
+
+    try {
+      setSavingDuprPlayerId(playerId);
+      setErrorMessage("");
+      const value = duprIdDrafts[playerId] ?? players.find((player) => player.id === playerId)?.duprId ?? "";
+      const response = await fetch(`/api/players/${encodeURIComponent(databaseId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duprId: value }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Unable to save DUPR ID.");
+      await reloadPlayers();
+      setSuccessMessage("DUPR ID saved.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to save DUPR ID.");
+    } finally {
+      setSavingDuprPlayerId(null);
+    }
+  }
+
   async function handleAddWalkIn() {
     const name = walkInName
       .trim()
@@ -437,10 +503,8 @@ export default function AdminPlayersPage() {
       return;
     }
 
-    if (!Number.isFinite(dupr) || dupr <= 0) {
-      setErrorMessage(
-        "Enter a valid DUPR for the walk-in.",
-      );
+    if (!Number.isFinite(dupr) || dupr < 0 || dupr > 8) {
+      setErrorMessage("Enter a rating from 0 to 8. Use 0 for an unrated walk-in.");
       return;
     }
 
@@ -611,7 +675,7 @@ export default function AdminPlayersPage() {
                     Tonight&apos;s Players
                   </h2>
                   <p className="mt-1 text-sm text-zinc-400">
-                    {selectedRows.length} selected · {waitlistCount} waitlisted · {selectedInvalidCount} selected without a valid DUPR
+                    {selectedRows.length} selected · {waitlistCount} waitlisted · {selectedInvalidCount} selected with an invalid rating
                   </p>
                 </div>
 
@@ -629,6 +693,15 @@ export default function AdminPlayersPage() {
                   />
                   Update existing DUPR
                 </label>
+
+                <button
+                  type="button"
+                  disabled={selectedRows.length < 4 || selectedRows.length % 4 !== 0 || selectedInvalidCount > 0}
+                  onClick={() => window.print()}
+                  className="min-h-11 rounded-xl border border-zinc-600 px-4 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Print Court List
+                </button>
 
                 <button
                   type="button"
@@ -700,12 +773,13 @@ export default function AdminPlayersPage() {
             </header>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px]">
+              <table className="w-full min-w-[920px]">
                 <thead className="bg-zinc-950 text-xs uppercase tracking-wide text-zinc-500">
                   <tr>
                     <th className="px-4 py-3 text-center">
                       Playing
                     </th>
+                    <th className="px-4 py-3 text-center">Court / Order</th>
                     <th className="px-4 py-3 text-left">
                       Player
                     </th>
@@ -730,9 +804,7 @@ export default function AdminPlayersPage() {
                       Boolean(
                         row.waitlistEnrollmentTime,
                       );
-                    const validDupr = Boolean(
-                      parseDupr(row.duprText),
-                    );
+                    const validDupr = parseDupr(row.duprText) !== null;
 
                     return (
                       <tr
@@ -758,6 +830,22 @@ export default function AdminPlayersPage() {
                           />
                         </td>
 
+                        <td className="px-4 py-3 text-center">
+                          {row.selected ? (() => {
+                            const position = selectedRows.findIndex((selected) => selected.rowId === row.rowId);
+                            const court = Math.floor(position / 4) + 1;
+                            return (
+                              <div className="flex items-center justify-center gap-2">
+                                <span className="rounded-lg bg-blue-500/15 px-2 py-1 text-xs font-bold text-blue-300">C{court} · #{position + 1}</span>
+                                <div className="flex gap-1">
+                                  <button type="button" onClick={() => moveRosterPlayer(row.rowId, "up")} disabled={position <= 0} className="rounded border border-zinc-700 px-2 py-1 text-white disabled:opacity-25">↑</button>
+                                  <button type="button" onClick={() => moveRosterPlayer(row.rowId, "down")} disabled={position < 0 || position >= selectedRows.length - 1} className="rounded border border-zinc-700 px-2 py-1 text-white disabled:opacity-25">↓</button>
+                                </div>
+                              </div>
+                            );
+                          })() : <span className="text-zinc-600">—</span>}
+                        </td>
+
                         <td className="px-4 py-3 font-semibold text-white">
                           {row.name}
                         </td>
@@ -780,7 +868,7 @@ export default function AdminPlayersPage() {
                         <td className="px-4 py-3">
                           <input
                             type="number"
-                            min="0.01"
+                            min="0"
                             max="8"
                             step="0.01"
                             value={row.duprText}
@@ -797,7 +885,7 @@ export default function AdminPlayersPage() {
                                   ? "border-red-500"
                                   : "border-zinc-700"
                             }`}
-                            placeholder="Required"
+                            placeholder="0 = unrated"
                           />
                         </td>
 
@@ -811,7 +899,7 @@ export default function AdminPlayersPage() {
                   {filteredRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-4 py-10 text-center text-zinc-400"
                       >
                         No players match the current search or filter.
@@ -820,6 +908,31 @@ export default function AdminPlayersPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </section>
+        )}
+
+        {rosterRows.length > 0 && (
+          <section className="court-assignment-print hidden print:block">
+            <h1>PBK Ladder League — Court Assignments</h1>
+            <p>{selectedRows.length} players • {Math.floor(selectedRows.length / 4)} courts</p>
+            <div className="print-court-grid">
+              {Array.from({ length: Math.floor(selectedRows.length / 4) }, (_, courtIndex) => {
+                const courtPlayers = selectedRows.slice(courtIndex * 4, courtIndex * 4 + 4);
+                return (
+                  <div key={courtIndex} className="print-court-card">
+                    <h2>Court {courtIndex + 1}</h2>
+                    <ol>
+                      {courtPlayers.map((player) => (
+                        <li key={player.rowId}>
+                          <strong>{player.name}</strong>
+                          <span>{(parseDupr(player.duprText) ?? 0) > 0 ? Number(player.duprText).toFixed(2) : "Unrated"}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
@@ -846,14 +959,14 @@ export default function AdminPlayersPage() {
 
             <input
               type="number"
-              min="0.01"
+              min="0"
               max="8"
               step="0.01"
               value={walkInDupr}
               onChange={(event) =>
                 setWalkInDupr(event.target.value)
               }
-              placeholder="DUPR"
+              placeholder="DUPR (0 if unrated)"
               className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-blue-500"
             />
 
@@ -873,12 +986,28 @@ export default function AdminPlayersPage() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <h2 className="text-xl font-bold text-white">
-            Current Player Database
-          </h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            {players.length} players currently available in the league manager.
-          </p>
+          <h2 className="text-xl font-bold text-white">DUPR Player IDs</h2>
+          <p className="mt-1 text-sm text-zinc-400">Save each player&apos;s DUPR ID once. Completed league nights can then be exported directly into the DUPR match-upload template.</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {players.map((player) => {
+              const draft = duprIdDrafts[player.id] ?? player.duprId ?? "";
+              return (
+                <div key={player.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-white">{player.name}</p>
+                      <p className="text-xs text-zinc-500">Rating {player.dupr > 0 ? player.dupr.toFixed(2) : "Unrated"}</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${draft ? "bg-green-500/15 text-green-300" : "bg-yellow-500/15 text-yellow-300"}`}>{draft ? "ID saved" : "Missing ID"}</span>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <input value={draft} onChange={(event) => setDuprIdDrafts((current) => ({ ...current, [player.id]: event.target.value }))} placeholder="DUPR ID" className="min-h-10 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-white" />
+                    <button type="button" disabled={savingDuprPlayerId === player.id} onClick={() => void saveDuprId(player.id)} className="rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:bg-zinc-700">{savingDuprPlayerId === player.id ? "Saving..." : "Save"}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
       </div>
     </AppLayout>

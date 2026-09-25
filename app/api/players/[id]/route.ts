@@ -51,7 +51,7 @@ export async function GET(
       error: playerError,
     } = await supabaseAdmin
       .from("players")
-      .select("id, name, dupr")
+      .select("id, name, dupr, dupr_id")
       .eq("id", playerId)
       .maybeSingle();
 
@@ -234,6 +234,7 @@ export async function GET(
           id: player.id,
           name: player.name,
           dupr: Number(player.dupr),
+          duprId: player.dupr_id ?? null,
           leagueNights,
           gamesPlayed,
           wins,
@@ -274,5 +275,28 @@ export async function GET(
         status: 500,
       },
     );
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const { requireStaffUser } = await import("@/lib/server/require-auth");
+    await requireStaffUser();
+    const { id: playerId } = await context.params;
+    const body = (await request.json()) as { duprId?: string | null };
+    const duprId = body.duprId?.trim() || null;
+    const { data, error } = await supabaseAdmin
+      .from("players")
+      .update({ dupr_id: duprId })
+      .eq("id", playerId)
+      .select("id, name, dupr, dupr_id")
+      .single();
+    if (error || !data) throw error ?? new Error("Player not found.");
+    return NextResponse.json({ player: data });
+  } catch (error) {
+    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+      return NextResponse.json({ error: "Sign in as staff to update DUPR IDs." }, { status: 401 });
+    }
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update DUPR ID." }, { status: 500 });
   }
 }

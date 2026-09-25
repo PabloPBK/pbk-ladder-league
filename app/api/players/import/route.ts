@@ -78,12 +78,12 @@ export async function POST(request: Request) {
 
       if (
         !Number.isFinite(dupr) ||
-        dupr <= 0 ||
+        dupr < 0 ||
         dupr > 8
       ) {
         return NextResponse.json(
           {
-            error: `${name} needs a valid DUPR between 0 and 8.`,
+            error: `${name} needs a rating between 0 and 8 (0 means unrated).`,
           },
           { status: 400 },
         );

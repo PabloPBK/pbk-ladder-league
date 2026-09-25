@@ -497,6 +497,36 @@ export default function AdminPage() {
     setSuccessMessage("");
   }
 
+  function movePlayerInSetup(playerId: number, direction: "up" | "down") {
+    if (roundIsGenerated) return;
+
+    setPlayers((currentPlayers) => {
+      const checkedIndexes = currentPlayers
+        .map((player, index) => (player.checkedIn ? index : -1))
+        .filter((index) => index >= 0);
+      const currentIndex = currentPlayers.findIndex((player) => player.id === playerId);
+      const checkedPosition = checkedIndexes.indexOf(currentIndex);
+      const targetPosition = direction === "up" ? checkedPosition - 1 : checkedPosition + 1;
+
+      if (checkedPosition < 0 || targetPosition < 0 || targetPosition >= checkedIndexes.length) {
+        return currentPlayers;
+      }
+
+      const targetIndex = checkedIndexes[targetPosition];
+      const next = [...currentPlayers];
+      return next;
+    });
+  }
+
+  function updatePlayerRatingForTonight(playerId: number, rating: number) {
+    if (roundIsGenerated) return;
+    setPlayers((currentPlayers) =>
+      currentPlayers.map((player) =>
+        player.id === playerId ? { ...player, dupr: rating } : player,
+      ),
+    );
+  }
+
   async function handleGenerateFirstRound() {
     if (!activeEvent || roundIsGenerated) {
       return;
@@ -834,6 +864,8 @@ export default function AdminPage() {
               onGenerateFirstRound={() =>
                 void handleGenerateFirstRound()
               }
+              onMovePlayer={movePlayerInSetup}
+              onRatingChange={updatePlayerRatingForTonight}
             />
 
             {roundIsGenerated && (

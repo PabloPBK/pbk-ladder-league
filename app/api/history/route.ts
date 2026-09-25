@@ -11,6 +11,9 @@ type EventRecord = {
   current_round: number;
 };
 
+type SeasonRecord = { id: string; league_id: string; name: string; };
+type LeagueRecord = { id: string; name: string; };
+
 type RoundRecord = {
   id: string;
   event_id: string;
@@ -80,6 +83,26 @@ export async function GET() {
         events: [],
       });
     }
+
+    const seasonIds = [...new Set(events.map((event) => event.season_id))];
+    const { data: seasonData, error: seasonsError } = await supabaseAdmin
+      .from("seasons")
+      .select("id, league_id, name")
+      .in("id", seasonIds);
+    if (seasonsError) throw seasonsError;
+    const seasons = (seasonData ?? []) as SeasonRecord[];
+    const leagueIds = [...new Set(seasons.map((season) => season.league_id))];
+    let leagues: LeagueRecord[] = [];
+    if (leagueIds.length > 0) {
+      const { data: leagueData, error: leaguesError } = await supabaseAdmin
+        .from("leagues")
+        .select("id, name")
+        .in("id", leagueIds);
+      if (leaguesError) throw leaguesError;
+      leagues = (leagueData ?? []) as LeagueRecord[];
+    }
+    const seasonById = new Map(seasons.map((season) => [season.id, season]));
+    const leagueById = new Map(leagues.map((league) => [league.id, league]));
 
     const eventIds = events.map(
       (event) => event.id,
@@ -381,9 +404,15 @@ export async function GET() {
 
       const winner = standings[0];
 
+      const eventSeason = seasonById.get(event.season_id);
+      const eventLeague = eventSeason ? leagueById.get(eventSeason.league_id) : undefined;
+
       return {
         id: event.id,
         seasonId: event.season_id,
+        seasonName: eventSeason?.name ?? "Unknown Season",
+        leagueId: eventSeason?.league_id ?? "",
+        leagueName: eventLeague?.name ?? "Unknown League",
         eventDate: event.event_date,
         name: event.name,
         status: event.status,

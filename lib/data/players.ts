@@ -2,12 +2,14 @@ export type DatabasePlayerRecord = {
   id: string;
   name: string;
   dupr: number;
+  dupr_id: string | null;
 };
 
 export type PlayerProfile = {
   id: string;
   name: string;
   dupr: number;
+  duprId?: string | null;
 };
 
 type PlayersResponse = {

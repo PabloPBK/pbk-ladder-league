@@ -89,6 +89,7 @@ function createRuntimePlayer(
     id: runtimeId,
     name: databasePlayer.name,
     dupr: Number(databasePlayer.dupr),
+    duprId: databasePlayer.dupr_id ?? null,
     checkedIn: false,
     wins: 0,
     losses: 0,

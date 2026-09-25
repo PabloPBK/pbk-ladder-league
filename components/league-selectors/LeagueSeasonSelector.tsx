@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   getActiveLeagues,
   getSeasonsForLeague,
+  createSeason,
   type LeagueRecord,
   type SeasonRecord,
 } from "@/lib/data/leagues";
@@ -27,6 +28,10 @@ export function LeagueSeasonSelector({
   const [loadingLeagues, setLoadingLeagues] = useState(true);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showNewSeason, setShowNewSeason] = useState(false);
+  const [newSeasonNumber, setNewSeasonNumber] = useState(1);
+  const [newSeasonStartDate, setNewSeasonStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [isCreatingSeason, setIsCreatingSeason] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +154,36 @@ export function LeagueSeasonSelector({
     selectedSeasonId,
   ]);
 
+
+  useEffect(() => {
+    const numbers = seasons
+      .map((season) => Number(season.name.match(/season\s+(\d+)/i)?.[1]))
+      .filter((value) => Number.isInteger(value) && value > 0);
+    setNewSeasonNumber(Math.max(0, ...numbers) + 1);
+  }, [seasons]);
+
+  async function handleCreateSeason() {
+    if (!selectedLeagueId || isCreatingSeason) return;
+
+    try {
+      setIsCreatingSeason(true);
+      setErrorMessage("");
+      const created = await createSeason({
+        leagueId: selectedLeagueId,
+        seasonNumber: newSeasonNumber,
+        startDate: newSeasonStartDate,
+      });
+      const refreshed = await getSeasonsForLeague(selectedLeagueId);
+      setSeasons(refreshed);
+      onSeasonChange(created.id);
+      setShowNewSeason(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to create season.");
+    } finally {
+      setIsCreatingSeason(false);
+    }
+  }
+
   return (
     <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
       <div className="mb-5">
@@ -196,12 +231,22 @@ export function LeagueSeasonSelector({
           </select>
         </label>
 
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold uppercase tracking-wide text-zinc-400">
-            Season
-          </span>
+        <div className="block">
+          <div className="mb-2 flex items-center justify-between gap-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            <span>Season</span>
+            {selectedLeagueId && (
+              <button
+                type="button"
+                onClick={() => setShowNewSeason((value) => !value)}
+                className="rounded-lg border border-blue-500/50 px-2.5 py-1 text-xs font-bold normal-case tracking-normal text-blue-300 hover:bg-blue-500/10"
+              >
+                + New Season
+              </button>
+            )}
+          </div>
 
           <select
+            aria-label="Season"
             value={selectedSeasonId}
             disabled={!selectedLeagueId || loadingSeasons}
             onChange={(event) =>
@@ -226,8 +271,43 @@ export function LeagueSeasonSelector({
               </option>
             ))}
           </select>
-        </label>
+        </div>
       </div>
+
+      {showNewSeason && selectedLeagueId && (
+        <div className="mt-5 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label>
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-blue-200">Season Number</span>
+              <input
+                type="number"
+                min="1"
+                value={newSeasonNumber}
+                onChange={(event) => setNewSeasonNumber(Math.max(1, Number(event.target.value) || 1))}
+                className="min-h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-white"
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-blue-200">Start Date</span>
+              <input
+                type="date"
+                value={newSeasonStartDate}
+                onChange={(event) => setNewSeasonStartDate(event.target.value)}
+                className="min-h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-white"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={isCreatingSeason}
+              onClick={() => void handleCreateSeason()}
+              className="min-h-11 self-end rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-500 disabled:bg-zinc-700"
+            >
+              {isCreatingSeason ? "Creating..." : `Create Season ${newSeasonNumber}`}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-blue-200/80">Creating a new season marks the current active season complete. The start date can be backdated.</p>
+        </div>
+      )}
 
       {selectedLeagueId && selectedSeasonId && (
         <div className="mt-5 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-green-300">

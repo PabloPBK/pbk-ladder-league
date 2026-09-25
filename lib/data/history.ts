@@ -9,6 +9,9 @@ export type HistoryWinner = {
 export type HistoryEventSummary = {
   id: string;
   seasonId: string;
+  seasonName: string;
+  leagueId: string;
+  leagueName: string;
   eventDate: string;
   name: string;
   status: string;
@@ -166,4 +169,17 @@ export async function getHistoryEvent(
     standings: result.standings,
     rounds: result.rounds,
   };
+}
+
+export async function updateHistoryEventSeason(eventId: string, seasonId: string) {
+  const response = await fetch(`/api/history/${encodeURIComponent(eventId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ seasonId }),
+  });
+  const result = await readJson<{ seasonId?: string; seasonName?: string; error?: string }>(response);
+  if (!response.ok || !result.seasonId) {
+    throw new Error(result.error ?? "Unable to update season assignment.");
+  }
+  return result;
 }

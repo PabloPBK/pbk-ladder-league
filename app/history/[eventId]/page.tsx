@@ -45,6 +45,8 @@ export default function HistoryDetailPage() {
 
   const [errorMessage, setErrorMessage] =
     useState("");
+  const [scoringType, setScoringType] = useState<"Standard" | "Rally">("Standard");
+  const [isExportingDupr, setIsExportingDupr] = useState(false);
 
   useEffect(() => {
     if (!eventId) {
@@ -85,6 +87,35 @@ export default function HistoryDetailPage() {
       cancelled = true;
     };
   }, [eventId]);
+
+  async function handleDuprExport() {
+    if (!eventId || isExportingDupr) return;
+    try {
+      setIsExportingDupr(true);
+      setErrorMessage("");
+      const response = await fetch(`/api/history/${encodeURIComponent(eventId)}/dupr-export?scoringType=${encodeURIComponent(scoringType)}`);
+      if (!response.ok) {
+        const result = (await response.json()) as { error?: string; missingPlayers?: Array<{ name: string }> };
+        const missingText = result.missingPlayers?.length ? ` Missing DUPR IDs: ${result.missingPlayers.map((player) => player.name).join(", ")}.` : "";
+        throw new Error((result.error ?? "Unable to export DUPR CSV.") + missingText);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "pbk-dupr-upload.csv";
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to export DUPR CSV.");
+    } finally {
+      setIsExportingDupr(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -152,7 +183,7 @@ export default function HistoryDetailPage() {
             )}
           </p>
 
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap items-end gap-3">
             <span className="rounded-full bg-zinc-900 px-4 py-2 text-zinc-300">
               {history.event.playerCount}{" "}
               Players
@@ -162,6 +193,18 @@ export default function HistoryDetailPage() {
               {history.event.roundCount}{" "}
               Rounds
             </span>
+            <div className="ml-auto flex flex-wrap items-end gap-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                DUPR scoring
+                <select value={scoringType} onChange={(event) => setScoringType(event.target.value as "Standard" | "Rally")} className="mt-1 block min-h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm normal-case text-white">
+                  <option value="Standard">Standard</option>
+                  <option value="Rally">Rally</option>
+                </select>
+              </label>
+              <button type="button" disabled={isExportingDupr} onClick={() => void handleDuprExport()} className="min-h-10 rounded-lg bg-green-600 px-4 text-sm font-bold text-white hover:bg-green-500 disabled:bg-zinc-700">
+                {isExportingDupr ? "Preparing..." : "Download DUPR CSV"}
+              </button>
+            </div>
           </div>
         </section>
 
