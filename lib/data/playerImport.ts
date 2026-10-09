@@ -2,7 +2,7 @@ import type { DatabasePlayerRecord } from "@/lib/data/players";
 
 export type PlayerImportInput = {
   name: string;
-  dupr: number;
+  dupr: number | null;
 };
 
 type ImportPlayersResponse = {

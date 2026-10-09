@@ -31,6 +31,15 @@ const PHONE = "Phone Number";
 const INVITATION_STATUS = "Invitation Status";
 const WAITLIST_TIME = "Waitlist Enrollment Time";
 const DOUBLES_RATING = "Ratings Doubles";
+const RATING_HEADERS = ["Ratings Doubles", "DUPR Doubles", "DUPR Doubles Rating", "Doubles Rating", "DUPR Rating", "DUPR", "Doubles DUPR"];
+function getRosterRating(row: ParsedCsvRow): string {
+  const normalized = new Map(Object.entries(row).map(([key, value]) => [key.trim().toLowerCase(), value]));
+  for (const header of RATING_HEADERS) {
+    const value = normalized.get(header.toLowerCase());
+    if (value !== undefined) return /^(not rated|unrated|n\/a|-)$/i.test(value.trim()) ? "" : value.trim();
+  }
+  return "";
+}
 
 function normalizeName(value: string) {
   return value
@@ -277,9 +286,7 @@ export default function AdminPlayersPage() {
             waitlistEnrollmentTime:
               row[WAITLIST_TIME] ?? "",
             duprText:
-              row[DOUBLES_RATING] === "Not Rated"
-                ? ""
-                : row[DOUBLES_RATING] ?? "",
+              getRosterRating(row),
             selected:
               Boolean(name) &&
               status.toUpperCase() === "ACCEPTED" &&
@@ -296,6 +303,9 @@ export default function AdminPlayersPage() {
         return a.name.localeCompare(b.name);
       });
 
+      if (mappedRows.every((row) => row.duprText === "")) {
+        setErrorMessage("No DUPR doubles ratings were found in this CSV. Existing database ratings will be preserved; enter ratings manually or upload a CSV with a DUPR doubles rating column.");
+      }
       setFileName(file.name);
       setRosterRows(mappedRows);
       setSearchText("");
@@ -420,7 +430,7 @@ export default function AdminPlayersPage() {
       const result = await importPlayers({
         players: selectedRows.map((row) => ({
           name: row.name,
-          dupr: Number(row.duprText),
+          dupr: row.duprText.trim() === "" ? null : Number(row.duprText),
         })),
         updateExisting,
       });
@@ -696,7 +706,7 @@ export default function AdminPlayersPage() {
 
                 <button
                   type="button"
-                  disabled={selectedRows.length < 4 || selectedRows.length % 4 !== 0 || selectedInvalidCount > 0}
+                  disabled={selectedRows.length === 0 || selectedInvalidCount > 0}
                   onClick={() => window.print()}
                   className="min-h-11 rounded-xl border border-zinc-600 px-4 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -915,9 +925,9 @@ export default function AdminPlayersPage() {
         {rosterRows.length > 0 && (
           <section className="court-assignment-print hidden print:block">
             <h1>PBK Ladder League — Court Assignments</h1>
-            <p>{selectedRows.length} players • {Math.floor(selectedRows.length / 4)} courts</p>
+            <p>{selectedRows.length} players • {Math.ceil(selectedRows.length / 4)} courts (last court may be incomplete)</p>
             <div className="print-court-grid">
-              {Array.from({ length: Math.floor(selectedRows.length / 4) }, (_, courtIndex) => {
+              {Array.from({ length: Math.ceil(selectedRows.length / 4) }, (_, courtIndex) => {
                 const courtPlayers = selectedRows.slice(courtIndex * 4, courtIndex * 4 + 4);
                 return (
                   <div key={courtIndex} className="print-court-card">

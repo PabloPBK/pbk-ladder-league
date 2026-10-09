@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type ImportPlayerInput = {
   name?: string;
-  dupr?: number;
+  dupr?: number | null;
 };
 
 type ImportPlayersRequest = {
@@ -60,14 +60,14 @@ export async function POST(request: Request) {
 
     const uniquePlayers = new Map<
       string,
-      { name: string; dupr: number }
+      { name: string; dupr: number | null }
     >();
 
     for (const player of submittedPlayers) {
       const name = player.name
         ?.trim()
         .replace(/\s+/g, " ");
-      const dupr = Number(player.dupr);
+      const dupr = player.dupr === null || player.dupr === undefined ? null : Number(player.dupr);
 
       if (!name) {
         return NextResponse.json(
@@ -77,9 +77,9 @@ export async function POST(request: Request) {
       }
 
       if (
-        !Number.isFinite(dupr) ||
+        dupr !== null && (!Number.isFinite(dupr) ||
         dupr < 0 ||
-        dupr > 8
+        dupr > 8)
       ) {
         return NextResponse.json(
           {
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     const playersToUpdate: {
       id: string;
       name: string;
-      dupr: number;
+      dupr: number | null;
     }[] = [];
 
     let skipped = 0;
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
       const existing = existingByName.get(key);
 
       if (!existing) {
-        playersToCreate.push(player);
+        playersToCreate.push({ ...player, dupr: player.dupr ?? 0 });
         return;
       }
 
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
           .from("players")
           .update({
             name: player.name,
-            dupr: player.dupr,
+            ...(player.dupr === null ? {} : { dupr: player.dupr }),
           })
           .eq("id", player.id)
           .select("id, name, dupr")
