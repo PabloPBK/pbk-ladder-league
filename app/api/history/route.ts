@@ -436,10 +436,12 @@ export async function GET() {
     return NextResponse.json({
       events: summaries,
     });
-  console.error(
-  "Unable to load league history:",
-  JSON.stringify(error, Object.getOwnPropertyNames(error))
-);
+   } catch (error) {
+    console.error(
+      "Unable to load league history:",
+      JSON.stringify(error, Object.getOwnPropertyNames(error))
+    );
+
     return NextResponse.json(
       {
         error:
@@ -449,7 +451,7 @@ export async function GET() {
       },
       {
         status: 500,
-      },
+      }
     );
   }
 }
