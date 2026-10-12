@@ -71,9 +71,10 @@ export async function GET() {
         ascending: false,
       });
 
-    if (eventsError) {
-      throw eventsError;
-    }
+   if (eventsError) {
+  console.error("HISTORY STEP 1 - league_events:", eventsError);
+  throw eventsError;
+}
 
     const events =
       (eventData ?? []) as EventRecord[];
