@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Home", icon: "🏠" },
   { href: "/admin", label: "Admin", icon: "⚙️" },
   { href: "/admin/players", label: "Manage Players", icon: "👥" },
+  {href: "/admin/player-directory",label: "Player Directory",icon: "📋",},
   { href: "/walking", label: "Runner", icon: "🏃" },
   { href: "/tv", label: "TV", icon: "📺" },
   { href: "/display", label: "Display", icon: "🏆" },
