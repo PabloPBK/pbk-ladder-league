@@ -198,26 +198,25 @@ export async function GET() {
 
     let courtPlayers: CourtPlayerRecord[] = [];
 
-    if (courtIds.length > 0) {
-      const {
-        data: courtPlayerData,
-        error: courtPlayersError,
-      } = await supabaseAdmin
-        .from("court_players")
-        .select(
-          "court_id, event_player_id, team_number",
-        )
-        .in("court_id", courtIds);
+const batchSize = 50;
 
-      if (courtPlayersError) {
-        throw courtPlayersError;
-      }
+for (let i = 0; i < courtIds.length; i += batchSize) {
+  const batch = courtIds.slice(i, i + batchSize);
 
-      courtPlayers =
-        (courtPlayerData ??
-          []) as CourtPlayerRecord[];
-    }
+  const { data, error } = await supabaseAdmin
+    .from("court_players")
+    .select("court_id, event_player_id, team_number")
+    .in("court_id", batch);
 
+  if (error) {
+    console.error("Court players batch error:", error);
+    throw error;
+  }
+
+  courtPlayers.push(
+    ...((data ?? []) as CourtPlayerRecord[])
+  );
+}
     const playerById = new Map(
       players.map((player) => [
         player.id,
