@@ -435,21 +435,25 @@ for (let i = 0; i < courtIds.length; i += batchSize) {
     return NextResponse.json({
       events: summaries,
     });
-   } catch (error) {
-    console.error(
-      "Unable to load league history:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error))
-    );
+     } catch (error) {
+    console.error("HISTORY API ERROR DETAILS:", {
+      message:
+        error instanceof Error
+          ? error.message
+          : String(error),
+      error,
+      details:
+        typeof error === "object" && error !== null
+          ? JSON.stringify(error)
+          : null,
+    });
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load league history.",
-      },
-      {
-        status: 500,
+      { error: "Unable to load league history." },
+      { status: 500 }
+    );
+  }
+}
       }
     );
   }
