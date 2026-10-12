@@ -294,13 +294,13 @@ export async function PATCH(
       if (
         typeof body.dupr !== "number" ||
         !Number.isFinite(body.dupr) ||
-        body.dupr < 1 ||
+        body.dupr < 0 ||
         body.dupr > 8
       ) {
         return NextResponse.json(
           {
             error:
-              "Enter a valid DUPR rating between 1 and 8.",
+              "Enter a valid DUPR rating between 0 and 8.",
           },
           { status: 400 },
         );
