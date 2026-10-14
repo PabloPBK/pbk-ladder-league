@@ -1,6 +1,26 @@
-
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
+
+const managerSections = [
+  {
+    title: "TV Screens",
+    description: "Configure individual TV displays.",
+    icon: "📺",
+    href: "/admin/tv-manager/screens",
+  },
+  {
+    title: "Presentations",
+    description: "Manage playlists and promotional images.",
+    icon: "🎬",
+    href: "/admin/tv-manager/presentations",
+  },
+  {
+    title: "Live Rosters",
+    description: "Manage teams and DUPR rankings.",
+    icon: "🏆",
+    href: "/admin/tv-manager/rosters",
+  },
+];
 
 export default function TVManagerPage() {
   return (
@@ -20,26 +40,11 @@ export default function TVManagerPage() {
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {[
-              {
-                title: "TV Screens",
-                description: "Configure individual TV displays.",
-                icon: "📺",
-              },
-              {
-                title: "Presentations",
-                description: "Manage playlists and promotional images.",
-                icon: "🎬",
-              },
-              {
-                title: "Live Rosters",
-                description: "Manage teams and DUPR rankings.",
-                icon: "🏆",
-              },
-            ].map((item) => (
-              <div
+            {managerSections.map((item) => (
+              <Link
                 key={item.title}
-                className="rounded-xl border border-zinc-700 bg-zinc-950 p-5"
+                href={item.href}
+                className="block rounded-xl border border-zinc-700 bg-zinc-950 p-5 transition hover:border-yellow-400 hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-yellow-400"
               >
                 <div className="text-3xl">{item.icon}</div>
                 <h3 className="mt-3 text-lg font-bold text-white">
@@ -48,7 +53,7 @@ export default function TVManagerPage() {
                 <p className="mt-2 text-sm text-zinc-400">
                   {item.description}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
@@ -59,9 +64,8 @@ export default function TVManagerPage() {
           </h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            The TV Display Manager dashboard is ready.
-            Next we will add TV registration,
-            presentations, and the Monster Mash roster.
+            Select a section above to manage your TV
+            displays, presentations, and live rosters.
           </p>
 
           <Link
