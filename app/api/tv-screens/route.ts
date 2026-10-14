@@ -1,13 +1,45 @@
 
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { requireStaffUser } from "@/lib/server/require-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    // Authenticate against the existing League Manager.
     await requireStaffUser();
 
-    const { data, error } = await supabaseAdmin
+    // Connect separately to the TV Manager database.
+    const tvSupabaseUrl =
+      process.env.TV_SUPABASE_URL;
+
+    const tvSupabaseSecretKey =
+      process.env.TV_SUPABASE_SECRET_KEY;
+
+    if (!tvSupabaseUrl || !tvSupabaseSecretKey) {
+      console.error(
+        "TV Manager Supabase configuration is missing."
+      );
+
+      return NextResponse.json(
+        { error: "TV Manager database is not configured" },
+        { status: 500 }
+      );
+    }
+
+    const tvSupabase = createClient(
+      tvSupabaseUrl,
+      tvSupabaseSecretKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    const { data, error } = await tvSupabase
       .from("tv_screens")
       .select(
         "id, name, location, display_mode, slide_duration, assigned_content, is_active"
