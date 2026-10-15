@@ -273,9 +273,12 @@ export default function PresentationsPage() {
                       ).toLocaleDateString()}
                     </p>
 
-                    <p className="mt-4 text-sm text-yellow-400">
-                      Slide management coming next
-                    </p>
+                    <Link
+  href={`/admin/tv-manager/presentations/${presentation.id}`}
+  className="mt-4 inline-block rounded-lg bg-yellow-400 px-4 py-2 font-bold text-black hover:bg-yellow-300"
+>
+  Manage Slides →
+</Link>
                   </div>
                 ))}
               </div>
