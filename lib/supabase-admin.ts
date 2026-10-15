@@ -1,20 +1,22 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const supabaseSecretKey =
+  process.env.LEAGUE_SUPABASE_SECRET_KEY ??
   process.env.SUPABASE_SECRET_KEY;
 
 if (!supabaseUrl) {
   throw new Error(
-    "NEXT_PUBLIC_SUPABASE_URL is not configured.",
+    "NEXT_PUBLIC_SUPABASE_URL is not configured."
   );
 }
 
 if (!supabaseSecretKey) {
   throw new Error(
-    "SUPABASE_SECRET_KEY is not configured.",
+    "League Supabase secret key is not configured."
   );
 }
 
@@ -26,5 +28,5 @@ export const supabaseAdmin = createClient(
       autoRefreshToken: false,
       persistSession: false,
     },
-  },
+  }
 );
