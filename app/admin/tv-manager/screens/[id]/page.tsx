@@ -280,12 +280,12 @@ export default function TVScreenSettingsPage() {
                 type="button"
                 onClick={() => void saveChanges()}
                 disabled={
-                  saving ||
-                  !screen.name.trim() ||
-                  !Number.isInteger(screen.slide_duration) ||
-                  screen.slide_duration < 1 ||
-                  screen.slide_duration > 3600
-                }
+  saving ||
+  !screen.name.trim() ||
+  !Number.isInteger(screen.slide_duration) ||
+  (screen.slide_duration ?? 0) < 1 ||
+  (screen.slide_duration ?? 0) > 3600
+}
                 className="rounded-lg bg-yellow-400 px-6 py-3 font-bold text-black disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save Changes"}
