@@ -24,9 +24,9 @@ export default function TVScreensPage() {
     setError("");
 
     try {
-      const response = await fetch("/api/tv/screens", {
-        cache: "no-store",
-      });
+      const response = await fetch("/api/tv-screens", {
+  cache: "no-store",
+});
 
       const result = await response.json();
 
