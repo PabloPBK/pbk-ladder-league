@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -25,8 +26,8 @@ export default function TVScreensPage() {
 
     try {
       const response = await fetch("/api/tv-screens", {
-  cache: "no-store",
-});
+        cache: "no-store",
+      });
 
       const result = await response.json();
 
@@ -76,7 +77,7 @@ export default function TVScreensPage() {
               disabled={loading}
               className="rounded-lg bg-yellow-400 px-4 py-2 font-bold text-black disabled:opacity-50"
             >
-              Refresh Screens
+              {loading ? "Loading..." : "Refresh Screens"}
             </button>
           </div>
 
@@ -101,9 +102,10 @@ export default function TVScreensPage() {
           {!loading && !error && screens.length > 0 && (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {screens.map((screen) => (
-                <div
+                <Link
                   key={screen.id}
-                  className="rounded-xl border border-zinc-700 bg-zinc-950 p-5"
+                  href={`/admin/tv-manager/screens/${encodeURIComponent(screen.id)}`}
+                  className="block rounded-xl border border-zinc-700 bg-zinc-950 p-5 transition hover:border-yellow-400 hover:bg-zinc-800"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-lg font-bold text-white">
@@ -134,7 +136,11 @@ export default function TVScreensPage() {
                       Slide Duration: {screen.slide_duration ?? "Not set"} seconds
                     </p>
                   </div>
-                </div>
+
+                  <p className="mt-5 text-sm font-semibold text-yellow-400">
+                    Manage TV Settings →
+                  </p>
+                </Link>
               ))}
             </div>
           )}
