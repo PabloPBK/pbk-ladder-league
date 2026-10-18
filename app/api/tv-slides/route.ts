@@ -171,3 +171,54 @@ export async function POST(request: NextRequest) {
     return errorResponse(error);
   }
 }
+
+export async function GET(request: NextRequest) {
+  try {
+    await requireStaffUser();
+
+    const presentationId =
+      request.nextUrl.searchParams.get("presentation_id");
+
+    if (
+      !presentationId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        presentationId
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Invalid presentation ID" },
+        { status: 400 }
+      );
+    }
+
+    const db = getTVDatabase();
+
+    const { data, error } = await db
+      .from("tv_slides")
+      .select("*")
+      .eq("presentation_id", presentationId)
+      .order("sort_order", { ascending: true });
+
+    if (error) throw error;
+
+    const slides = await Promise.all(
+      (data ?? []).map(async (slide) => {
+        const { data: signedData, error: signedError } =
+          await db.storage
+            .from("tv-media")
+            .createSignedUrl(slide.storage_path, 3600);
+
+        if (signedError) throw signedError;
+
+        return {
+          ...slide,
+          media_url: signedData.signedUrl,
+        };
+      })
+    );
+
+    return NextResponse.json({ slides });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
