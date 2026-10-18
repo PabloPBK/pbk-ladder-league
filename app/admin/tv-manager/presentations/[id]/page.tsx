@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -28,12 +28,14 @@ export default function PresentationEditorPage() {
 
   const [presentation, setPresentation] =
     useState<Presentation | null>(null);
-
   const [slides, setSlides] = useState<Slide[]>([]);
   const [loading, setLoading] = useState(true);
   const [slidesLoading, setSlidesLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
@@ -41,6 +43,9 @@ export default function PresentationEditorPage() {
   const [message, setMessage] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const busy =
+    uploading || deletingId !== null || savingOrder;
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +58,6 @@ export default function PresentationEditorPage() {
         const response = await fetch("/api/tv-presentations", {
           cache: "no-store",
         });
-
         const result = await response.json();
 
         if (!response.ok) {
@@ -70,9 +74,7 @@ export default function PresentationEditorPage() {
           throw new Error("Presentation not found");
         }
 
-        if (!cancelled) {
-          setPresentation(found);
-        }
+        if (!cancelled) setPresentation(found);
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -82,9 +84,7 @@ export default function PresentationEditorPage() {
           );
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -95,7 +95,7 @@ export default function PresentationEditorPage() {
     };
   }, [presentationId]);
 
-  async function loadSlides() {
+  const loadSlides = useCallback(async () => {
     setSlidesLoading(true);
     setUploadError("");
 
@@ -106,7 +106,6 @@ export default function PresentationEditorPage() {
         )}`,
         { cache: "no-store" }
       );
-
       const result = await response.json();
 
       if (!response.ok) {
@@ -115,9 +114,15 @@ export default function PresentationEditorPage() {
         );
       }
 
-      setSlides(
-        Array.isArray(result.slides) ? result.slides : []
+      const loaded: Slide[] = Array.isArray(result.slides)
+        ? result.slides
+        : [];
+
+      loaded.sort(
+        (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
       );
+
+      setSlides(loaded);
     } catch (err) {
       setUploadError(
         err instanceof Error
@@ -127,19 +132,17 @@ export default function PresentationEditorPage() {
     } finally {
       setSlidesLoading(false);
     }
-  }
+  }, [presentationId]);
 
   useEffect(() => {
     void loadSlides();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presentationId]);
+  }, [loadSlides]);
 
   async function uploadFile(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
-
-    if (!file || uploading) return;
+    if (!file || busy) return;
 
     setUploading(true);
     setUploadError("");
@@ -174,7 +177,6 @@ export default function PresentationEditorPage() {
         method: "POST",
         body: formData,
       });
-
       const result = await response.json();
 
       if (!response.ok) {
@@ -184,7 +186,6 @@ export default function PresentationEditorPage() {
       }
 
       setFile(null);
-
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -203,10 +204,11 @@ export default function PresentationEditorPage() {
   }
 
   async function deleteSlide(slideId: string) {
+    if (busy) return;
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this slide? This cannot be undone."
     );
-
     if (!confirmed) return;
 
     setDeletingId(slideId);
@@ -218,7 +220,6 @@ export default function PresentationEditorPage() {
         `/api/tv-slides?id=${encodeURIComponent(slideId)}`,
         { method: "DELETE" }
       );
-
       const result = await response.json();
 
       if (!response.ok) {
@@ -242,6 +243,69 @@ export default function PresentationEditorPage() {
       );
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function moveSlide(
+    sourceId: string,
+    targetId: string
+  ) {
+    if (busy || sourceId === targetId) return;
+
+    const original = [...slides];
+    const sourceIndex = original.findIndex(
+      (slide) => slide.id === sourceId
+    );
+    const targetIndex = original.findIndex(
+      (slide) => slide.id === targetId
+    );
+
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const reordered = [...original];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const updated = reordered.map((slide, index) => ({
+      ...slide,
+      sort_order: index,
+    }));
+
+    setSlides(updated);
+    setSavingOrder(true);
+    setUploadError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/tv-slides/reorder", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          presentation_id: presentationId,
+          slide_ids: updated.map((slide) => slide.id),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Unable to save slide order"
+        );
+      }
+
+      setMessage("Slide order saved successfully!");
+    } catch (err) {
+      setSlides(original);
+      setUploadError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save slide order"
+      );
+    } finally {
+      setSavingOrder(false);
     }
   }
 
@@ -319,9 +383,7 @@ export default function PresentationEditorPage() {
 
                   <button
                     type="submit"
-                    disabled={
-                      !file || uploading || deletingId !== null
-                    }
+                    disabled={!file || busy}
                     className="rounded-lg bg-yellow-400 px-6 py-3 font-bold text-black disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {uploading
@@ -333,18 +395,20 @@ export default function PresentationEditorPage() {
 
               <div className="mt-6 rounded-xl border border-zinc-700 bg-zinc-950 p-6">
                 <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-lg font-bold text-white">
-                    Presentation Slides
-                  </h3>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      Presentation Slides
+                    </h3>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Drag a slide onto another slide to
+                      change its position.
+                    </p>
+                  </div>
 
                   <button
                     type="button"
                     onClick={() => void loadSlides()}
-                    disabled={
-                      slidesLoading ||
-                      uploading ||
-                      deletingId !== null
-                    }
+                    disabled={slidesLoading || busy}
                     className="text-sm text-yellow-400 hover:underline disabled:opacity-50"
                   >
                     Refresh
@@ -369,6 +433,12 @@ export default function PresentationEditorPage() {
                   </p>
                 )}
 
+                {savingOrder && (
+                  <p className="mt-4 text-yellow-400">
+                    Saving slide order...
+                  </p>
+                )}
+
                 {slidesLoading && (
                   <p className="mt-4 text-zinc-400">
                     Loading slides...
@@ -385,11 +455,54 @@ export default function PresentationEditorPage() {
 
                 {slides.length > 0 && (
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    {slides.map((slide) => (
+                    {slides.map((slide, index) => (
                       <div
                         key={slide.id}
-                        className="overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900"
+                        onDragOver={(event) => {
+                          if (busy || !draggedId) return;
+                          event.preventDefault();
+                          setDragOverId(slide.id);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const sourceId = draggedId;
+                          setDraggedId(null);
+                          setDragOverId(null);
+
+                          if (sourceId) {
+                            void moveSlide(
+                              sourceId,
+                              slide.id
+                            );
+                          }
+                        }}
+                        className={`overflow-hidden rounded-xl border bg-zinc-900 ${
+                          dragOverId === slide.id &&
+                          draggedId !== slide.id
+                            ? "border-yellow-400 ring-2 ring-yellow-400"
+                            : "border-zinc-700"
+                        }`}
                       >
+                        <div
+                          draggable={!busy}
+                          onDragStart={(event) => {
+                            if (busy) {
+                              event.preventDefault();
+                              return;
+                            }
+                            event.dataTransfer.effectAllowed =
+                              "move";
+                            setDraggedId(slide.id);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedId(null);
+                            setDragOverId(null);
+                          }}
+                          className="cursor-grab border-b border-zinc-700 p-3 text-sm font-semibold text-yellow-400 active:cursor-grabbing"
+                        >
+                          ☰ Drag to move — Slide {index + 1}
+                        </div>
+
                         {slide.media_type.startsWith("image") ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -398,6 +511,7 @@ export default function PresentationEditorPage() {
                               slide.title ||
                               "Presentation slide"
                             }
+                            draggable={false}
                             className="h-56 w-full object-contain"
                           />
                         ) : slide.media_type.startsWith("video") ? (
@@ -437,9 +551,7 @@ export default function PresentationEditorPage() {
                             onClick={() =>
                               void deleteSlide(slide.id)
                             }
-                            disabled={
-                              deletingId !== null || uploading
-                            }
+                            disabled={busy}
                             className="rounded-lg border border-red-800 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-950 disabled:opacity-50"
                           >
                             {deletingId === slide.id
