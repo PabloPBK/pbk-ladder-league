@@ -222,3 +222,68 @@ export async function GET(request: NextRequest) {
     return errorResponse(error);
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireStaffUser();
+
+    const slideId = request.nextUrl.searchParams.get("id");
+
+    if (
+      !slideId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        slideId
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Invalid slide ID" },
+        { status: 400 }
+      );
+    }
+
+    const db = getTVDatabase();
+
+    // Find the slide before deleting it.
+    const { data: slide, error: lookupError } = await db
+      .from("tv_slides")
+      .select("id, storage_path")
+      .eq("id", slideId)
+      .single();
+
+    if (lookupError || !slide) {
+      return NextResponse.json(
+        { error: "Slide not found" },
+        { status: 404 }
+      );
+    }
+
+    // Remove the database record first.
+    const { error: deleteError } = await db
+      .from("tv_slides")
+      .delete()
+      .eq("id", slideId);
+
+    if (deleteError) throw deleteError;
+
+    // Remove the uploaded media file.
+    const { error: storageError } = await db.storage
+      .from("tv-media")
+      .remove([slide.storage_path]);
+
+    if (storageError) {
+      console.error(
+        "Slide deleted, but media cleanup failed:",
+        storageError
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      warning: storageError
+        ? "Slide deleted, but media cleanup requires attention"
+        : null,
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
