@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireStaffUser } from "@/lib/server/require-auth";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
@@ -18,11 +19,12 @@ export async function PATCH(
 
     const { id } = await context.params;
 
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        id
-      )
-    ) {
+    // Validate the TV screen UUID.
+    // Correct UUID format: 8-4-4-4-12
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(id)) {
       return NextResponse.json(
         { error: "Invalid TV screen ID" },
         { status: 400 }
@@ -34,7 +36,9 @@ export async function PATCH(
       process.env.TV_SUPABASE_SECRET_KEY;
 
     if (!tvSupabaseUrl || !tvSupabaseSecretKey) {
-      console.error("TV Manager database configuration missing");
+      console.error(
+        "TV Manager database configuration missing"
+      );
 
       return NextResponse.json(
         { error: "TV Manager database is not configured" },
@@ -74,6 +78,7 @@ export async function PATCH(
       is_active,
     } = input;
 
+    // Validate settings before updating Supabase.
     if (
       typeof name !== "string" ||
       !name.trim() ||
@@ -107,11 +112,12 @@ export async function PATCH(
       }
     );
 
+    // Update settings without changing the display token.
     const { data, error } = await tvSupabase
       .from("tv_screens")
       .update({
         name: name.trim(),
-        location: location,
+        location,
         display_mode,
         slide_duration,
         is_active,
@@ -123,7 +129,10 @@ export async function PATCH(
       .maybeSingle();
 
     if (error) {
-      console.error("TV screen update failed:", error);
+      console.error(
+        "TV screen update failed:",
+        error
+      );
 
       return NextResponse.json(
         { error: "Unable to save TV settings" },
@@ -160,7 +169,10 @@ export async function PATCH(
       );
     }
 
-    console.error("TV settings API error:", error);
+    console.error(
+      "TV settings API error:",
+      error
+    );
 
     return NextResponse.json(
       { error: "Unable to save TV settings" },
