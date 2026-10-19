@@ -18,6 +18,11 @@ export async function POST(
 
     const { id } = await context.params;
 
+console.log("TV LAUNCH DEBUG", {
+  id,
+  params: await context.params,
+});
+
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     ) {
