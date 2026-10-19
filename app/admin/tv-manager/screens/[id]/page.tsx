@@ -276,6 +276,55 @@ export default function TVScreenSettingsPage() {
                 </p>
               </div>
 
+              
+<button
+  type="button"
+  onClick={async () => {
+    // Open the tab immediately to avoid popup blockers.
+    const newTab = window.open("", "_blank");
+
+    if (!newTab) {
+      setError(
+        "Your browser blocked the TV window. Please allow popups."
+      );
+      return;
+    }
+
+    try {
+      setError("");
+
+      const response = await fetch(
+        `/api/tv-screens/${encodeURIComponent(screenId)}/launch`,
+        {
+          method: "POST",
+          cache: "no-store",
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Unable to launch TV display"
+        );
+      }
+
+      newTab.location.replace(result.url);
+    } catch (err) {
+      newTab.close();
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to launch TV display"
+      );
+    }
+  }}
+  className="mr-3 rounded-lg border border-yellow-400 px-6 py-3 font-bold text-yellow-400 hover:bg-yellow-400 hover:text-black"
+>
+  📺 Launch TV Display
+</button>
+
               <button
                 type="button"
                 onClick={() => void saveChanges()}
