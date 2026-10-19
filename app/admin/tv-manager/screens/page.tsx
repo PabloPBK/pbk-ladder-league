@@ -355,11 +355,23 @@ export default function TVScreensPage() {
                       </p>
                     </div>
 
+                    {/* Open this TV's display in a new tab */}
+                    <a
+                      href={`/tv/player/${encodeURIComponent(
+                        screen.id
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-5 block rounded-lg border border-yellow-400 px-4 py-3 text-center text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black"
+                    >
+                      Open TV Display ↗
+                    </a>
+
                     <Link
                       href={`/admin/tv-manager/screens/${encodeURIComponent(
                         screen.id
                       )}`}
-                      className="mt-5 block border-t border-zinc-700 pt-4 text-sm font-semibold text-yellow-400 hover:underline"
+                      className="mt-4 block border-t border-zinc-700 pt-4 text-sm font-semibold text-yellow-400 hover:underline"
                     >
                       Manage TV Settings →
                     </Link>
