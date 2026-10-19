@@ -14,18 +14,17 @@ export async function POST(
   context: RouteContext
 ) {
   try {
+    // Only authorized staff can launch TV displays.
     await requireStaffUser();
 
     const { id } = await context.params;
 
-console.log("TV LAUNCH DEBUG", {
-  id,
-  params: await context.params,
-});
+    // Validate the TV screen UUID.
+    // Correct UUID format: 8-4-4-4-12
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-    ) {
+    if (!uuidRegex.test(id)) {
       return NextResponse.json(
         { error: "Invalid TV screen ID" },
         { status: 400 }
@@ -36,6 +35,8 @@ console.log("TV LAUNCH DEBUG", {
     const key = process.env.TV_SUPABASE_SECRET_KEY;
 
     if (!url || !key) {
+      console.error("TV database configuration missing");
+
       return NextResponse.json(
         { error: "TV database is not configured" },
         { status: 500 }
@@ -49,13 +50,21 @@ console.log("TV LAUNCH DEBUG", {
       },
     });
 
+    // Retrieve the TV and its existing display token.
     const { data: screen, error } = await db
       .from("tv_screens")
       .select("id, name, display_token, is_active")
       .eq("id", id)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      console.error("TV screen lookup failed:", error);
+
+      return NextResponse.json(
+        { error: "Unable to load TV screen" },
+        { status: 500 }
+      );
+    }
 
     if (!screen) {
       return NextResponse.json(
@@ -78,7 +87,9 @@ console.log("TV LAUNCH DEBUG", {
       );
     }
 
+    // Build the secure TV player URL.
     const origin = new URL(request.url).origin;
+
     const playerUrl = new URL(
       `/tv/player/${encodeURIComponent(screen.id)}`,
       origin
@@ -90,7 +101,9 @@ console.log("TV LAUNCH DEBUG", {
     );
 
     return NextResponse.json(
-      { url: playerUrl.toString() },
+      {
+        url: playerUrl.toString(),
+      },
       {
         headers: {
           "Cache-Control": "no-store",
