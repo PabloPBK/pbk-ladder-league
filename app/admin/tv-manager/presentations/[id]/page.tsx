@@ -10,6 +10,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import LiveRosterSlides from "./LiveRosterSlides";
+import PresentationLogoManager from "./PresentationLogoManager";
+
 
 type Presentation = {
   id: string;
@@ -545,6 +547,10 @@ export default function PresentationEditorPage() {
                   {presentation.description ||
                     "No description provided."}
                 </p>
+                
+<PresentationLogoManager
+  presentationId={presentationId}
+/>
 
                 <div className="mt-6 rounded-xl border border-zinc-700 bg-zinc-950 p-6">
                   <h3 className="text-lg font-bold text-white">
