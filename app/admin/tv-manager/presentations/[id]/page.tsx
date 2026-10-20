@@ -526,9 +526,20 @@ export default function PresentationEditorPage() {
           {!loading &&
             presentation && (
               <>
-                <h2 className="text-2xl font-bold text-white">
-                  🎬 {presentation.name}
-                </h2>
+                
+<div className="flex flex-wrap items-center justify-between gap-4">
+  <h2 className="text-2xl font-bold text-white">
+    🎬 {presentation.name}
+  </h2>
+
+  <Link
+    href={`/admin/tv-manager/presentations/${presentationId}/preview`}
+    className="rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black hover:bg-yellow-300"
+  >
+    ▶ Preview Presentation
+  </Link>
+</div>
+
 
                 <p className="mt-2 text-zinc-400">
                   {presentation.description ||
