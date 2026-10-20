@@ -51,6 +51,7 @@ type PlayerData = {
   presentation: {
     id: string;
     name: string;
+    logo_url: string | null;
   } | null;
   slides: Slide[];
 };
@@ -106,10 +107,13 @@ function rosterPageCount(slide: Slide | null | undefined) {
 function LiveRosterDisplay({
   slide,
   pageIndex,
+  logoUrl,
 }: {
   slide: Slide;
   pageIndex: number;
+  logoUrl?: string | null;
 }) {
+
   const roster = slide.roster;
   const isTeams = slide.media_type === "roster_teams";
   const allEntries = roster?.entries ?? [];
@@ -154,16 +158,30 @@ function LiveRosterDisplay({
                 : "Live Free Agents"}
             </p>
           </div>
+  
+<div className="flex shrink-0 items-center gap-[2vw]">
+  <div className="rounded-xl border border-yellow-400 px-[2vw] py-[1vh] text-right">
+    <p className="text-[clamp(12px,1vw,20px)] uppercase tracking-wider text-zinc-400">
+      Rating Method
+    </p>
 
-          <div className="shrink-0 rounded-xl border border-yellow-400 px-[2vw] py-[1vh] text-right">
-            <p className="text-[clamp(12px,1vw,20px)] uppercase tracking-wider text-zinc-400">
-              Rating Method
-            </p>
+    <p className="mt-1 text-[clamp(17px,1.7vw,32px)] font-black text-yellow-400">
+      {ratingLabel(roster?.rating_method)}
+    </p>
+  </div>
 
-            <p className="mt-1 text-[clamp(17px,1.7vw,32px)] font-black text-yellow-400">
-              {ratingLabel(roster?.rating_method)}
-            </p>
-          </div>
+  {logoUrl && (
+    <div className="flex h-[clamp(80px,12vh,160px)] w-[clamp(80px,12vw,180px)] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={logoUrl}
+        alt="Presentation logo"
+        className="max-h-full max-w-full object-contain"
+      />
+    </div>
+  )}
+</div>
+
         </div>
       </header>
 
@@ -645,11 +663,12 @@ export default function TVPlayerPage() {
       {currentSlide &&
         (currentSlide.media_type === "roster_teams" ||
           currentSlide.media_type ===
-            "roster_free_agents") && (
-          <LiveRosterDisplay
-            slide={currentSlide}
-            pageIndex={rosterPageIndex}
-          />
+            "roster_free_agents") && (     
+<LiveRosterDisplay
+  slide={currentSlide}
+  pageIndex={rosterPageIndex}
+  logoUrl={player?.presentation?.logo_url}
+/>
         )}
 
       {currentSlide &&
