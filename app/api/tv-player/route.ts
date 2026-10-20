@@ -108,21 +108,23 @@ async function loadRosterData(
     };
   }
 
-  const { data: players, error: playersError } = await db
-    .from("roster_players")
-    .select(
-      "id, full_name, dupr_doubles, dupr_singles, club_rating"
-    )
-    .eq("event_id", eventId);
+  const { data: players, error: playersError } =
+    await db
+      .from("roster_players")
+      .select(
+        "id, full_name, dupr_doubles, dupr_singles, club_rating"
+      )
+      .eq("event_id", eventId);
 
   if (playersError) throw playersError;
 
   const rosterPlayers = (players ?? []) as RosterPlayer[];
 
-  const { data: teams, error: teamsError } = await db
-    .from("roster_teams")
-    .select("id, player1_id, player2_id")
-    .eq("event_id", eventId);
+  const { data: teams, error: teamsError } =
+    await db
+      .from("roster_teams")
+      .select("id, player1_id, player2_id")
+      .eq("event_id", eventId);
 
   if (teamsError) throw teamsError;
 
@@ -195,7 +197,10 @@ async function loadRosterData(
     .map((player) => ({
       id: player.id,
       name: player.full_name,
-      rating: getRating(player, event.rating_method),
+      rating: getRating(
+        player,
+        event.rating_method
+      ),
     }))
     .sort((a, b) => {
       if (a.rating === null) return 1;
@@ -240,14 +245,15 @@ export async function GET(request: NextRequest) {
     const db = getTVDatabase();
 
     // Authenticate the TV before accessing roster data.
-    const { data: screen, error: screenError } = await db
-      .from("tv_screens")
-      .select(
-        "id, name, is_active, presentation_id, display_mode, slide_duration"
-      )
-      .eq("id", screenId)
-      .eq("display_token", displayToken)
-      .maybeSingle();
+    const { data: screen, error: screenError } =
+      await db
+        .from("tv_screens")
+        .select(
+          "id, name, is_active, presentation_id, display_mode, slide_duration"
+        )
+        .eq("id", screenId)
+        .eq("display_token", displayToken)
+        .maybeSingle();
 
     if (screenError) throw screenError;
 
@@ -285,7 +291,9 @@ export async function GET(request: NextRequest) {
       error: presentationError,
     } = await db
       .from("tv_presentations")
-      .select("id, name, is_active")
+      .select(
+        "id, name, is_active, logo_storage_path"
+      )
       .eq("id", screen.presentation_id)
       .maybeSingle();
 
@@ -299,13 +307,43 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const { data: slides, error: slidesError } = await db
-      .from("tv_slides")
-      .select(
-        "id, title, media_type, storage_path, roster_event_id, sort_order, duration_seconds"
-      )
-      .eq("presentation_id", presentation.id)
-      .order("sort_order", { ascending: true });
+    // Generate a secure URL for the presentation logo.
+    // Presentations without a logo continue normally.
+    let logoUrl: string | null = null;
+
+    if (presentation.logo_storage_path) {
+      const {
+        data: logoData,
+        error: logoError,
+      } = await db.storage
+        .from("tv-media")
+        .createSignedUrl(
+          presentation.logo_storage_path,
+          3600
+        );
+
+      if (logoError || !logoData?.signedUrl) {
+        throw (
+          logoError ||
+          new Error(
+            "Unable to access presentation logo"
+          )
+        );
+      }
+
+      logoUrl = logoData.signedUrl;
+    }
+
+    const { data: slides, error: slidesError } =
+      await db
+        .from("tv_slides")
+        .select(
+          "id, title, media_type, storage_path, roster_event_id, sort_order, duration_seconds"
+        )
+        .eq("presentation_id", presentation.id)
+        .order("sort_order", {
+          ascending: true,
+        });
 
     if (slidesError) throw slidesError;
 
@@ -366,7 +404,9 @@ export async function GET(request: NextRequest) {
         if (error || !data?.signedUrl) {
           throw (
             error ||
-            new Error("Unable to access slide media")
+            new Error(
+              "Unable to access slide media"
+            )
           );
         }
 
@@ -382,6 +422,7 @@ export async function GET(request: NextRequest) {
       presentation: {
         id: presentation.id,
         name: presentation.name,
+        logo_url: logoUrl,
       },
       slides: preparedSlides,
     });
