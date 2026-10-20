@@ -1,8 +1,26 @@
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireStaffUser } from "@/lib/server/require-auth";
 
 export const dynamic = "force-dynamic";
+
+type RatingMethod =
+  | "dupr_doubles"
+  | "dupr_singles"
+  | "club_rating";
+
+const ratingMethods: RatingMethod[] = [
+  "dupr_doubles",
+  "dupr_singles",
+  "club_rating",
+];
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const eventFields =
+  "id, name, event_date, event_type, rating_method, created_at";
 
 function getTVDatabase() {
   const url = process.env.TV_SUPABASE_URL;
@@ -46,6 +64,47 @@ function handleError(error: unknown) {
   );
 }
 
+function isRatingMethod(
+  value: unknown
+): value is RatingMethod {
+  return (
+    typeof value === "string" &&
+    ratingMethods.includes(value as RatingMethod)
+  );
+}
+
+function validateEventDate(
+  value: unknown
+): string | null {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value)
+  ) {
+    throw new Error("INVALID_EVENT_DATE");
+  }
+
+  const parsedDate = new Date(
+    `${value}T00:00:00Z`
+  );
+
+  if (
+    Number.isNaN(parsedDate.getTime()) ||
+    parsedDate.toISOString().slice(0, 10) !== value
+  ) {
+    throw new Error("INVALID_EVENT_DATE");
+  }
+
+  return value;
+}
+
 // GET: Retrieve all events
 export async function GET() {
   try {
@@ -55,10 +114,10 @@ export async function GET() {
 
     const { data, error } = await db
       .from("roster_events")
-      .select(
-        "id, name, event_date, event_type, created_at"
-      )
-      .order("created_at", { ascending: false });
+      .select(eventFields)
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (error) throw error;
 
@@ -84,6 +143,8 @@ export async function POST(request: Request) {
 
     if (
       !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
       typeof body.name !== "string" ||
       !body.name.trim() ||
       body.name.trim().length > 120 ||
@@ -97,41 +158,25 @@ export async function POST(request: Request) {
       );
     }
 
-    let eventDate: string | null = null;
+    const ratingMethod =
+      body.rating_method ?? "dupr_doubles";
 
-    if (
-      body.event_date !== undefined &&
-      body.event_date !== null &&
-      body.event_date !== ""
-    ) {
-      if (
-        typeof body.event_date !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(
-          body.event_date
-        )
-      ) {
-        return NextResponse.json(
-          { error: "Invalid event date" },
-          { status: 400 }
-        );
-      }
-
-      const parsedDate = new Date(
-        `${body.event_date}T00:00:00Z`
+    if (!isRatingMethod(ratingMethod)) {
+      return NextResponse.json(
+        { error: "Invalid rating method" },
+        { status: 400 }
       );
+    }
 
-      if (
-        Number.isNaN(parsedDate.getTime()) ||
-        parsedDate.toISOString().slice(0, 10) !==
-          body.event_date
-      ) {
-        return NextResponse.json(
-          { error: "Invalid event date" },
-          { status: 400 }
-        );
-      }
+    let eventDate: string | null;
 
-      eventDate = body.event_date;
+    try {
+      eventDate = validateEventDate(body.event_date);
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid event date" },
+        { status: 400 }
+      );
     }
 
     const db = getTVDatabase();
@@ -142,10 +187,9 @@ export async function POST(request: Request) {
         name: body.name.trim(),
         event_date: eventDate,
         event_type: body.event_type,
+        rating_method: ratingMethod,
       })
-      .select(
-        "id, name, event_date, event_type, created_at"
-      )
+      .select(eventFields)
       .single();
 
     if (error) throw error;
@@ -153,6 +197,63 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { event: data },
       { status: 201 }
+    );
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+// PATCH: Update an existing event's rating method
+export async function PATCH(request: Request) {
+  try {
+    await requireStaffUser();
+
+    const body = await request.json().catch(() => null);
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      typeof body.id !== "string" ||
+      !uuidPattern.test(body.id) ||
+      !isRatingMethod(body.rating_method)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Valid event ID and rating method are required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const db = getTVDatabase();
+
+    const { data, error } = await db
+      .from("roster_events")
+      .update({
+        rating_method: body.rating_method,
+      })
+      .eq("id", body.id)
+      .select(eventFields)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return NextResponse.json(
+        { error: "Event not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { event: data },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
     );
   } catch (error) {
     return handleError(error);
