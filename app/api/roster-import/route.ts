@@ -4,10 +4,16 @@ import { requireStaffUser } from "@/lib/server/require-auth";
 
 export const dynamic = "force-dynamic";
 
-const uuid =
+const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Row = {
+type RatingStatus =
+  | "needs_review"
+  | "confirmed_dupr"
+  | "club_rating"
+  | "manual";
+
+type ImportPlayer = {
   full_name: string;
   email?: string | null;
   phone?: string | null;
@@ -16,22 +22,44 @@ type Row = {
   dupr_singles?: number | null;
   imported_doubles_rating?: number | null;
   imported_singles_rating?: number | null;
-  doubles_rating_status:
-    | "needs_review"
-    | "confirmed_dupr"
-    | "club_rating"
-    | "manual";
+  doubles_rating_status: RatingStatus;
 };
+
+const ratingStatuses: RatingStatus[] = [
+  "needs_review",
+  "confirmed_dupr",
+  "club_rating",
+  "manual",
+];
 
 const clean = (value: string) =>
   value.trim().replace(/\s+/g, " ").toLowerCase();
 
-const validRating = (value: unknown) =>
-  value == null ||
-  (typeof value === "number" &&
-    Number.isFinite(value) &&
-    value >= 1 &&
-    value <= 8);
+function validRating(value: unknown): boolean {
+  return (
+    value == null ||
+    (typeof value === "number" &&
+      Number.isFinite(value) &&
+      value >= 1 &&
+      value <= 8)
+  );
+}
+
+function getDatabase() {
+  const url = process.env.TV_SUPABASE_URL;
+  const key = process.env.TV_SUPABASE_SECRET_KEY;
+
+  if (!url || !key) {
+    throw new Error("TV_DATABASE_NOT_CONFIGURED");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -41,73 +69,53 @@ export async function POST(request: Request) {
 
     if (
       !body ||
-      !uuid.test(body.event_id) ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      typeof body.event_id !== "string" ||
+      !uuidPattern.test(body.event_id) ||
       !Array.isArray(body.players) ||
       body.players.length === 0 ||
       body.players.length > 300
     ) {
       return NextResponse.json(
-        { error: "Invalid event or import size (maximum 300 rows)" },
+        {
+          error: "Invalid event or import size (maximum 300 players)",
+        },
         { status: 400 }
       );
     }
 
-    const rows = body.players as Row[];
+    const rows = body.players as ImportPlayer[];
 
-    for (const p of rows) {
+    for (const player of rows) {
       if (
-        !p ||
-        typeof p.full_name !== "string" ||
-        !p.full_name.trim() ||
-        p.full_name.length > 200 ||
-        (p.email != null &&
-          (typeof p.email !== "string" || p.email.length > 300)) ||
-        (p.phone != null &&
-          (typeof p.phone !== "string" || p.phone.length > 300)) ||
+        !player ||
+        typeof player.full_name !== "string" ||
+        !player.full_name.trim() ||
+        player.full_name.length > 200 ||
+        (player.email != null &&
+          (typeof player.email !== "string" ||
+            player.email.length > 300)) ||
+        (player.phone != null &&
+          (typeof player.phone !== "string" ||
+            player.phone.length > 300)) ||
+        !ratingStatuses.includes(player.doubles_rating_status) ||
         ![
-          "needs_review",
-          "confirmed_dupr",
-          "club_rating",
-          "manual",
-        ].includes(p.doubles_rating_status) ||
-        ![
-          p.club_rating,
-          p.dupr_doubles,
-          p.dupr_singles,
-          p.imported_doubles_rating,
-          p.imported_singles_rating,
+          player.club_rating,
+          player.dupr_doubles,
+          player.dupr_singles,
+          player.imported_doubles_rating,
+          player.imported_singles_rating,
         ].every(validRating)
       ) {
         return NextResponse.json(
-          { error: "Invalid player data or rating" },
-          { status: 400 }
-        );
-      }
-
-      if (
-        p.doubles_rating_status === "club_rating" &&
-        p.dupr_doubles != null
-      ) {
-        return NextResponse.json(
-          { error: "Club rating cannot also be used as DUPR Doubles" },
+          { error: "Invalid player details or rating" },
           { status: 400 }
         );
       }
     }
 
-    const url = process.env.TV_SUPABASE_URL;
-    const secret = process.env.TV_SUPABASE_SECRET_KEY;
-
-    if (!url || !secret) {
-      throw new Error("TV_DATABASE_NOT_CONFIGURED");
-    }
-
-    const db = createClient(url, secret, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const db = getDatabase();
 
     const { data: event, error: eventError } = await db
       .from("roster_events")
@@ -132,66 +140,84 @@ export async function POST(request: Request) {
     if (existingError) throw existingError;
 
     const existingRows = existing ?? [];
-    const seen = new Set<string>();
+    const seenNames = new Set<string>();
+    const seenEmails = new Set<string>();
+
     const insertRows: Record<string, unknown>[] = [];
     let skipped = 0;
 
-    for (const p of rows) {
-      const email = clean(p.email ?? "");
-      const name = clean(p.full_name);
+    for (const player of rows) {
+      const name = clean(player.full_name);
+      const email = clean(player.email ?? "");
 
       const duplicate = existingRows.some(
-        (x) =>
-          (email && clean(x.email ?? "") === email) ||
-          clean(x.full_name) === name
+        (existingPlayer) =>
+          clean(existingPlayer.full_name) === name ||
+          (email !== "" &&
+            clean(existingPlayer.email ?? "") === email)
       );
 
       if (
         duplicate ||
-        seen.has(`n:${name}`) ||
-        (email && seen.has(`e:${email}`))
+        seenNames.has(name) ||
+        (email !== "" && seenEmails.has(email))
       ) {
         skipped++;
         continue;
       }
 
-      seen.add(`n:${name}`);
+      seenNames.add(name);
 
-      if (email) seen.add(`e:${email}`);
+      if (email) {
+        seenEmails.add(email);
+      }
 
       insertRows.push({
         event_id: body.event_id,
-        full_name: p.full_name.trim(),
-        email: p.email?.trim() || null,
-        phone: p.phone?.trim() || null,
-        club_rating: p.club_rating ?? null,
-        dupr_doubles: p.dupr_doubles ?? null,
-        dupr_singles: p.dupr_singles ?? null,
+        full_name: player.full_name.trim(),
+        email: player.email?.trim() || null,
+        phone: player.phone?.trim() || null,
+
+        // Independent rating fields.
+        club_rating: player.club_rating ?? null,
+        dupr_doubles: player.dupr_doubles ?? null,
+        dupr_singles: player.dupr_singles ?? null,
+
+        // Preserve the original imported PodPlay values.
         imported_doubles_rating:
-          p.imported_doubles_rating ?? null,
+          player.imported_doubles_rating ?? null,
         imported_singles_rating:
-          p.imported_singles_rating ?? null,
-        doubles_rating_status: p.doubles_rating_status,
+          player.imported_singles_rating ?? null,
+
+        doubles_rating_status: player.doubles_rating_status,
         registration_status: "Accepted",
         source: "csv",
+
         rating_updated_at:
-          p.doubles_rating_status === "needs_review"
+          player.doubles_rating_status === "needs_review"
             ? null
             : new Date().toISOString(),
       });
     }
 
-    if (insertRows.length) {
-      const { error } = await db
+    if (insertRows.length > 0) {
+      const { error: insertError } = await db
         .from("roster_players")
         .insert(insertRows);
 
-      if (error) throw error;
+      if (insertError) throw insertError;
     }
 
     return NextResponse.json(
-      { added: insertRows.length, skipped },
-      { headers: { "Cache-Control": "no-store" } }
+      {
+        added: insertRows.length,
+        skipped,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
     );
   } catch (error) {
     const message =
@@ -211,7 +237,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.error("Roster CSV import error", error);
+    console.error("Roster import error:", error);
 
     return NextResponse.json(
       { error: "Unable to import registrations" },
