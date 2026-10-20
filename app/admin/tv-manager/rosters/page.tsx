@@ -369,6 +369,60 @@ function editPlayer(player: RosterPlayer) {
     setEditingId(null);
     setPlayerForm(emptyPlayer);
   }
+  
+async function deletePlayer(player: RosterPlayer) {
+  if (!selectedEventId) return;
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete ${player.full_name}?\n\n` +
+      "This removes the player from the selected event. " +
+      "Players assigned to teams must be unassigned first."
+  );
+
+  if (!confirmed) return;
+
+  setError("");
+  setSuccess("");
+
+  try {
+    const response = await fetch("/api/roster-players", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: player.id,
+        event_id: selectedEventId,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || "Unable to delete player"
+      );
+    }
+
+    if (editingId === player.id) {
+      cancelEdit();
+    }
+
+    await loadPlayers(selectedEventId);
+
+    setSuccess(
+      `${player.full_name} was removed from this event.`
+    );
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Unable to delete player";
+
+    setError(message);
+    window.alert(message);
+  }
+}
 
   async function savePlayer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -845,10 +899,13 @@ function editPlayer(player: RosterPlayer) {
                   ? "Players without assigned partners are Free Agents. Partner assignment is coming next."
                   : "Individual event roster."}
               </p>
-
-              <h3 className="mt-6 text-lg font-bold">
-                {editingId ? "Edit Player" : "Add Player Manually"}
-              </h3>
+          
+<h3
+  id="player-edit-form"
+  className="mt-6 scroll-mt-8 text-lg font-bold"
+>
+  {editingId ? "Edit Player" : "Add Player Manually"}
+</h3>
 
               <form onSubmit={savePlayer} className="mt-4 space-y-4">
                 <div>
@@ -1150,14 +1207,25 @@ function editPlayer(player: RosterPlayer) {
                             {player.doubles_rating_status.replaceAll("_", " ")}
                           </td>
                           <td className="pl-3">
-                            <button
-                              type="button"
-                              onClick={() => editPlayer(player)}
-                              className="font-semibold text-yellow-400 hover:underline"
-                            >
-                              Edit
-                            </button>
-                          </td>
+  <div className="flex items-center gap-5">
+    <button
+      type="button"
+      onClick={() => editPlayer(player)}
+      className="font-semibold text-yellow-400 hover:underline"
+    >
+      Edit
+    </button>
+
+    <button
+      type="button"
+      onClick={() => void deletePlayer(player)}
+      className="font-semibold text-red-400 hover:underline"
+    >
+      Delete
+    </button>
+  </div>
+</td>
+
                         </tr>
                       ))}
                     </tbody>
