@@ -16,6 +16,8 @@ type PlayerData = {
   screen: {
     id: string;
     name: string;
+    display_mode: "single" | "slideshow";
+    slide_duration: number;
   };
   presentation: {
     id: string;
