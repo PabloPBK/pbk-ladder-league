@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -56,6 +55,8 @@ type PlayerData = {
   slides: Slide[];
 };
 
+const ROSTER_PAGE_SIZE = 12;
+
 function getDuration(value: number | null | undefined) {
   if (
     typeof value !== "number" ||
@@ -85,17 +86,46 @@ function ratingLabel(method: string | null | undefined) {
   }
 }
 
-function LiveRosterDisplay({ slide }: { slide: Slide }) {
+function rosterPageCount(slide: Slide | null | undefined) {
+  if (
+    !slide ||
+    (slide.media_type !== "roster_teams" &&
+      slide.media_type !== "roster_free_agents")
+  ) {
+    return 1;
+  }
+
+  return Math.max(
+    1,
+    Math.ceil(
+      (slide.roster?.entries?.length ?? 0) / ROSTER_PAGE_SIZE
+    )
+  );
+}
+
+function LiveRosterDisplay({
+  slide,
+  pageIndex,
+}: {
+  slide: Slide;
+  pageIndex: number;
+}) {
   const roster = slide.roster;
   const isTeams = slide.media_type === "roster_teams";
-  const entries = roster?.entries ?? [];
+  const allEntries = roster?.entries ?? [];
 
-  // Use two equal columns when the roster grows.
-  // Both columns are explicitly 50% of the available space.
+  const totalPages = rosterPageCount(slide);
+  const safePageIndex = Math.min(
+    Math.max(0, pageIndex),
+    totalPages - 1
+  );
+
+  const entries = allEntries.slice(
+    safePageIndex * ROSTER_PAGE_SIZE,
+    (safePageIndex + 1) * ROSTER_PAGE_SIZE
+  );
+
   const useTwoColumns = entries.length > 6;
-
-  // Divide entries into equal-sized columns, preserving
-  // the ranking order from top to bottom.
   const midpoint = Math.ceil(entries.length / 2);
 
   const columns = useTwoColumns
@@ -173,40 +203,46 @@ function LiveRosterDisplay({ slide }: { slide: Slide }) {
                     return (
                       <div
                         key={team.id}
-                        className="flex h-[clamp(90px,11vh,130px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
+                        className="flex h-[clamp(72px,9.2vh,110px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
                       >
-                        <div className="flex h-[clamp(48px,5vw,76px)] w-[clamp(48px,5vw,76px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(22px,2.2vw,42px)] font-black text-black">
+                        <div className="flex h-[clamp(42px,4.5vw,70px)] w-[clamp(42px,4.5vw,70px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(20px,2vw,38px)] font-black text-black">
                           {team.rank}
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-3">
-                            <p className="min-w-0 flex-1 truncate text-[clamp(17px,1.65vw,32px)] font-bold leading-tight">
+                            <p className="min-w-0 flex-1 truncate text-[clamp(15px,1.5vw,29px)] font-bold leading-tight">
                               {team.player1}
                             </p>
 
-                            <span className="shrink-0 text-[clamp(12px,1vw,19px)] text-zinc-400">
-                              {formatRating(team.player1_rating)}
+                            <span className="shrink-0 text-[clamp(11px,0.9vw,18px)] text-zinc-400">
+                              {formatRating(
+                                team.player1_rating
+                              )}
                             </span>
                           </div>
 
                           <div className="mt-1 flex min-w-0 items-center gap-3">
-                            <p className="min-w-0 flex-1 truncate text-[clamp(17px,1.65vw,32px)] font-bold leading-tight">
+                            <p className="min-w-0 flex-1 truncate text-[clamp(15px,1.5vw,29px)] font-bold leading-tight">
                               {team.player2}
                             </p>
 
-                            <span className="shrink-0 text-[clamp(12px,1vw,19px)] text-zinc-400">
-                              {formatRating(team.player2_rating)}
+                            <span className="shrink-0 text-[clamp(11px,0.9vw,18px)] text-zinc-400">
+                              {formatRating(
+                                team.player2_rating
+                              )}
                             </span>
                           </div>
                         </div>
 
                         <div className="shrink-0 border-l border-zinc-700 pl-[1vw] text-right">
-                          <p className="text-[clamp(23px,2.4vw,46px)] font-black leading-tight text-yellow-400">
-                            {formatRating(team.combined_rating)}
+                          <p className="text-[clamp(21px,2.2vw,42px)] font-black leading-tight text-yellow-400">
+                            {formatRating(
+                              team.combined_rating
+                            )}
                           </p>
 
-                          <p className="mt-1 text-[clamp(11px,0.9vw,17px)] text-zinc-400">
+                          <p className="mt-1 text-[clamp(10px,0.8vw,16px)] text-zinc-400">
                             Combined
                           </p>
                         </div>
@@ -219,17 +255,17 @@ function LiveRosterDisplay({ slide }: { slide: Slide }) {
                   return (
                     <div
                       key={agent.id}
-                      className="flex h-[clamp(76px,9vh,110px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
+                      className="flex h-[clamp(68px,8.5vh,100px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
                     >
-                      <div className="flex h-[clamp(45px,4.5vw,70px)] w-[clamp(45px,4.5vw,70px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(21px,2vw,38px)] font-black text-black">
+                      <div className="flex h-[clamp(40px,4vw,65px)] w-[clamp(40px,4vw,65px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(19px,1.9vw,36px)] font-black text-black">
                         {agent.rank}
                       </div>
 
-                      <p className="min-w-0 flex-1 truncate text-[clamp(18px,1.8vw,34px)] font-bold">
+                      <p className="min-w-0 flex-1 truncate text-[clamp(17px,1.7vw,32px)] font-bold">
                         {agent.name}
                       </p>
 
-                      <p className="shrink-0 text-[clamp(23px,2.4vw,46px)] font-black text-yellow-400">
+                      <p className="shrink-0 text-[clamp(21px,2.2vw,42px)] font-black text-yellow-400">
                         {formatRating(agent.rating)}
                       </p>
                     </div>
@@ -243,17 +279,20 @@ function LiveRosterDisplay({ slide }: { slide: Slide }) {
 
       <footer className="mt-[1vh] flex shrink-0 items-center justify-between border-t border-zinc-800 pt-[1.5vh] text-[clamp(12px,1vw,20px)] text-zinc-400">
         <span>
-          {entries.length}{" "}
+          {allEntries.length}{" "}
           {isTeams
-            ? entries.length === 1
+            ? allEntries.length === 1
               ? "Team"
               : "Teams"
-            : entries.length === 1
+            : allEntries.length === 1
               ? "Free Agent"
               : "Free Agents"}
         </span>
 
         <span className="font-bold text-yellow-400">
+          {totalPages > 1
+            ? `PAGE ${safePageIndex + 1} OF ${totalPages} • `
+            : ""}
           LIVE • AUTO UPDATING
         </span>
       </footer>
@@ -268,13 +307,17 @@ export default function TVPlayerPage() {
   const screenId = params.id;
   const token = searchParams.get("token") ?? "";
 
-  const [player, setPlayer] = useState<PlayerData | null>(null);
+  const [player, setPlayer] = useState<PlayerData | null>(
+    null
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [rosterPageIndex, setRosterPageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const playerRef = useRef<PlayerData | null>(null);
   const indexRef = useRef(0);
+  const rosterPageRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const slides = player?.slides ?? [];
@@ -291,21 +334,40 @@ export default function TVPlayerPage() {
 
     if (!data) return;
 
-    const nextSlides = data.slides ?? [];
-    const mode = data.screen.display_mode ?? "slideshow";
+    const activeSlide = data.slides[indexRef.current];
+    const pages = rosterPageCount(activeSlide);
 
-    if (
-      mode !== "slideshow" ||
-      nextSlides.length <= 1
-    ) {
+    // Display every roster page before changing slides.
+    if (rosterPageRef.current + 1 < pages) {
+      const nextPage = rosterPageRef.current + 1;
+
+      rosterPageRef.current = nextPage;
+      setRosterPageIndex(nextPage);
       return;
     }
 
-    setCurrentIndex((previous) => {
-      const next = (previous + 1) % nextSlides.length;
-      indexRef.current = next;
-      return next;
-    });
+    const canAdvanceSlide =
+      (data.screen.display_mode ?? "slideshow") ===
+        "slideshow" && data.slides.length > 1;
+
+    if (!canAdvanceSlide) {
+      // In single-screen mode, cycle roster pages.
+      if (pages > 1) {
+        rosterPageRef.current = 0;
+        setRosterPageIndex(0);
+      }
+
+      return;
+    }
+
+    const next =
+      (indexRef.current + 1) % data.slides.length;
+
+    indexRef.current = next;
+    rosterPageRef.current = 0;
+
+    setRosterPageIndex(0);
+    setCurrentIndex(next);
   }, []);
 
   // Refresh presentation and roster data every 30 seconds.
@@ -315,9 +377,11 @@ export default function TVPlayerPage() {
 
     playerRef.current = null;
     indexRef.current = 0;
+    rosterPageRef.current = 0;
 
     setPlayer(null);
     setCurrentIndex(0);
+    setRosterPageIndex(0);
     setLoading(true);
     setError("");
 
@@ -396,7 +460,22 @@ export default function TVPlayerPage() {
           indexRef.current >= nextPlayer.slides.length
         ) {
           indexRef.current = 0;
+          rosterPageRef.current = 0;
+
           setCurrentIndex(0);
+          setRosterPageIndex(0);
+        } else {
+          // Keep the current page during data refreshes.
+          // Clamp the page if the roster has become smaller.
+          const active =
+            nextPlayer.slides[indexRef.current];
+
+          const maxPage = rosterPageCount(active) - 1;
+
+          if (rosterPageRef.current > maxPage) {
+            rosterPageRef.current = maxPage;
+            setRosterPageIndex(maxPage);
+          }
         }
 
         playerRef.current = nextPlayer;
@@ -431,18 +510,25 @@ export default function TVPlayerPage() {
     };
   }, [screenId, token]);
 
-  // Advance non-video slides according to the screen timer.
+  // Advance images and roster pages using saved durations.
   useEffect(() => {
-    if (!currentSlide || !isSlideshow) return;
+    if (!currentSlide) return;
+
+    const hasMultipleRosterPages =
+      rosterPageCount(currentSlide) > 1;
+
+    if (!isSlideshow && !hasMultipleRosterPages) {
+      return;
+    }
 
     if (currentSlide.media_type.startsWith("video")) {
       return;
     }
 
     const duration = getDuration(
-  currentSlide.duration_seconds ??
-    player?.screen.slide_duration
-);
+      currentSlide.duration_seconds ??
+        player?.screen.slide_duration
+    );
 
     const timer = window.setTimeout(() => {
       advanceSlide();
@@ -455,6 +541,8 @@ export default function TVPlayerPage() {
     currentSlide?.id,
     currentSlide?.media_type,
     currentSlide?.duration_seconds,
+    currentSlide?.roster?.entries.length,
+    rosterPageIndex,
     player?.screen.slide_duration,
     isSlideshow,
     advanceSlide,
@@ -488,6 +576,7 @@ export default function TVPlayerPage() {
             <p className="text-3xl font-bold text-yellow-400">
               Pickleball Kingdom
             </p>
+
             <p className="mt-4 text-lg text-zinc-400">
               Loading TV presentation...
             </p>
@@ -555,8 +644,12 @@ export default function TVPlayerPage() {
 
       {currentSlide &&
         (currentSlide.media_type === "roster_teams" ||
-          currentSlide.media_type === "roster_free_agents") && (
-          <LiveRosterDisplay slide={currentSlide} />
+          currentSlide.media_type ===
+            "roster_free_agents") && (
+          <LiveRosterDisplay
+            slide={currentSlide}
+            pageIndex={rosterPageIndex}
+          />
         )}
 
       {currentSlide &&
@@ -566,7 +659,9 @@ export default function TVPlayerPage() {
           <img
             key={currentSlide.id}
             src={currentSlide.media_url}
-            alt={currentSlide.title || "TV presentation"}
+            alt={
+              currentSlide.title || "TV presentation"
+            }
             className="h-full w-full object-contain"
             onError={advanceSlide}
           />
@@ -598,7 +693,8 @@ export default function TVPlayerPage() {
         !currentSlide.media_type.startsWith("image") &&
         !currentSlide.media_type.startsWith("video") &&
         currentSlide.media_type !== "roster_teams" &&
-        currentSlide.media_type !== "roster_free_agents" && (
+        currentSlide.media_type !==
+          "roster_free_agents" && (
           <div className="flex h-full items-center justify-center">
             <p className="text-zinc-400">
               Unsupported slide format
