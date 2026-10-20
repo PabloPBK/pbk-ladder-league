@@ -73,9 +73,21 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (!slide.media_type.startsWith("image")) {
+    // Images and live roster slides support
+    // individual display durations.
+    // Videos continue playing until finished.
+    const allowedTypes = [
+      "image",
+      "roster_teams",
+      "roster_free_agents",
+    ];
+
+    if (!allowedTypes.includes(slide.media_type)) {
       return NextResponse.json(
-        { error: "Duration settings are for images only" },
+        {
+          error:
+            "Duration settings are available for images and live roster slides only.",
+        },
         { status: 400 }
       );
     }
