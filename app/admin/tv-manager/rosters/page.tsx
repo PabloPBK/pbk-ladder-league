@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
+import TeamManager from "./TeamManager";
 
 type RatingMethod = "dupr_doubles" | "dupr_singles" | "club_rating";
 type RatingStatus = "needs_review" | "confirmed_dupr" | "club_rating" | "manual";
@@ -155,6 +156,9 @@ export default function LiveRostersPage() {
   const [events, setEvents] = useState<RosterEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
+  const [playersVersion, setPlayersVersion] = useState(0);
+
+
 
   const [name, setName] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -229,6 +233,7 @@ export default function LiveRostersPage() {
       }
 
       setPlayers(result.players || []);
+      setPlayersVersion((current) => current + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load players");
     } finally {
@@ -1149,6 +1154,13 @@ export default function LiveRostersPage() {
                 </div>
               )}
             </section>
+            <TeamManager
+  eventId={selectedEvent.id}
+  eventName={selectedEvent.name}
+  eventType={selectedEvent.event_type}
+  ratingMethod={selectedEvent.rating_method ?? "dupr_doubles"}
+  playersVersion={playersVersion}
+/>
           </>
         )}
 
