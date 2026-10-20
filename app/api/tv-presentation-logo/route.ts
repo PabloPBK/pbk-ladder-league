@@ -148,19 +148,22 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) throw uploadError;
 
-    const { data: updated, error: updateError } =
-      await db
-        .from("tv_presentations")
-        .update({
-          logo_storage_path: storagePath,
-        })
-        .eq("id", presentationId)
-        .eq(
-          "logo_storage_path",
-          previousPath ?? null
-        )
-        .select("id")
-        .maybeSingle();
+const updateQuery = db
+  .from("tv_presentations")
+  .update({
+    logo_storage_path: storagePath,
+  })
+  .eq("id", presentationId);
+
+const { data: updated, error: updateError } =
+  await (
+    previousPath
+      ? updateQuery.eq("logo_storage_path", previousPath)
+      : updateQuery.is("logo_storage_path", null)
+  )
+    .select("id")
+    .maybeSingle();
+
 
     if (updateError || !updated) {
       await db.storage
