@@ -649,9 +649,8 @@ export default function PresentationPreviewPage() {
           Connection interrupted. Retrying...
         </div>
       )}
-
-      <div className="absolute right-5 top-5 z-50 flex items-center gap-3">
-        <span className="rounded-lg bg-black/80 px-4 py-3 text-sm font-semibold text-yellow-400">
+<div className="absolute bottom-5 right-5 z-50 flex items-center gap-3">
+      <span className="rounded-lg bg-black/80 px-4 py-3 text-sm font-semibold text-yellow-400">
           PREVIEW MODE
         </span>
 
