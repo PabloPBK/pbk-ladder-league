@@ -16,8 +16,8 @@ type PlayerData = {
   screen: {
     id: string;
     name: string;
-    display_mode: "single" | "slideshow";
-    slide_duration: number;
+    display_mode?: "single" | "slideshow" | null;
+    slide_duration?: number | null;
   };
   presentation: {
     id: string;
@@ -25,6 +25,17 @@ type PlayerData = {
   } | null;
   slides: Slide[];
 };
+
+function getDuration(value: number | null | undefined) {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
+    return 10;
+  }
+
+  return Math.max(1, Math.min(value, 3600));
+}
 
 export default function TVPlayerPage() {
   const params = useParams<{ id: string }>();
@@ -38,52 +49,67 @@ export default function TVPlayerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<PlayerData | null>(null);
   const indexRef = useRef(0);
-  const mountedRef = useRef(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const currentSlide = player?.slides[currentIndex] ?? null;
+  const slides = player?.slides ?? [];
+  const currentSlide = slides[currentIndex] ?? null;
+
+  // Preserve existing slideshow behavior until the
+  // API supplies an explicit display mode.
+  const displayMode =
+    player?.screen.display_mode ?? "slideshow";
+
+  const isSlideshow =
+    displayMode === "slideshow" && slides.length > 1;
 
   const advanceSlide = useCallback(() => {
-    const slides = playerRef.current?.slides ?? [];
+    const data = playerRef.current;
 
-    if (slides.length === 0) return;
+    if (!data) return;
+
+    const nextSlides = data.slides ?? [];
+    const mode = data.screen.display_mode ?? "slideshow";
+
+    if (
+      mode !== "slideshow" ||
+      nextSlides.length <= 1
+    ) {
+      return;
+    }
 
     setCurrentIndex((previous) => {
-      const next = (previous + 1) % slides.length;
+      const next = (previous + 1) % nextSlides.length;
       indexRef.current = next;
       return next;
     });
   }, []);
 
+  // Load presentation and refresh it every 30 seconds.
   useEffect(() => {
-    mountedRef.current = true;
+    let cancelled = false;
+    let inFlight = false;
 
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
     playerRef.current = null;
     indexRef.current = 0;
+
     setPlayer(null);
     setCurrentIndex(0);
     setLoading(true);
     setError("");
 
     if (!token) {
-      setError("This TV does not have a display access token.");
+      setError(
+        "This TV does not have a display access token."
+      );
       setLoading(false);
       return;
     }
 
-    let cancelled = false;
-    let inFlight = false;
-
     async function loadPlayer() {
-      if (inFlight) return;
+      if (inFlight || cancelled) return;
+
       inFlight = true;
 
       try {
@@ -103,38 +129,52 @@ export default function TVPlayerPage() {
 
         if (!response.ok) {
           throw new Error(
-            result.error || "Unable to load TV presentation"
+            result.error ||
+              "Unable to load TV presentation"
           );
         }
 
-        if (cancelled || !mountedRef.current) return;
+        if (cancelled) return;
 
         const nextPlayer = result as PlayerData;
         const previousPlayer = playerRef.current;
 
-        const previousSlides = previousPlayer?.slides ?? [];
-        const nextSlides = nextPlayer.slides ?? [];
-
         const previousSignature = JSON.stringify({
-          presentation: previousPlayer?.presentation?.id ?? null,
-          slides: previousSlides.map((slide) => ({
-            id: slide.id,
-            duration: slide.duration_seconds,
-          })),
+          presentation:
+            previousPlayer?.presentation?.id ?? null,
+          mode:
+            previousPlayer?.screen.display_mode ?? null,
+          duration:
+            previousPlayer?.screen.slide_duration ?? null,
+          slides: (previousPlayer?.slides ?? []).map(
+            (slide) => ({
+              id: slide.id,
+              type: slide.media_type,
+              duration: slide.duration_seconds,
+            })
+          ),
         });
 
         const nextSignature = JSON.stringify({
-          presentation: nextPlayer.presentation?.id ?? null,
-          slides: nextSlides.map((slide) => ({
-            id: slide.id,
-            duration: slide.duration_seconds,
-          })),
+          presentation:
+            nextPlayer.presentation?.id ?? null,
+          mode:
+            nextPlayer.screen.display_mode ?? null,
+          duration:
+            nextPlayer.screen.slide_duration ?? null,
+          slides: (nextPlayer.slides ?? []).map(
+            (slide) => ({
+              id: slide.id,
+              type: slide.media_type,
+              duration: slide.duration_seconds,
+            })
+          ),
         });
 
-        if (previousSignature !== nextSignature) {
-          indexRef.current = 0;
-          setCurrentIndex(0);
-        } else if (indexRef.current >= nextSlides.length) {
+        if (
+          previousSignature !== nextSignature ||
+          indexRef.current >= nextPlayer.slides.length
+        ) {
           indexRef.current = 0;
           setCurrentIndex(0);
         }
@@ -143,7 +183,7 @@ export default function TVPlayerPage() {
         setPlayer(nextPlayer);
         setError("");
       } catch (err) {
-        if (cancelled || !mountedRef.current) return;
+        if (cancelled) return;
 
         const message =
           err instanceof Error
@@ -154,7 +194,7 @@ export default function TVPlayerPage() {
       } finally {
         inFlight = false;
 
-        if (!cancelled && mountedRef.current) {
+        if (!cancelled) {
           setLoading(false);
         }
       }
@@ -162,8 +202,6 @@ export default function TVPlayerPage() {
 
     void loadPlayer();
 
-    // Check for presentation changes every 30 seconds.
-    // This also renews the temporary media URLs.
     const interval = window.setInterval(() => {
       void loadPlayer();
     }, 30000);
@@ -174,30 +212,17 @@ export default function TVPlayerPage() {
     };
   }, [screenId, token]);
 
+  // Automatically advance images in slideshow mode.
   useEffect(() => {
-    if (!currentSlide) return;
+    if (!currentSlide || !isSlideshow) return;
 
-    const isVideo =
-      currentSlide.media_type.startsWith("video");
-
-    if (isVideo) {
-      const video = videoRef.current;
-
-      if (video) {
-        video.currentTime = 0;
-
-        void video.play().catch(() => {
-          // Some browsers require a user interaction
-          // before allowing video playback.
-        });
-      }
-
+    if (currentSlide.media_type.startsWith("video")) {
       return;
     }
 
-    const duration = Math.max(
-      5,
-      Math.min(currentSlide.duration_seconds ?? 10, 3600)
+    const duration = getDuration(
+      player?.screen.slide_duration ??
+        currentSlide.duration_seconds
     );
 
     const timer = window.setTimeout(() => {
@@ -211,8 +236,30 @@ export default function TVPlayerPage() {
     currentSlide?.id,
     currentSlide?.media_type,
     currentSlide?.duration_seconds,
+    player?.screen.slide_duration,
+    isSlideshow,
     advanceSlide,
   ]);
+
+  // Retry video playback when the active slide changes.
+  useEffect(() => {
+    if (
+      !currentSlide ||
+      !currentSlide.media_type.startsWith("video")
+    ) {
+      return;
+    }
+
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    video.currentTime = 0;
+
+    void video.play().catch(() => {
+      // Muted autoplay is supported by most TV browsers.
+    });
+  }, [currentSlide?.id, currentSlide?.media_type]);
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-black text-white">
@@ -235,12 +282,16 @@ export default function TVPlayerPage() {
             <p className="text-3xl font-bold text-yellow-400">
               TV Display Unavailable
             </p>
+
             <p className="mt-4 text-lg text-zinc-400">
               {error}
             </p>
-            <p className="mt-3 text-sm text-zinc-500">
-              This screen will automatically try again.
-            </p>
+
+            {token && (
+              <p className="mt-3 text-sm text-zinc-500">
+                This screen will automatically try again.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -251,9 +302,11 @@ export default function TVPlayerPage() {
             <p className="text-4xl font-black text-yellow-400">
               Pickleball Kingdom
             </p>
+
             <p className="mt-5 text-xl text-zinc-300">
               {player.screen.name}
             </p>
+
             <p className="mt-3 text-zinc-500">
               Waiting for a presentation assignment...
             </p>
@@ -263,15 +316,17 @@ export default function TVPlayerPage() {
 
       {player &&
         player.presentation &&
-        player.slides.length === 0 && (
+        slides.length === 0 && (
           <div className="flex h-full items-center justify-center p-8">
             <div className="text-center">
               <p className="text-4xl font-black text-yellow-400">
                 Pickleball Kingdom
               </p>
+
               <p className="mt-5 text-xl text-zinc-300">
                 {player.presentation.name}
               </p>
+
               <p className="mt-3 text-zinc-500">
                 No slides have been added yet.
               </p>
@@ -285,7 +340,10 @@ export default function TVPlayerPage() {
           <img
             key={currentSlide.id}
             src={currentSlide.media_url}
-            alt={currentSlide.title || "TV presentation"}
+            alt={
+              currentSlide.title ||
+              "TV presentation"
+            }
             className="h-full w-full object-contain"
             onError={advanceSlide}
           />
@@ -301,8 +359,13 @@ export default function TVPlayerPage() {
             muted
             playsInline
             preload="auto"
-            onEnded={advanceSlide}
-            onError={advanceSlide}
+            loop={!isSlideshow}
+            onEnded={
+              isSlideshow ? advanceSlide : undefined
+            }
+            onError={
+              isSlideshow ? advanceSlide : undefined
+            }
             className="h-full w-full object-contain"
           />
         )}
