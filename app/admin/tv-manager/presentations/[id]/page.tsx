@@ -842,9 +842,9 @@ slide.media_type === "roster_free_agents" ? (
                                 </button>
                               </div>
 
-                              {slide.media_type.startsWith(
-                                "image"
-                              ) && (
+                              {(slide.media_type.startsWith("image") ||
+  slide.media_type === "roster_teams" ||
+  slide.media_type === "roster_free_agents") && (
                                 <div className="mt-4 border-t border-zinc-700 pt-4">
                                   <label
                                     htmlFor={`duration-${slide.id}`}
