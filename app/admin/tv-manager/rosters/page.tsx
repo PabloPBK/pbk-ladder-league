@@ -341,18 +341,29 @@ export default function LiveRostersPage() {
     setPlayerForm((current) => ({ ...current, [field]: value }));
   }
 
-  function editPlayer(player: RosterPlayer) {
-    setEditingId(player.id);
-    setPlayerForm({
-      full_name: player.full_name,
-      club_rating: ratingText(player.club_rating),
-      dupr_doubles: ratingText(player.dupr_doubles),
-      dupr_singles: ratingText(player.dupr_singles),
-      doubles_rating_status: player.doubles_rating_status,
-    });
-    setError("");
-    setSuccess("");
-  }
+  
+function editPlayer(player: RosterPlayer) {
+  setEditingId(player.id);
+  setPlayerForm({
+    full_name: player.full_name,
+    club_rating: ratingText(player.club_rating),
+    dupr_doubles: ratingText(player.dupr_doubles),
+    dupr_singles: ratingText(player.dupr_singles),
+    doubles_rating_status: player.doubles_rating_status,
+  });
+
+  setError("");
+  setSuccess("");
+
+  window.requestAnimationFrame(() => {
+    document
+      .getElementById("player-edit-form")
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+  });
+}
 
   function cancelEdit() {
     setEditingId(null);
