@@ -11,6 +11,7 @@ const links = [
   {href: "/admin/player-directory",label: "Player Directory",icon: "📋",},
   { href: "/walking", label: "Runner", icon: "🏃" },
   { href: "/tv", label: "TV", icon: "📺" },
+  { href: "/admin/tv-manager", label: "TV Display Manager", icon: "🖥️" },
   { href: "/display", label: "Display", icon: "🏆" },
   { href: "/live", label: "Live", icon: "📊" },
   { href: "/stats", label: "Stats", icon: "📈" },
