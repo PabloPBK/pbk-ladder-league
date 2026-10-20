@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -20,13 +21,27 @@ function getTVDatabase() {
   });
 }
 
+// Validate a complete UUID:
+// 8 characters - 4 - 4 - 4 - 12
 function isUUID(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       value
     )
   );
+}
+
+function jsonResponse(
+  body: unknown,
+  status: number = 200
+) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -36,23 +51,32 @@ export async function GET(request: NextRequest) {
 
     const displayToken =
       request.nextUrl.searchParams.get("token");
-console.log("TV PLAYER VALIDATION", {
-  screenIdValid: isUUID(screenId),
-  tokenValid: isUUID(displayToken),
-  tokenLength: displayToken?.length ?? 0,
-});
+
+    // Diagnostic information only.
+    // Never log the actual private display token.
+    console.log("TV PLAYER VALIDATION", {
+      screenIdValid: isUUID(screenId),
+      tokenValid: isUUID(displayToken),
+      tokenLength: displayToken?.length ?? 0,
+    });
+
+    // Validate the screen ID and display token.
     if (!isUUID(screenId) || !isUUID(displayToken)) {
-      return NextResponse.json(
-        { error: "Invalid TV display credentials" },
-        { status: 400 }
+      return jsonResponse(
+        {
+          error: "Invalid TV display credentials",
+        },
+        400
       );
     }
 
     const db = getTVDatabase();
 
-    // Validate the screen and its private display token.
-    // Include the settings needed by the TV player.
-    const { data: screen, error: screenError } = await db
+    // Find the screen using its ID and private token.
+    const {
+      data: screen,
+      error: screenError,
+    } = await db
       .from("tv_screens")
       .select(
         "id, name, is_active, presentation_id, display_mode, slide_duration"
@@ -66,14 +90,15 @@ console.log("TV PLAYER VALIDATION", {
     }
 
     if (!screen || !screen.is_active) {
-      return NextResponse.json(
-        { error: "TV display unavailable" },
-        { status: 404 }
+      return jsonResponse(
+        {
+          error: "TV display unavailable",
+        },
+        404
       );
     }
 
-    // Return the TV settings with every response,
-    // including when no presentation is assigned.
+    // Settings used by the TV player.
     const screenSettings = {
       id: screen.id,
       name: screen.name,
@@ -88,22 +113,16 @@ console.log("TV PLAYER VALIDATION", {
           : 10,
     };
 
+    // No presentation assigned yet.
     if (!screen.presentation_id) {
-      return NextResponse.json(
-        {
-          screen: screenSettings,
-          presentation: null,
-          slides: [],
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        }
-      );
+      return jsonResponse({
+        screen: screenSettings,
+        presentation: null,
+        slides: [],
+      });
     }
 
-    // Load the presentation assigned to this TV.
+    // Load the assigned presentation.
     const {
       data: presentation,
       error: presentationError,
@@ -118,37 +137,38 @@ console.log("TV PLAYER VALIDATION", {
     }
 
     if (!presentation || !presentation.is_active) {
-      return NextResponse.json(
-        {
-          screen: screenSettings,
-          presentation: null,
-          slides: [],
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        }
-      );
+      return jsonResponse({
+        screen: screenSettings,
+        presentation: null,
+        slides: [],
+      });
     }
 
-    // Retrieve the slides in their saved order.
-    const { data: slides, error: slidesError } = await db
+    // Load slides in presentation order.
+    const {
+      data: slides,
+      error: slidesError,
+    } = await db
       .from("tv_slides")
       .select(
         "id, title, media_type, storage_path, sort_order, duration_seconds"
       )
       .eq("presentation_id", presentation.id)
-      .order("sort_order", { ascending: true });
+      .order("sort_order", {
+        ascending: true,
+      });
 
     if (slidesError) {
       throw slidesError;
     }
 
-    // Generate temporary access URLs for media.
+    // Create temporary signed URLs for slide media.
     const slidesWithUrls = await Promise.all(
       (slides ?? []).map(async (slide) => {
-        const { data, error } = await db.storage
+        const {
+          data,
+          error,
+        } = await db.storage
           .from("tv-media")
           .createSignedUrl(
             slide.storage_path,
@@ -175,34 +195,23 @@ console.log("TV PLAYER VALIDATION", {
       })
     );
 
-    return NextResponse.json(
-      {
-        screen: screenSettings,
-        presentation: {
-          id: presentation.id,
-          name: presentation.name,
-        },
-        slides: slidesWithUrls,
+    // Send presentation and slides to the TV.
+    return jsonResponse({
+      screen: screenSettings,
+      presentation: {
+        id: presentation.id,
+        name: presentation.name,
       },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
-    );
+      slides: slidesWithUrls,
+    });
   } catch (error) {
     console.error("TV player API error:", error);
 
-    return NextResponse.json(
+    return jsonResponse(
       {
         error: "Unable to load TV presentation",
       },
-      {
-        status: 500,
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
+      500
     );
   }
 }
