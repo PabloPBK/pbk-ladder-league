@@ -440,9 +440,9 @@ export default function TVPlayerPage() {
     }
 
     const duration = getDuration(
-      player?.screen.slide_duration ??
-        currentSlide.duration_seconds
-    );
+  currentSlide.duration_seconds ??
+    player?.screen.slide_duration
+);
 
     const timer = window.setTimeout(() => {
       advanceSlide();
