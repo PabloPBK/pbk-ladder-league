@@ -36,7 +36,11 @@ export async function GET(request: NextRequest) {
 
     const displayToken =
       request.nextUrl.searchParams.get("token");
-
+console.log("TV PLAYER VALIDATION", {
+  screenIdValid: isUUID(screenId),
+  tokenValid: isUUID(displayToken),
+  tokenLength: displayToken?.length ?? 0,
+});
     if (!isUUID(screenId) || !isUUID(displayToken)) {
       return NextResponse.json(
         { error: "Invalid TV display credentials" },
