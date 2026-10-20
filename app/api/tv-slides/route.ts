@@ -6,6 +6,26 @@ import { requireStaffUser } from "@/lib/server/require-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const allowedTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["video/mp4", "mp4"],
+  ["video/webm", "webm"],
+]);
+
+const liveTypes = [
+  "roster_teams",
+  "roster_free_agents",
+] as const;
+
+function isUUID(value: unknown): value is string {
+  return typeof value === "string" && uuidPattern.test(value);
+}
+
 function getTVDatabase() {
   const url = process.env.TV_SUPABASE_URL;
   const key = process.env.TV_SUPABASE_SECRET_KEY;
@@ -48,28 +68,119 @@ function errorResponse(error: unknown) {
   );
 }
 
-const allowedTypes = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"],
-  ["video/mp4", "mp4"],
-  ["video/webm", "webm"],
-]);
+async function getNextSortOrder(
+  db: ReturnType<typeof getTVDatabase>,
+  presentationId: string
+) {
+  const { data, error } = await db
+    .from("tv_slides")
+    .select("sort_order")
+    .eq("presentation_id", presentationId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return (data?.sort_order ?? -1) + 1;
+}
 
 export async function POST(request: NextRequest) {
   try {
     await requireStaffUser();
 
+    const db = getTVDatabase();
+    const contentType =
+      request.headers.get("content-type") ?? "";
+
+    // LIVE ROSTER SLIDE
+    if (contentType.includes("application/json")) {
+      const body = await request.json().catch(() => null);
+
+      if (
+        !body ||
+        !isUUID(body.presentation_id) ||
+        !isUUID(body.roster_event_id) ||
+        !liveTypes.includes(body.media_type)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid live roster slide details" },
+          { status: 400 }
+        );
+      }
+
+      const { data: presentation, error: presentationError } =
+        await db
+          .from("tv_presentations")
+          .select("id")
+          .eq("id", body.presentation_id)
+          .maybeSingle();
+
+      if (presentationError) throw presentationError;
+
+      if (!presentation) {
+        return NextResponse.json(
+          { error: "Presentation not found" },
+          { status: 404 }
+        );
+      }
+
+      const { data: event, error: eventError } = await db
+        .from("roster_events")
+        .select("id, name")
+        .eq("id", body.roster_event_id)
+        .maybeSingle();
+
+      if (eventError) throw eventError;
+
+      if (!event) {
+        return NextResponse.json(
+          { error: "Roster event not found" },
+          { status: 404 }
+        );
+      }
+
+      const title =
+        body.media_type === "roster_teams"
+          ? `${event.name} - Team Rankings`
+          : `${event.name} - Free Agents`;
+
+      const sortOrder = await getNextSortOrder(
+        db,
+        body.presentation_id
+      );
+
+      const { data: slide, error: insertError } =
+        await db
+          .from("tv_slides")
+          .insert({
+            presentation_id: body.presentation_id,
+            title: title.slice(0, 200),
+            media_type: body.media_type,
+            storage_path: null,
+            roster_event_id: body.roster_event_id,
+            sort_order: sortOrder,
+            duration_seconds: 15,
+          })
+          .select("*")
+          .single();
+
+      if (insertError) throw insertError;
+
+      return NextResponse.json(
+        { slide },
+        { status: 201 }
+      );
+    }
+
+    // EXISTING IMAGE / VIDEO UPLOAD
     const form = await request.formData();
     const file = form.get("file");
     const presentationId = form.get("presentation_id");
 
     if (
       !(file instanceof File) ||
-      typeof presentationId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        presentationId
-      )
+      !isUUID(presentationId)
     ) {
       return NextResponse.json(
         { error: "Invalid upload details" },
@@ -86,28 +197,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Keep uploads small enough for standard Vercel
-    // serverless request limits.
     if (file.size > 4 * 1024 * 1024) {
       return NextResponse.json(
         {
           error:
-            "File exceeds 4 MB. Larger video uploads will require direct storage uploads.",
+            "File exceeds 4 MB. Larger video uploads require direct storage uploads.",
         },
         { status: 413 }
       );
     }
-
-    const db = getTVDatabase();
 
     const { data: presentation, error: lookupError } =
       await db
         .from("tv_presentations")
         .select("id")
         .eq("id", presentationId)
-        .single();
+        .maybeSingle();
 
-    if (lookupError || !presentation) {
+    if (lookupError) throw lookupError;
+
+    if (!presentation) {
       return NextResponse.json(
         { error: "Presentation not found" },
         { status: 404 }
@@ -126,47 +235,44 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) throw uploadError;
 
-    const mediaType = file.type.startsWith("video/")
-      ? "video"
-      : "image";
+    try {
+      const sortOrder = await getNextSortOrder(
+        db,
+        presentationId
+      );
 
-    const { data: lastSlide, error: orderError } =
-      await db
-        .from("tv_slides")
-        .select("sort_order")
-        .eq("presentation_id", presentationId)
-        .order("sort_order", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const mediaType = file.type.startsWith("video/")
+        ? "video"
+        : "image";
 
-    if (orderError) {
-      await db.storage.from("tv-media").remove([storagePath]);
-      throw orderError;
+      const { data: slide, error: insertError } =
+        await db
+          .from("tv_slides")
+          .insert({
+            presentation_id: presentationId,
+            title: file.name.slice(0, 200),
+            media_type: mediaType,
+            storage_path: storagePath,
+            roster_event_id: null,
+            sort_order: sortOrder,
+            duration_seconds: 10,
+          })
+          .select("*")
+          .single();
+
+      if (insertError) throw insertError;
+
+      return NextResponse.json(
+        { slide },
+        { status: 201 }
+      );
+    } catch (error) {
+      await db.storage
+        .from("tv-media")
+        .remove([storagePath]);
+
+      throw error;
     }
-
-    const { data: slide, error: insertError } =
-      await db
-        .from("tv_slides")
-        .insert({
-          presentation_id: presentationId,
-          title: file.name.slice(0, 200),
-          media_type: mediaType,
-          storage_path: storagePath,
-          sort_order: (lastSlide?.sort_order ?? -1) + 1,
-          duration_seconds: 10,
-        })
-        .select("*")
-        .single();
-
-    if (insertError) {
-      await db.storage.from("tv-media").remove([storagePath]);
-      throw insertError;
-    }
-
-    return NextResponse.json(
-      { slide },
-      { status: 201 }
-    );
   } catch (error) {
     return errorResponse(error);
   }
@@ -179,12 +285,7 @@ export async function GET(request: NextRequest) {
     const presentationId =
       request.nextUrl.searchParams.get("presentation_id");
 
-    if (
-      !presentationId ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        presentationId
-      )
-    ) {
+    if (!isUUID(presentationId)) {
       return NextResponse.json(
         { error: "Invalid presentation ID" },
         { status: 400 }
@@ -203,10 +304,28 @@ export async function GET(request: NextRequest) {
 
     const slides = await Promise.all(
       (data ?? []).map(async (slide) => {
+        // Live roster slides have no uploaded media.
+        if (
+          slide.media_type === "roster_teams" ||
+          slide.media_type === "roster_free_agents"
+        ) {
+          return {
+            ...slide,
+            media_url: null,
+          };
+        }
+
+        if (!slide.storage_path) {
+          throw new Error("Media slide missing storage path");
+        }
+
         const { data: signedData, error: signedError } =
           await db.storage
             .from("tv-media")
-            .createSignedUrl(slide.storage_path, 3600);
+            .createSignedUrl(
+              slide.storage_path,
+              3600
+            );
 
         if (signedError) throw signedError;
 
@@ -217,7 +336,14 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({ slides });
+    return NextResponse.json(
+      { slides },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   } catch (error) {
     return errorResponse(error);
   }
@@ -227,14 +353,10 @@ export async function DELETE(request: NextRequest) {
   try {
     await requireStaffUser();
 
-    const slideId = request.nextUrl.searchParams.get("id");
+    const slideId =
+      request.nextUrl.searchParams.get("id");
 
-    if (
-      !slideId ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        slideId
-      )
-    ) {
+    if (!isUUID(slideId)) {
       return NextResponse.json(
         { error: "Invalid slide ID" },
         { status: 400 }
@@ -243,21 +365,22 @@ export async function DELETE(request: NextRequest) {
 
     const db = getTVDatabase();
 
-    // Find the slide before deleting it.
-    const { data: slide, error: lookupError } = await db
-      .from("tv_slides")
-      .select("id, storage_path")
-      .eq("id", slideId)
-      .single();
+    const { data: slide, error: lookupError } =
+      await db
+        .from("tv_slides")
+        .select("id, media_type, storage_path")
+        .eq("id", slideId)
+        .maybeSingle();
 
-    if (lookupError || !slide) {
+    if (lookupError) throw lookupError;
+
+    if (!slide) {
       return NextResponse.json(
         { error: "Slide not found" },
         { status: 404 }
       );
     }
 
-    // Remove the database record first.
     const { error: deleteError } = await db
       .from("tv_slides")
       .delete()
@@ -265,23 +388,30 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) throw deleteError;
 
-    // Remove the uploaded media file.
-    const { error: storageError } = await db.storage
-      .from("tv-media")
-      .remove([slide.storage_path]);
+    // Only uploaded slides have files to remove.
+    if (slide.storage_path) {
+      const { error: storageError } = await db.storage
+        .from("tv-media")
+        .remove([slide.storage_path]);
 
-    if (storageError) {
-      console.error(
-        "Slide deleted, but media cleanup failed:",
-        storageError
-      );
+      if (storageError) {
+        console.error(
+          "Slide deleted, but media cleanup failed:",
+          storageError
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        warning: storageError
+          ? "Slide deleted, but media cleanup requires attention"
+          : null,
+      });
     }
 
     return NextResponse.json({
       success: true,
-      warning: storageError
-        ? "Slide deleted, but media cleanup requires attention"
-        : null,
+      warning: null,
     });
   } catch (error) {
     return errorResponse(error);
