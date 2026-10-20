@@ -9,6 +9,7 @@ import {
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
+import LiveRosterSlides from "./LiveRosterSlides";
 
 type Presentation = {
   id: string;
@@ -591,6 +592,11 @@ export default function PresentationEditorPage() {
                   </form>
                 </div>
 
+                <LiveRosterSlides
+  presentationId={presentationId}
+  onSlideAdded={loadSlides}
+  disabled={busy}
+/>
                 <div className="mt-6 rounded-xl border border-zinc-700 bg-zinc-950 p-6">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -748,9 +754,22 @@ export default function PresentationEditorPage() {
                               {index + 1}
                             </div>
 
-                            {slide.media_type.startsWith(
-                              "image"
-                            ) ? (
+                            {slide.media_type === "roster_teams" ||
+slide.media_type === "roster_free_agents" ? (
+  <div className="flex h-56 flex-col items-center justify-center bg-black p-6 text-center">
+    <span className="text-5xl">
+      {slide.media_type === "roster_teams" ? "🏆" : "👥"}
+    </span>
+    <h3 className="mt-4 text-xl font-black text-yellow-400">
+      {slide.media_type === "roster_teams"
+        ? "LIVE TEAM RANKINGS"
+        : "LIVE FREE AGENTS"}
+    </h3>
+    <p className="mt-2 text-sm text-zinc-400">
+      Automatically updated from your event roster
+    </p>
+  </div>
+) : slide.media_type.startsWith("image") ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 src={
