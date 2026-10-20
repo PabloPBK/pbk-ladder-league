@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
       error: presentationError,
     } = await db
       .from("tv_presentations")
-      .select("id, name, is_active")
+.select("id, name, is_active, logo_storage_path")
       .eq("id", presentationId)
       .maybeSingle();
 
@@ -242,6 +242,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
+let logoUrl: string | null = null;
+
+if (presentation.logo_storage_path) {
+  const { data: logoData, error: logoError } =
+    await db.storage
+      .from("tv-media")
+      .createSignedUrl(
+        presentation.logo_storage_path,
+        3600
+      );
+  if (logoError || !logoData?.signedUrl) {
+    throw (
+      logoError ||
+      new Error("Unable to access presentation logo")
+    );
+  }
+
+  logoUrl = logoData.signedUrl;
+}
     const { data: slides, error: slidesError } =
       await db
         .from("tv_slides")
@@ -312,11 +331,13 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.json(
-      {
-        presentation: {
-          id: presentation.id,
-          name: presentation.name,
-        },
+      {        
+presentation: {
+  id: presentation.id,
+  name: presentation.name,
+  logo_url: logoUrl,
+},
+
         slides: preparedSlides,
       },
       {
