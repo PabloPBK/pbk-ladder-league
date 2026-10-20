@@ -368,3 +368,94 @@ export async function PATCH(request: Request) {
     return handleError(error);
   }
 }
+
+ // DELETE /api/roster-players
+ // Remove a player from a specific event.
+ // Players assigned to teams must be unassigned first.
+ export async function DELETE(request: Request) {
+   try {
+     await requireStaffUser();
+
+     const body = await request.json().catch(() => null);
+
+     const playerId = body?.id;
+     const eventId = body?.event_id;
+
+     if (
+       typeof playerId !== "string" ||
+       !uuidPattern.test(playerId) ||
+       typeof eventId !== "string" ||
+       !uuidPattern.test(eventId)
+     ) {
+       return NextResponse.json(
+         { error: "Valid player and event IDs required" },
+         { status: 400 }
+       );
+     }
+
+     const db = getDatabase();
+
+     const { data: player, error: lookupError } = await db
+       .from("roster_players")
+       .select("id, full_name")
+       .eq("id", playerId)
+       .eq("event_id", eventId)
+       .maybeSingle();
+
+     if (lookupError) throw lookupError;
+
+     if (!player) {
+       return NextResponse.json(
+         { error: "Player not found in this event" },
+         { status: 404 }
+       );
+     }
+
+     // Do not delete a player who is assigned to a team.
+     // This protects existing team assignments.
+     const { data: teams, error: teamsError } = await db
+       .from("roster_teams")
+       .select("id")
+       .eq("event_id", eventId)
+       .or(
+         `player1_id.eq.${playerId},player2_id.eq.${playerId}`
+       )
+       .limit(1);
+
+     if (teamsError) throw teamsError;
+
+     if (teams && teams.length > 0) {
+       return NextResponse.json(
+         {
+           error:
+             "This player is assigned to a team. Remove the team assignment before deleting the player.",
+         },
+         { status: 409 }
+       );
+     }
+
+     const { data: deleted, error: deleteError } = await db
+       .from("roster_players")
+       .delete()
+       .eq("id", playerId)
+       .eq("event_id", eventId)
+       .select("id")
+       .maybeSingle();
+
+     if (deleteError) throw deleteError;
+
+     if (!deleted) {
+       return NextResponse.json(
+         { error: "Player could not be deleted" },
+         { status: 404 }
+       );
+     }
+
+     return NextResponse.json({
+       success: true,
+       deleted_player_id: deleted.id,
+     });
+   } catch (error) {
+     return handleError(error);
+   }
+ }
