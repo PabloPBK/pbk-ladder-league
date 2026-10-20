@@ -1,15 +1,45 @@
+
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useParams, useSearchParams } from "next/navigation";
+
+type TeamEntry = {
+  id: string;
+  rank: number;
+  player1: string;
+  player2: string;
+  player1_rating: number | null;
+  player2_rating: number | null;
+  combined_rating: number | null;
+};
+
+type FreeAgentEntry = {
+  id: string;
+  rank: number;
+  name: string;
+  rating: number | null;
+};
+
+type RosterData = {
+  event_name: string;
+  rating_method: string | null;
+  entries: TeamEntry[] | FreeAgentEntry[];
+};
 
 type Slide = {
   id: string;
   title: string | null;
   media_type: string;
-  media_url: string;
+  media_url: string | null;
   sort_order: number;
   duration_seconds: number | null;
+  roster?: RosterData;
 };
 
 type PlayerData = {
@@ -37,6 +67,173 @@ function getDuration(value: number | null | undefined) {
   return Math.max(1, Math.min(value, 3600));
 }
 
+function formatRating(value: number | null | undefined) {
+  return typeof value === "number" &&
+    Number.isFinite(value)
+    ? value.toFixed(2)
+    : "NR";
+}
+
+function ratingLabel(method: string | null | undefined) {
+  switch (method) {
+    case "dupr_singles":
+      return "DUPR Singles";
+    case "club_rating":
+      return "Club Rating";
+    default:
+      return "DUPR Doubles";
+  }
+}
+
+function LiveRosterDisplay({
+  slide,
+}: {
+  slide: Slide;
+}) {
+  const roster = slide.roster;
+  const isTeams = slide.media_type === "roster_teams";
+  const entries = roster?.entries ?? [];
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden bg-black px-[3vw] py-[3vh] text-white">
+      <header className="shrink-0 border-b-2 border-yellow-400 pb-[2vh]">
+        <div className="flex items-center justify-between gap-6">
+          <div className="min-w-0">
+            <p className="text-[clamp(13px,1.5vw,28px)] font-black uppercase tracking-[0.2em] text-yellow-400">
+              Pickleball Kingdom
+            </p>
+
+            <h1 className="mt-2 truncate text-[clamp(26px,3.4vw,68px)] font-black uppercase leading-tight">
+              {roster?.event_name ?? "Live Event"}
+            </h1>
+
+            <p className="mt-2 text-[clamp(15px,1.6vw,30px)] font-bold text-zinc-300">
+              {isTeams
+                ? "LIVE TEAM RANKINGS"
+                : "LIVE FREE AGENTS"}
+            </p>
+          </div>
+
+          <div className="shrink-0 text-right">
+            <div className="rounded-xl border border-yellow-400 px-[2vw] py-[1vh]">
+              <p className="text-[clamp(12px,1.1vw,22px)] uppercase tracking-wider text-zinc-400">
+                Rating Method
+              </p>
+              <p className="mt-1 text-[clamp(16px,1.8vw,34px)] font-black text-yellow-400">
+                {ratingLabel(roster?.rating_method)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {entries.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center text-center">
+          <div>
+            <p className="text-[clamp(26px,3vw,56px)] font-black text-yellow-400">
+              {isTeams
+                ? "No Teams Assigned Yet"
+                : "No Free Agents"}
+            </p>
+            <p className="mt-4 text-[clamp(16px,1.5vw,28px)] text-zinc-400">
+              This display updates automatically.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-hidden pt-[2vh]">
+          <div
+            className="grid h-full grid-flow-col gap-x-[2vw] gap-y-[1vh]"
+            style={{
+              gridTemplateRows: `repeat(${Math.ceil(
+                entries.length / 2
+              )}, minmax(0, 1fr))`,
+              gridTemplateColumns:
+                entries.length > 8
+                  ? "repeat(2, minmax(0, 1fr))"
+                  : "minmax(0, 1fr)",
+              gridAutoFlow: "column",
+            }}
+          >
+            {entries.map((entry) => {
+              if (isTeams) {
+                const team = entry as TeamEntry;
+
+                return (
+                  <div
+                    key={team.id}
+                    className="flex min-h-0 items-center gap-[1.3vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.4vw] py-[0.7vh]"
+                  >
+                    <div className="flex w-[clamp(38px,4vw,80px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 py-2 text-[clamp(20px,2.2vw,44px)] font-black text-black">
+                      {team.rank}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[clamp(16px,1.9vw,38px)] font-bold leading-tight">
+                        {team.player1}
+                      </p>
+                      <p className="truncate text-[clamp(16px,1.9vw,38px)] font-bold leading-tight">
+                        {team.player2}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className="text-[clamp(22px,2.7vw,52px)] font-black leading-tight text-yellow-400">
+                        {formatRating(team.combined_rating)}
+                      </p>
+                      <p className="text-[clamp(11px,1vw,20px)] text-zinc-400">
+                        Combined
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              const agent = entry as FreeAgentEntry;
+
+              return (
+                <div
+                  key={agent.id}
+                  className="flex min-h-0 items-center gap-[1.3vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.4vw] py-[0.7vh]"
+                >
+                  <div className="flex w-[clamp(38px,4vw,80px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 py-2 text-[clamp(20px,2.2vw,44px)] font-black text-black">
+                    {agent.rank}
+                  </div>
+
+                  <p className="min-w-0 flex-1 truncate text-[clamp(18px,2vw,40px)] font-bold">
+                    {agent.name}
+                  </p>
+
+                  <p className="shrink-0 text-[clamp(22px,2.7vw,52px)] font-black text-yellow-400">
+                    {formatRating(agent.rating)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <footer className="mt-[2vh] flex shrink-0 items-center justify-between border-t border-zinc-800 pt-[1.5vh] text-[clamp(12px,1.1vw,22px)] text-zinc-400">
+        <span>
+          {entries.length}{" "}
+          {isTeams
+            ? entries.length === 1
+              ? "Team"
+              : "Teams"
+            : entries.length === 1
+              ? "Free Agent"
+              : "Free Agents"}
+        </span>
+
+        <span className="font-bold text-yellow-400">
+          LIVE • AUTO UPDATING
+        </span>
+      </footer>
+    </div>
+  );
+}
+
 export default function TVPlayerPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -56,8 +253,6 @@ export default function TVPlayerPage() {
   const slides = player?.slides ?? [];
   const currentSlide = slides[currentIndex] ?? null;
 
-  // Preserve existing slideshow behavior until the
-  // API supplies an explicit display mode.
   const displayMode =
     player?.screen.display_mode ?? "slideshow";
 
@@ -86,7 +281,6 @@ export default function TVPlayerPage() {
     });
   }, []);
 
-  // Load presentation and refresh it every 30 seconds.
   useEffect(() => {
     let cancelled = false;
     let inFlight = false;
@@ -120,9 +314,7 @@ export default function TVPlayerPage() {
 
         const response = await fetch(
           `/api/tv-player?${query.toString()}`,
-          {
-            cache: "no-store",
-          }
+          { cache: "no-store" }
         );
 
         const result = await response.json();
@@ -185,12 +377,11 @@ export default function TVPlayerPage() {
       } catch (err) {
         if (cancelled) return;
 
-        const message =
+        setError(
           err instanceof Error
             ? err.message
-            : "Unable to load TV presentation";
-
-        setError(message);
+            : "Unable to load TV presentation"
+        );
       } finally {
         inFlight = false;
 
@@ -212,7 +403,6 @@ export default function TVPlayerPage() {
     };
   }, [screenId, token]);
 
-  // Automatically advance images in slideshow mode.
   useEffect(() => {
     if (!currentSlide || !isSlideshow) return;
 
@@ -241,7 +431,6 @@ export default function TVPlayerPage() {
     advanceSlide,
   ]);
 
-  // Retry video playback when the active slide changes.
   useEffect(() => {
     if (
       !currentSlide ||
@@ -282,11 +471,9 @@ export default function TVPlayerPage() {
             <p className="text-3xl font-bold text-yellow-400">
               TV Display Unavailable
             </p>
-
             <p className="mt-4 text-lg text-zinc-400">
               {error}
             </p>
-
             {token && (
               <p className="mt-3 text-sm text-zinc-500">
                 This screen will automatically try again.
@@ -302,11 +489,9 @@ export default function TVPlayerPage() {
             <p className="text-4xl font-black text-yellow-400">
               Pickleball Kingdom
             </p>
-
             <p className="mt-5 text-xl text-zinc-300">
               {player.screen.name}
             </p>
-
             <p className="mt-3 text-zinc-500">
               Waiting for a presentation assignment...
             </p>
@@ -322,11 +507,9 @@ export default function TVPlayerPage() {
               <p className="text-4xl font-black text-yellow-400">
                 Pickleball Kingdom
               </p>
-
               <p className="mt-5 text-xl text-zinc-300">
                 {player.presentation.name}
               </p>
-
               <p className="mt-3 text-zinc-500">
                 No slides have been added yet.
               </p>
@@ -335,22 +518,31 @@ export default function TVPlayerPage() {
         )}
 
       {currentSlide &&
-        currentSlide.media_type.startsWith("image") && (
+        currentSlide.media_type === "roster_teams" && (
+          <LiveRosterDisplay slide={currentSlide} />
+        )}
+
+      {currentSlide &&
+        currentSlide.media_type === "roster_free_agents" && (
+          <LiveRosterDisplay slide={currentSlide} />
+        )}
+
+      {currentSlide &&
+        currentSlide.media_type.startsWith("image") &&
+        currentSlide.media_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={currentSlide.id}
             src={currentSlide.media_url}
-            alt={
-              currentSlide.title ||
-              "TV presentation"
-            }
+            alt={currentSlide.title || "TV presentation"}
             className="h-full w-full object-contain"
             onError={advanceSlide}
           />
         )}
 
       {currentSlide &&
-        currentSlide.media_type.startsWith("video") && (
+        currentSlide.media_type.startsWith("video") &&
+        currentSlide.media_url && (
           <video
             key={currentSlide.id}
             ref={videoRef}
@@ -372,7 +564,9 @@ export default function TVPlayerPage() {
 
       {currentSlide &&
         !currentSlide.media_type.startsWith("image") &&
-        !currentSlide.media_type.startsWith("video") && (
+        !currentSlide.media_type.startsWith("video") &&
+        currentSlide.media_type !== "roster_teams" &&
+        currentSlide.media_type !== "roster_free_agents" && (
           <div className="flex h-full items-center justify-center">
             <p className="text-zinc-400">
               Unsupported slide format
