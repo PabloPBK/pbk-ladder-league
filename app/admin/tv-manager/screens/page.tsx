@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -33,7 +34,11 @@ export default function TVScreensPage() {
 
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [launchingId, setLaunchingId] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState("");
+
   const [messages, setMessages] = useState<
     Record<string, string>
   >({});
@@ -153,6 +158,86 @@ export default function TVScreensPage() {
     }
   }
 
+  async function launchTV(screenId: string) {
+    if (launchingId !== null) return;
+
+    // Open the tab immediately so Safari
+    // does not block it as a popup.
+    const newTab = window.open("", "_blank");
+
+    if (!newTab) {
+      setMessages((current) => ({
+        ...current,
+        [screenId]:
+          "Popup blocked. Please allow popups for this site.",
+      }));
+      return;
+    }
+
+    setLaunchingId(screenId);
+
+    setMessages((current) => ({
+      ...current,
+      [screenId]: "",
+    }));
+
+    try {
+      const response = await fetch(
+        `/api/tv-screens/${encodeURIComponent(screenId)}/launch`,
+        {
+          method: "POST",
+          cache: "no-store",
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Unable to launch TV display"
+        );
+      }
+
+      if (
+        typeof result.url !== "string" ||
+        !result.url
+      ) {
+        throw new Error(
+          "The TV launch API did not return a valid URL."
+        );
+      }
+
+      // Only navigate to a player URL on this site.
+      const playerUrl = new URL(result.url, window.location.origin);
+
+      if (
+        playerUrl.origin !== window.location.origin ||
+        playerUrl.protocol !== window.location.protocol ||
+        playerUrl.pathname !==
+          `/tv/player/${encodeURIComponent(screenId)}` ||
+        !playerUrl.searchParams.get("token")
+      ) {
+        throw new Error(
+          "The TV launch API returned an invalid player URL."
+        );
+      }
+
+      newTab.location.replace(playerUrl.toString());
+    } catch (err) {
+      newTab.close();
+
+      setMessages((current) => ({
+        ...current,
+        [screenId]:
+          err instanceof Error
+            ? err.message
+            : "Unable to launch TV display",
+      }));
+    } finally {
+      setLaunchingId(null);
+    }
+  }
+
   return (
     <AppLayout
       title="TV Screens"
@@ -182,7 +267,11 @@ export default function TVScreensPage() {
             <button
               type="button"
               onClick={() => void loadScreens()}
-              disabled={loading || savingId !== null}
+              disabled={
+                loading ||
+                savingId !== null ||
+                launchingId !== null
+              }
               className="rounded-lg bg-yellow-400 px-4 py-2 font-bold text-black disabled:opacity-50"
             >
               {loading ? "Loading..." : "Refresh Screens"}
@@ -213,10 +302,12 @@ export default function TVScreensPage() {
           {!loading && !error && screens.length > 0 && (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {screens.map((screen) => {
-                const selectedId = assignments[screen.id] ?? "";
+                const selectedId =
+                  assignments[screen.id] ?? "";
 
                 const hasChanges =
-                  selectedId !== (screen.presentation_id ?? "");
+                  selectedId !==
+                  (screen.presentation_id ?? "");
 
                 const currentPresentation =
                   presentations.find(
@@ -224,7 +315,11 @@ export default function TVScreensPage() {
                       item.id === screen.presentation_id
                   );
 
-                const isSaving = savingId === screen.id;
+                const isSaving =
+                  savingId === screen.id;
+
+                const isLaunching =
+                  launchingId === screen.id;
 
                 return (
                   <div
@@ -251,7 +346,8 @@ export default function TVScreensPage() {
 
                     <div className="mt-4 space-y-2 text-sm text-zinc-400">
                       <p>
-                        Location: {screen.location || "Not set"}
+                        Location:{" "}
+                        {screen.location || "Not set"}
                       </p>
 
                       <p>
@@ -280,7 +376,8 @@ export default function TVScreensPage() {
                         onChange={(event) => {
                           setAssignments((current) => ({
                             ...current,
-                            [screen.id]: event.target.value,
+                            [screen.id]:
+                              event.target.value,
                           }));
 
                           setMessages((current) => ({
@@ -297,22 +394,29 @@ export default function TVScreensPage() {
 
                         {screen.presentation_id &&
                           !currentPresentation && (
-                            <option value={screen.presentation_id}>
-                              Current presentation (unavailable)
+                            <option
+                              value={
+                                screen.presentation_id
+                              }
+                            >
+                              Current presentation
+                              (unavailable)
                             </option>
                           )}
 
-                        {presentations.map((presentation) => (
-                          <option
-                            key={presentation.id}
-                            value={presentation.id}
-                          >
-                            {presentation.name}
-                            {!presentation.is_active
-                              ? " (Inactive)"
-                              : ""}
-                          </option>
-                        ))}
+                        {presentations.map(
+                          (presentation) => (
+                            <option
+                              key={presentation.id}
+                              value={presentation.id}
+                            >
+                              {presentation.name}
+                              {!presentation.is_active
+                                ? " (Inactive)"
+                                : ""}
+                            </option>
+                          )
+                        )}
                       </select>
 
                       <button
@@ -321,7 +425,8 @@ export default function TVScreensPage() {
                           void saveAssignment(screen.id)
                         }
                         disabled={
-                          savingId !== null || !hasChanges
+                          savingId !== null ||
+                          !hasChanges
                         }
                         className="mt-3 w-full rounded-lg bg-yellow-400 px-4 py-3 text-sm font-bold text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -355,17 +460,21 @@ export default function TVScreensPage() {
                       </p>
                     </div>
 
-                    {/* Open this TV's display in a new tab */}
-                    <a
-                      href={`/tv/player/${encodeURIComponent(
-                        screen.id
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-5 block rounded-lg border border-yellow-400 px-4 py-3 text-center text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void launchTV(screen.id)
+                      }
+                      disabled={
+                        launchingId !== null ||
+                        !screen.is_active
+                      }
+                      className="mt-5 block w-full rounded-lg border border-yellow-400 px-4 py-3 text-center text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Open TV Display ↗
-                    </a>
+                      {isLaunching
+                        ? "Launching TV..."
+                        : "Open TV Display ↗"}
+                    </button>
 
                     <Link
                       href={`/admin/tv-manager/screens/${encodeURIComponent(
