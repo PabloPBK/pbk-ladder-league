@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import TVPlayerPage from "../tv/player/[id]/page";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function ShortTVPage({
 }: PageProps) {
   const { shortCode } = await params;
 
+  // Only allow valid TV short codes.
   if (!/^tv[a-z0-9]{1,30}$/.test(shortCode)) {
     notFound();
   }
@@ -31,9 +33,10 @@ export default async function ShortTVPage({
     },
   });
 
+  // Confirm that this TV exists and is active.
   const { data: screen, error } = await db
     .from("tv_screens")
-    .select("id, name, is_active")
+    .select("id, is_active")
     .eq("short_code", shortCode)
     .maybeSingle();
 
@@ -45,17 +48,6 @@ export default async function ShortTVPage({
     notFound();
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-black text-white">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-yellow-400">
-          Pickleball Kingdom
-        </h1>
-        <p className="mt-4 text-xl">{screen.name}</p>
-        <p className="mt-3 text-zinc-400">
-          TV screen connected successfully.
-        </p>
-      </div>
-    </main>
-  );
+  // Use the existing TV Player with public access.
+  return <TVPlayerPage publicShortCode={shortCode} />;
 }
