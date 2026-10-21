@@ -317,13 +317,18 @@ function LiveRosterDisplay({
     </div>
   );
 }
+export default function TVPlayerPage({
+  publicShortCode,
+}: {
+  publicShortCode?: string;
+} = {}) {
+  
+const params = useParams<{ id: string }>();
+const searchParams = useSearchParams();
 
-export default function TVPlayerPage() {
-  const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
-
-  const screenId = params.id;
-  const token = searchParams.get("token") ?? "";
+const screenId = params.id;
+const token = searchParams.get("token") ?? "";
+const isPublicDisplay = Boolean(publicShortCode);
 
   const [player, setPlayer] = useState<PlayerData | null>(
     null
@@ -403,7 +408,7 @@ export default function TVPlayerPage() {
     setLoading(true);
     setError("");
 
-    if (!token) {
+   if (!token && !isPublicDisplay) {
       setError(
         "This TV does not have a display access token."
       );
@@ -417,10 +422,14 @@ export default function TVPlayerPage() {
       inFlight = true;
 
       try {
-        const query = new URLSearchParams({
-          screen_id: screenId,
-          token,
-        });
+        const query = publicShortCode
+  ? new URLSearchParams({
+      short_code: publicShortCode,
+    })
+  : new URLSearchParams({
+      screen_id: screenId,
+      token,
+    });
 
         const response = await fetch(
           `/api/tv-player?${query.toString()}`,
@@ -526,8 +535,7 @@ export default function TVPlayerPage() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [screenId, token]);
-
+}, [screenId, token, publicShortCode, isPublicDisplay]);
   // Advance images and roster pages using saved durations.
   useEffect(() => {
     if (!currentSlide) return;

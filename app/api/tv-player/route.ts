@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -228,25 +229,46 @@ export async function GET(request: NextRequest) {
     const displayToken =
       request.nextUrl.searchParams.get("token");
 
-    // Never log the private display token.
-    console.log("TV PLAYER VALIDATION", {
-      screenIdValid: isUUID(screenId),
-      tokenValid: isUUID(displayToken),
-      tokenLength: displayToken?.length ?? 0,
-    });
-
-    if (!isUUID(screenId) || !isUUID(displayToken)) {
-      return jsonResponse(
-        { error: "Invalid TV display credentials" },
-        400
-      );
-    }
+    const shortCode =
+      request.nextUrl.searchParams.get("short_code");
 
     const db = getTVDatabase();
 
-    // Authenticate the TV before accessing roster data.
-    const { data: screen, error: screenError } =
-      await db
+    let screen;
+
+    if (shortCode !== null) {
+      // Public, read-only TV display access.
+      // Only active screens with registered short codes
+      // can be accessed through this method.
+      if (!/^tv[a-z0-9]{1,30}$/.test(shortCode)) {
+        return jsonResponse(
+          { error: "Invalid TV address" },
+          400
+        );
+      }
+
+      const result = await db
+        .from("tv_screens")
+        .select(
+          "id, name, is_active, presentation_id, display_mode, slide_duration"
+        )
+        .eq("short_code", shortCode)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (result.error) throw result.error;
+
+      screen = result.data;
+    } else {
+      // Preserve the existing token-based TV Player.
+      if (!isUUID(screenId) || !isUUID(displayToken)) {
+        return jsonResponse(
+          { error: "Invalid TV display credentials" },
+          400
+        );
+      }
+
+      const result = await db
         .from("tv_screens")
         .select(
           "id, name, is_active, presentation_id, display_mode, slide_duration"
@@ -255,7 +277,10 @@ export async function GET(request: NextRequest) {
         .eq("display_token", displayToken)
         .maybeSingle();
 
-    if (screenError) throw screenError;
+      if (result.error) throw result.error;
+
+      screen = result.data;
+    }
 
     if (!screen || !screen.is_active) {
       return jsonResponse(
@@ -307,8 +332,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Generate a secure URL for the presentation logo.
-    // Presentations without a logo continue normally.
+    // Generate a signed URL for the presentation logo.
     let logoUrl: string | null = null;
 
     if (presentation.logo_storage_path) {
