@@ -16,7 +16,7 @@ export default async function FacilityScheduleLayout({
       error instanceof Error ? error.message : "";
 
     if (message === "AUTH_REQUIRED") {
-      redirect("/login");
+      redirect("/login?next=/admin/facility-schedule");
     }
 
     if (message === "STAFF_ACCESS_DENIED") {
@@ -26,6 +26,7 @@ export default async function FacilityScheduleLayout({
             <h1 className="text-2xl font-bold text-yellow-400">
               Staff Access Required
             </h1>
+
             <p className="mt-4 text-zinc-400">
               You are not authorized to manage the daily
               operations schedule.
