@@ -30,7 +30,7 @@ const groups: NavGroup[] = [
     icon: "🏆",
     links: [
       { href: "/admin", label: "League Admin", icon: "⚙️" },
-      { href: "/admin/players", label: "Manage Players", icon: "👥" },
+      { href: "/admin/players", label: "Import Players", icon: "👥" },
       { href: "/walking", label: "Score Management", icon: "🏃" },
       { href: "/live", label: "Live", icon: "📊" },
       { href: "/tv", label: "League TV", icon: "📺" },
