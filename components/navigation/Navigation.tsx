@@ -31,7 +31,7 @@ const groups: NavGroup[] = [
     links: [
       { href: "/admin", label: "League Admin", icon: "⚙️" },
       { href: "/admin/players", label: "Manage Players", icon: "👥" },
-      { href: "/walking", label: "Runner", icon: "🏃" },
+      { href: "/walking", label: "Score Management", icon: "🏃" },
       { href: "/live", label: "Live", icon: "📊" },
       { href: "/tv", label: "League TV", icon: "📺" },
       { href: "/display", label: "Season Standings", icon: "🏆" },
