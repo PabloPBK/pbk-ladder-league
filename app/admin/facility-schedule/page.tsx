@@ -225,6 +225,7 @@ export default function FacilitySchedulePage() {
   const [colorsError, setColorsError] = useState("");
   const [showEventSetup, setShowEventSetup] = useState(false);
   const [newEventType, setNewEventType] = useState("Open Play");
+  const [newCustomEventName, setNewCustomEventName] = useState("");
   const [newEventGroups, setNewEventGroups] = useState(1);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoMessage, setLogoMessage] = useState("");
@@ -323,17 +324,28 @@ export default function FacilitySchedulePage() {
   function addEvent() {
     if (!schedule) return;
 
+    if (newEventType === "Custom" && !newCustomEventName.trim()) {
+      setErrorMessage("Enter an event name before creating a custom event.");
+      return;
+    }
+
     const index = schedule.events.length;
     const groupCount = newEventType === "Open Play" ? newEventGroups : 1;
 
+    const event = newEvent(newEventType, groupCount);
+    if (newEventType === "Custom") {
+      event.customType = newCustomEventName.trim();
+    }
+
     updateSchedule({
       ...schedule,
-      events: [...schedule.events, newEvent(newEventType, groupCount)],
+      events: [...schedule.events, event],
     });
 
     setOpenEvents((previous) => [...previous, index]);
     setShowEventSetup(false);
     setNewEventType("Open Play");
+    setNewCustomEventName("");
     setNewEventGroups(1);
   }
 
@@ -656,6 +668,7 @@ export default function FacilitySchedulePage() {
                     value={newEventType}
                     onChange={(e) => {
                       setNewEventType(e.target.value);
+                      setNewCustomEventName("");
                       setNewEventGroups(1);
                     }}
                     className={`${inputStyle} mt-2`}
@@ -665,6 +678,19 @@ export default function FacilitySchedulePage() {
                     ))}
                   </select>
                 </label>
+                {newEventType === "Custom" && (
+                  <label className="text-sm font-semibold">
+                    Event Name
+                    <input
+                      type="text"
+                      value={newCustomEventName}
+                      onChange={(e) => setNewCustomEventName(e.target.value)}
+                      placeholder="e.g., Birthday Party or Corporate Event"
+                      maxLength={100}
+                      className={`${inputStyle} mt-2`}
+                    />
+                  </label>
+                )}
                 {newEventType === "Open Play" && (
                   <label className="text-sm font-semibold">
                     Number of Skill Levels
@@ -686,7 +712,7 @@ export default function FacilitySchedulePage() {
                   : "This event will start with one court assignment group. You can add more groups later."}
               </p>
               <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={addEvent} className="rounded-lg bg-yellow-400 px-5 py-3 font-bold text-black hover:bg-yellow-300">
+                <button type="button" onClick={addEvent} disabled={newEventType === "Custom" && !newCustomEventName.trim()} className="rounded-lg bg-yellow-400 px-5 py-3 font-bold text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50">
                   Create Event
                 </button>
                 <button type="button" onClick={() => setShowEventSetup(false)} className={secondaryButton}>
