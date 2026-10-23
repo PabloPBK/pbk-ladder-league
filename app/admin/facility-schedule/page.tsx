@@ -32,6 +32,7 @@ type Schedule = {
   welcome: string;
   announcements: string[];
   events: ScheduleEvent[];
+  logo_url?: string;
   [key: string]: unknown;
 };
 
@@ -225,6 +226,9 @@ export default function FacilitySchedulePage() {
   const [showEventSetup, setShowEventSetup] = useState(false);
   const [newEventType, setNewEventType] = useState("Open Play");
   const [newEventGroups, setNewEventGroups] = useState(1);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoMessage, setLogoMessage] = useState("");
+  const [logoError, setLogoError] = useState("");
 
   useEffect(() => {
     async function loadSchedule() {
@@ -404,6 +408,40 @@ export default function FacilitySchedulePage() {
     });
   }
 
+  async function uploadLogo(file: File | undefined) {
+    if (!file || !schedule) return;
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!allowedTypes.includes(file.type) || file.size === 0 || file.size > 5 * 1024 * 1024) {
+      setLogoError("Choose a PNG, JPG, or WebP image smaller than 5 MB.");
+      setLogoMessage("");
+      return;
+    }
+
+    setUploadingLogo(true);
+    setLogoError("");
+    setLogoMessage("");
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/facility-branding", {
+        method: "POST",
+        body: form,
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.logo_url !== "string") {
+        throw new Error(result.error || "Logo upload failed");
+      }
+      updateSchedule({ ...schedule, logo_url: result.logo_url });
+      setLogoMessage("Logo uploaded. Click Save & Publish to activate it on the TV.");
+    } catch (error) {
+      setLogoError(error instanceof Error ? error.message : "Logo upload failed");
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
   async function saveSchedule() {
     if (!schedule) return;
 
@@ -527,6 +565,65 @@ export default function FacilitySchedulePage() {
             rows={3}
             className={`${inputStyle} mt-2`}
           />
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="text-xl font-bold text-yellow-400">Branding &amp; Logos</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Upload a transparent Canva PNG (or JPG/WebP). The same logo will be used
+            in the schedule header and the larger welcome display when no events are visible.
+          </p>
+          <div className="mt-5 grid gap-6 md:grid-cols-2">
+            <div>
+              <label htmlFor="facility-logo-upload" className="block text-sm font-semibold">
+                Upload facility logo (maximum 5 MB)
+              </label>
+              <input
+                id="facility-logo-upload"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={uploadingLogo}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  void uploadLogo(file);
+                  event.currentTarget.value = "";
+                }}
+                className="mt-3 block w-full text-sm text-zinc-200 file:mr-4 file:rounded-lg file:border-0 file:bg-yellow-400 file:px-4 file:py-2 file:font-bold file:text-black hover:file:bg-yellow-300 disabled:opacity-50"
+              />
+              {uploadingLogo && <p className="mt-3 text-sm text-blue-300">Uploading logo...</p>}
+              {logoMessage && <p className="mt-3 text-sm text-green-300">{logoMessage}</p>}
+              {logoError && <p className="mt-3 text-sm text-red-300">{logoError}</p>}
+              {schedule.logo_url && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSchedule({ ...schedule, logo_url: "" });
+                    setLogoMessage("Logo cleared. Click Save & Publish to update the TV.");
+                    setLogoError("");
+                  }}
+                  className="mt-4 rounded-lg border border-red-800 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-950"
+                >
+                  Remove logo from schedule
+                </button>
+              )}
+              <p className="mt-4 text-xs text-zinc-500">
+                Uploading stores the image; Save &amp; Publish selects it for your schedule.
+                The TV display will be updated in the next step.
+              </p>
+            </div>
+            <div className="flex min-h-48 items-center justify-center rounded-xl border border-zinc-700 bg-[#081327] p-5">
+              {schedule.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={schedule.logo_url}
+                  alt="Facility logo preview"
+                  className="max-h-48 max-w-full object-contain"
+                />
+              ) : (
+                <p className="text-center text-sm text-zinc-400">No logo selected yet</p>
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="space-y-4">
