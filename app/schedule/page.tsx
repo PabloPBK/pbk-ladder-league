@@ -131,6 +131,11 @@ export default function LobbySchedulePage() {
     (a, b) => a.start.localeCompare(b.start)
   );
 
+  // Scale the schedule based on the number of events currently displayed.
+  const eventCount = sortedEvents.length;
+  const spacious = eventCount === 1;
+  const roomy = eventCount === 2;
+
   const dateText = now
     ? new Intl.DateTimeFormat("en-US", {
         timeZone: "America/Los_Angeles",
@@ -204,7 +209,7 @@ export default function LobbySchedulePage() {
             </p>
           </section>
         ) : (
-          <div className="space-y-4">
+          <div className={spacious ? "space-y-5" : "space-y-4"}>
             {sortedEvents.map((event, eventIndex) => {
               const start = timeToMinutes(event.start);
               const end = timeToMinutes(event.end);
@@ -225,11 +230,11 @@ export default function LobbySchedulePage() {
                     isActive
                       ? "border-yellow-400 bg-[#15294a]"
                       : "border-white/15 bg-[#101f38]"
-                  } ${isPast ? "opacity-60" : ""}`}
+                  } ${isPast ? "opacity-60" : ""} ${spacious ? "min-h-[min(58vh,620px)]" : roomy ? "min-h-[260px]" : ""}`}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+                  <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-white/10 ${spacious ? "px-7 py-6" : "px-5 py-4"}`}>
                     <div className="flex flex-wrap items-center gap-4">
-                      <h2 className="text-2xl font-black text-yellow-400 md:text-3xl">
+                      <h2 className={`font-black text-yellow-400 ${spacious ? "text-3xl md:text-5xl" : roomy ? "text-2xl md:text-4xl" : "text-2xl md:text-3xl"}`}>
                         {eventName(event)}
                       </h2>
 
@@ -240,7 +245,7 @@ export default function LobbySchedulePage() {
                       )}
                     </div>
 
-                    <p className="text-xl font-black text-white md:text-2xl">
+                    <p className={`font-black text-white ${spacious ? "text-2xl md:text-4xl" : roomy ? "text-xl md:text-3xl" : "text-xl md:text-2xl"}`}>
                       {formatTime(event.start)}
                       {" – "}
                       {formatTime(event.end)}
@@ -253,15 +258,15 @@ export default function LobbySchedulePage() {
                     </p>
                   )}
 
-                  <div className="grid gap-3 p-4 lg:grid-cols-2">
+                  <div className={`grid ${spacious ? "gap-5 p-6" : "gap-3 p-4"} ${(event.assignments || []).length > 1 ? "lg:grid-cols-2" : "grid-cols-1"}`}>
                     {(event.assignments || []).map(
                       (assignment, assignmentIndex) => (
                         <div
                           key={assignmentIndex}
-                          className="rounded-xl border border-white/10 bg-black/20 p-4"
+                          className={`rounded-xl border border-white/10 bg-black/20 ${spacious ? "p-6" : "p-4"}`}
                         >
                           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                            <h3 className="text-xl font-black text-white">
+                            <h3 className={`font-black text-white ${spacious ? "text-2xl md:text-4xl" : roomy ? "text-2xl md:text-3xl" : "text-xl"}`}>
                               {levelName(assignment)}
                             </h3>
 
@@ -269,21 +274,21 @@ export default function LobbySchedulePage() {
                               assignment.wristband !== "None" && (
                                 <div className="flex items-center gap-2">
                                   <span
-                                    className="h-5 w-5 rounded-full border border-white/30"
+                                    className={`${spacious ? "h-8 w-8" : "h-6 w-6"} shrink-0 rounded-full border border-white/30`}
                                     style={{
                                       backgroundColor: wristbandColor(
                                         assignment.wristband
                                       ),
                                     }}
                                   />
-<span className="text-xl font-black text-blue-100">
-  {assignment.wristband} Wristband
+                                  <span className={`font-black text-blue-100 ${spacious ? "text-xl md:text-3xl" : roomy ? "text-xl md:text-2xl" : "text-xl"}`}>
+                                    {assignment.wristband} Wristband
                                   </span>
                                 </div>
                               )}
                           </div>
 
-                          <div className="flex flex-wrap gap-2">
+                          <div className={`flex flex-wrap ${spacious ? "gap-3" : "gap-2"}`}>
                             {(assignment.courts || [])
                               .slice()
                               .sort((a, b) => a - b)
@@ -294,18 +299,18 @@ export default function LobbySchedulePage() {
                                 return (
                                   <div
                                     key={court}
-                                    className={`flex min-h-16 min-w-16 flex-col items-center justify-center rounded-xl border-2 px-3 py-2 ${
+                                    className={`flex flex-col items-center justify-center rounded-xl border-2 ${spacious ? "min-h-20 min-w-20 px-4 py-3 md:min-h-24 md:min-w-24" : roomy ? "min-h-20 min-w-20 px-3 py-2" : "min-h-16 min-w-16 px-3 py-2"} ${
                                       isStack
                                         ? "border-yellow-400 bg-yellow-400/15"
                                         : "border-blue-400/30 bg-blue-900/40"
                                     }`}
                                   >
-                                    <span className="text-2xl font-black">
+                                    <span className={`font-black ${spacious ? "text-3xl md:text-4xl" : roomy ? "text-3xl" : "text-2xl"}`}>
                                       {court}
                                     </span>
 
                                     {isStack && (
-                                      <span className="text-[10px] font-black uppercase tracking-wide text-yellow-300">
+                                      <span className={`font-black uppercase tracking-wide text-yellow-300 ${spacious ? "text-xs md:text-sm" : "text-[10px]"}`}>
                                         Stack
                                       </span>
                                     )}
