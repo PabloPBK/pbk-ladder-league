@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Assignment = {
   level: string;
@@ -75,6 +75,9 @@ export default function LobbySchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [now, setNow] = useState<Date | null>(null);
+  const contentViewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -117,11 +120,14 @@ export default function LobbySchedulePage() {
   useEffect(() => {
     setNow(new Date());
 
-    const clock = window.setInterval(() => {
-      setNow(new Date());
-    }, 15000);
+    const update = () => setNow(new Date());
+    const clock = window.setInterval(update, 5000);
+    document.addEventListener("visibilitychange", update);
 
-    return () => window.clearInterval(clock);
+    return () => {
+      window.clearInterval(clock);
+      document.removeEventListener("visibilitychange", update);
+    };
   }, []);
 
   // Use Lynnwood local time, even if the TV/browser has a different timezone.
@@ -176,6 +182,41 @@ export default function LobbySchedulePage() {
       }).format(now)
     : "";
 
+  // Fit the complete activity/announcement area inside the TV viewport.
+  // Recalculate when content or screen size changes, including an iframe resize.
+  useEffect(() => {
+    const viewport = contentViewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const available = viewport.clientHeight;
+        if (!available) return;
+        // scrollHeight is measured in unzoomed layout pixels in browsers
+        // supporting CSS zoom. Restore zoom first for an accurate baseline.
+        content.style.zoom = "1";
+        const naturalHeight = content.scrollHeight;
+        const naturalWidth = content.scrollWidth;
+        const scale = Math.min(1, available / Math.max(naturalHeight, 1),
+          viewport.clientWidth / Math.max(naturalWidth, 1));
+        const safeScale = Math.max(0.35, Math.floor(scale * 1000) / 1000);
+        content.style.zoom = String(safeScale);
+        setFitScale(safeScale);
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    window.addEventListener("resize", measure);
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [schedule, sortedEvents.length, now?.getMinutes()]);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#081327] text-2xl font-bold text-white">
@@ -185,41 +226,41 @@ export default function LobbySchedulePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#081327] px-5 py-4 text-white md:px-10">
-      <div className="mx-auto max-w-[1800px]">
-        <header className="mb-4 grid grid-cols-1 items-center gap-3 border-b border-white/15 pb-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,0.7fr)_minmax(0,1fr)] lg:gap-4">
+    <main className="h-[100dvh] overflow-hidden bg-[#081327] px-4 py-3 text-white md:px-6">
+      <div className="mx-auto flex h-full max-w-[1800px] min-h-0 flex-col">
+        <header className="mb-2 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-white/15 pb-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.45fr)_minmax(0,0.75fr)] lg:gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-yellow-400 sm:text-sm">
               Pickleball Kingdom Lynnwood
             </p>
 
-            <h1 className="mt-1 whitespace-normal text-4xl font-black tracking-tight text-white sm:text-5xl lg:whitespace-nowrap lg:text-[clamp(2.5rem,3.45vw,4rem)]">
+            <h1 className={`${eventCount > 0 ? "text-2xl lg:text-[clamp(1.6rem,2.3vw,2.8rem)]" : "text-2xl lg:text-[clamp(1.7rem,2.6vw,3.2rem)]"} mt-1 font-black tracking-tight text-white`}>
               Today&apos;s Schedule
             </h1>
 
-            <p className="mt-2 text-base font-semibold text-blue-200 lg:whitespace-nowrap lg:text-[clamp(0.8rem,1.12vw,1.25rem)]">
+            <p className={`${eventCount > 0 ? "mt-1 text-xs lg:text-sm" : "mt-1 text-xs lg:text-sm"} font-semibold text-blue-200`}>
               {schedule?.welcome ||
                 "WELCOME TO PICKLEBALL KINGDOM LYNNWOOD"}
             </p>
           </div>
 
-          <div className="flex items-center justify-center overflow-visible">
+          <div className={`${"hidden lg:flex"} items-center justify-center overflow-hidden`}>
             {schedule?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={schedule.logo_url}
                 alt="Pickleball Kingdom Lynnwood"
-                className="max-h-32 w-full max-w-[320px] scale-125 object-contain lg:max-h-36"
+                className={`${"max-h-16 max-w-[180px]"} w-full object-contain`}
               />
             ) : null}
           </div>
 
-          <div className="text-left lg:text-right">
-            <p className="whitespace-nowrap text-base font-bold text-blue-200 lg:text-lg">
+          <div className="text-right">
+            <p className={`${"text-xs lg:text-base"} whitespace-nowrap font-bold text-blue-200`}>
               {dateText}
             </p>
 
-            <p className="mt-1 whitespace-nowrap text-3xl font-black text-yellow-400 lg:text-4xl">
+            <p className={`${"text-xl lg:text-3xl"} mt-1 whitespace-nowrap font-black text-yellow-400`}>
               {clockText}
             </p>
           </div>
@@ -231,10 +272,12 @@ export default function LobbySchedulePage() {
           </div>
         )}
 
+        <div ref={contentViewportRef} className="min-h-0 flex-1 overflow-hidden">
+          <div ref={contentRef} style={{ zoom: fitScale }}>
         {sortedEvents.length === 0 ? (
-          <section className="flex min-h-[min(59vh,620px)] flex-col items-center justify-center gap-5 overflow-hidden rounded-2xl border border-white/15 bg-white/5 px-5 py-6 text-center sm:gap-7">
+          <section className="flex min-h-[min(58dvh,600px)] flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-center">
             {schedule?.logo_url ? (
-              <div className="flex h-[min(34vh,340px)] w-full items-center justify-center">
+              <div className="flex h-[min(31dvh,300px)] w-full items-center justify-center">
                 {/* The uploaded PNG has generous transparent margins. Scaling the
                     image enlarges the visible artwork without making the panel
                     or the message extend beyond the TV viewport. */}
@@ -242,7 +285,7 @@ export default function LobbySchedulePage() {
                 <img
                   src={schedule.logo_url}
                   alt="Pickleball Kingdom Lynnwood"
-                  className="h-full w-full max-w-[1050px] scale-150 object-contain"
+                  className="h-full w-full max-w-[850px] object-contain"
                 />
               </div>
             ) : (
@@ -251,12 +294,12 @@ export default function LobbySchedulePage() {
               </h2>
             )}
 
-            <p className="max-w-6xl text-xl font-bold leading-snug text-blue-100 sm:text-2xl lg:text-[clamp(1.5rem,2.4vw,2.5rem)]">
+            <p className="max-w-6xl text-xl font-bold leading-snug text-blue-100 lg:text-[clamp(1.3rem,2vw,2rem)]">
               Upcoming activities will appear 15 minutes before they begin.
             </p>
           </section>
         ) : (
-          <div className={spacious ? "space-y-5" : "space-y-4"}>
+          <div className={spacious ? "space-y-3" : "space-y-2"}>
             {sortedEvents.map((event, eventIndex) => {
               const start = timeToMinutes(event.start);
               const end = timeToMinutes(event.end);
@@ -278,11 +321,11 @@ export default function LobbySchedulePage() {
                     isActive
                       ? "border-yellow-400 bg-[#15294a]"
                       : "border-white/15 bg-[#101f38]"
-                  } ${spacious ? "min-h-[min(58vh,620px)]" : roomy ? "min-h-[260px]" : ""}`}
+                  } `}
                 >
-                  <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-white/10 ${spacious ? "px-7 py-6" : "px-5 py-4"}`}>
+                  <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-2`}>
                     <div className="flex flex-wrap items-center gap-4">
-                      <h2 className={`font-black text-yellow-400 ${spacious ? "text-3xl md:text-5xl" : roomy ? "text-2xl md:text-4xl" : "text-2xl md:text-3xl"}`}>
+                      <h2 className={`font-black text-yellow-400 ${spacious ? "text-2xl md:text-3xl" : roomy ? "text-xl md:text-2xl" : "text-lg md:text-xl"}`}>
                         {eventName(event)}
                       </h2>
 
@@ -298,7 +341,7 @@ export default function LobbySchedulePage() {
                       )}
                     </div>
 
-                    <p className={`font-black text-white ${spacious ? "text-2xl md:text-4xl" : roomy ? "text-xl md:text-3xl" : "text-xl md:text-2xl"}`}>
+                    <p className={`font-black text-white ${spacious ? "text-lg md:text-2xl" : roomy ? "text-lg md:text-xl" : "text-base md:text-lg"}`}>
                       {formatTime(event.start)}
                       {" – "}
                       {formatTime(event.end)}
@@ -306,20 +349,20 @@ export default function LobbySchedulePage() {
                   </div>
 
                   {event.details && (
-                    <p className="px-5 pt-3 text-base text-blue-200">
+                    <p className="px-4 pt-2 text-sm text-blue-200">
                       {event.details}
                     </p>
                   )}
 
-                  <div className={`grid ${spacious ? "gap-5 p-6" : "gap-3 p-4"} ${(event.assignments || []).length > 1 ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+                  <div className={`grid ${spacious ? "gap-3 p-3" : "gap-2 p-2"} ${(event.assignments || []).length > 1 ? "lg:grid-cols-2" : "grid-cols-1"}`}>
                     {(event.assignments || []).map(
                       (assignment, assignmentIndex) => (
                         <div
                           key={assignmentIndex}
-                          className={`rounded-xl border border-white/10 bg-black/20 ${spacious ? "p-6" : "p-4"}`}
+                          className={`rounded-xl border border-white/10 bg-black/20 ${spacious ? "p-3" : "p-2"}`}
                         >
-                          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                            <h3 className={`font-black text-white ${spacious ? "text-2xl md:text-4xl" : roomy ? "text-2xl md:text-3xl" : "text-xl"}`}>
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <h3 className={`font-black text-white ${spacious ? "text-xl md:text-2xl" : roomy ? "text-lg md:text-xl" : "text-base md:text-lg"}`}>
                               {levelName(assignment)}
                             </h3>
 
@@ -327,21 +370,21 @@ export default function LobbySchedulePage() {
                               assignment.wristband !== "None" && (
                                 <div className="flex items-center gap-2">
                                   <span
-                                    className={`${spacious ? "h-8 w-8" : "h-6 w-6"} shrink-0 rounded-full border border-white/30`}
+                                    className={`${spacious ? "h-5 w-5" : "h-5 w-5"} shrink-0 rounded-full border border-white/30`}
                                     style={{
                                       backgroundColor: wristbandColor(
                                         assignment.wristband
                                       ),
                                     }}
                                   />
-                                  <span className={`font-black text-blue-100 ${spacious ? "text-xl md:text-3xl" : roomy ? "text-xl md:text-2xl" : "text-xl"}`}>
+                                  <span className={`font-black text-blue-100 ${spacious ? "text-base md:text-lg" : roomy ? "text-sm md:text-base" : "text-sm"}`}>
                                     {assignment.wristband} Wristband
                                   </span>
                                 </div>
                               )}
                           </div>
 
-                          <div className={`flex flex-wrap ${spacious ? "gap-3" : "gap-2"}`}>
+                          <div className={`flex flex-wrap ${spacious ? "gap-2" : "gap-2"}`}>
                             {(assignment.courts || [])
                               .slice()
                               .sort((a, b) => a - b)
@@ -352,13 +395,13 @@ export default function LobbySchedulePage() {
                                 return (
                                   <div
                                     key={court}
-                                    className={`flex flex-col items-center justify-center rounded-xl border-2 ${spacious ? "min-h-20 min-w-20 px-4 py-3 md:min-h-24 md:min-w-24" : roomy ? "min-h-20 min-w-20 px-3 py-2" : "min-h-16 min-w-16 px-3 py-2"} ${
+                                    className={`flex flex-col items-center justify-center rounded-xl border-2 ${spacious ? "min-h-14 min-w-14 px-3 py-2 md:min-h-16 md:min-w-16" : roomy ? "min-h-12 min-w-12 px-2 py-1" : "min-h-11 min-w-11 px-2 py-1"} ${
                                       isStack
                                         ? "border-yellow-400 bg-yellow-400/15"
                                         : "border-blue-400/30 bg-blue-900/40"
                                     }`}
                                   >
-                                    <span className={`font-black ${spacious ? "text-3xl md:text-4xl" : roomy ? "text-3xl" : "text-2xl"}`}>
+                                    <span className={`font-black ${spacious ? "text-2xl md:text-3xl" : roomy ? "text-xl md:text-2xl" : "text-xl"}`}>
                                       {court}
                                     </span>
 
@@ -382,8 +425,8 @@ export default function LobbySchedulePage() {
         )}
 
         {schedule?.announcements?.some((item) => item.trim()) && (
-          <section className="mt-6 rounded-2xl border border-yellow-400/40 bg-yellow-400/10 p-5">
-            <h2 className="mb-3 text-xl font-black uppercase tracking-wide text-yellow-400">
+          <section className="mt-2 rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-3">
+            <h2 className="mb-1 text-base font-black uppercase tracking-wide text-yellow-400">
               Club Announcements
             </h2>
 
@@ -393,7 +436,7 @@ export default function LobbySchedulePage() {
                 .map((announcement, index) => (
                   <p
                     key={index}
-                    className="text-lg font-semibold text-white"
+                    className="text-sm font-semibold text-white"
                   >
                     {announcement}
                   </p>
@@ -402,7 +445,10 @@ export default function LobbySchedulePage() {
           </section>
         )}
 
-        <footer className="mt-4 border-t border-white/10 pt-3 text-center text-sm font-semibold text-blue-300">
+          </div>
+        </div>
+
+        <footer className="mt-2 shrink-0 border-t border-white/10 pt-2 text-center text-xs font-semibold text-blue-300">
           Court assignments and event information may change.
           Please follow staff instructions.
         </footer>
