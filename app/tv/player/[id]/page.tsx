@@ -45,7 +45,7 @@ type PlayerData = {
   screen: {
     id: string;
     name: string;
-    display_mode?: "single" | "slideshow" | null;
+    display_mode?: "single" | "slideshow" | "daily_schedule" | null;
     slide_duration?: number | null;
   };
   presentation: {
@@ -352,6 +352,8 @@ const isPublicDisplay = Boolean(publicShortCode);
   const isSlideshow =
     displayMode === "slideshow" && slides.length > 1;
 
+  const isDailySchedule = displayMode === "daily_schedule";
+
   const advanceSlide = useCallback(() => {
     const data = playerRef.current;
 
@@ -596,6 +598,14 @@ const isPublicDisplay = Boolean(publicShortCode);
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-black text-white">
+      {player && isDailySchedule ? (
+        <iframe
+          src="/schedule"
+          title="Daily Operations Schedule"
+          className="h-full w-full border-0"
+        />
+      ) : (
+        <>
       {loading && !player && (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
@@ -733,6 +743,8 @@ const isPublicDisplay = Boolean(publicShortCode);
         <div className="absolute bottom-4 right-4 rounded-lg bg-black/70 px-3 py-2 text-xs text-zinc-400">
           Connection interrupted. Retrying...
         </div>
+      )}
+        </>
       )}
     </main>
   );
