@@ -78,14 +78,14 @@ function newAssignment(): Assignment {
   };
 }
 
-function newEvent(): ScheduleEvent {
+function newEvent(type = "Open Play", groupCount = 1): ScheduleEvent {
   return {
     start: "09:00",
     end: "10:30",
-    type: "Open Play",
+    type,
     customType: "",
     details: "",
-    assignments: [newAssignment()],
+    assignments: Array.from({ length: groupCount }, () => newAssignment()),
   };
 }
 
@@ -189,6 +189,9 @@ export default function FacilitySchedulePage() {
   const [openEvents, setOpenEvents] = useState<number[]>([]);
   const [wristbandColors, setWristbandColors] = useState<WristbandColor[]>([]);
   const [colorsError, setColorsError] = useState("");
+  const [showEventSetup, setShowEventSetup] = useState(false);
+  const [newEventType, setNewEventType] = useState("Open Play");
+  const [newEventGroups, setNewEventGroups] = useState(1);
 
   useEffect(() => {
     async function loadSchedule() {
@@ -284,13 +287,17 @@ export default function FacilitySchedulePage() {
     if (!schedule) return;
 
     const index = schedule.events.length;
+    const groupCount = newEventType === "Open Play" ? newEventGroups : 1;
 
     updateSchedule({
       ...schedule,
-      events: [...schedule.events, newEvent()],
+      events: [...schedule.events, newEvent(newEventType, groupCount)],
     });
 
     setOpenEvents((previous) => [...previous, index]);
+    setShowEventSetup(false);
+    setNewEventType("Open Play");
+    setNewEventGroups(1);
   }
 
   function duplicateEvent(index: number) {
@@ -498,12 +505,62 @@ export default function FacilitySchedulePage() {
 
             <button
               type="button"
-              onClick={addEvent}
+              onClick={() => setShowEventSetup((previous) => !previous)}
               className="rounded-lg bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-500"
             >
-              + Add Event
+              {showEventSetup ? "Cancel New Event" : "+ Add Event"}
             </button>
           </div>
+
+          {showEventSetup && (
+            <div className="space-y-4 rounded-xl border border-blue-700 bg-zinc-900 p-6">
+              <h3 className="text-xl font-bold text-yellow-400">Create a New Event</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-semibold">
+                  Event Type
+                  <select
+                    value={newEventType}
+                    onChange={(e) => {
+                      setNewEventType(e.target.value);
+                      setNewEventGroups(1);
+                    }}
+                    className={`${inputStyle} mt-2`}
+                  >
+                    {EVENT_TYPES.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </label>
+                {newEventType === "Open Play" && (
+                  <label className="text-sm font-semibold">
+                    Number of Skill Levels
+                    <select
+                      value={newEventGroups}
+                      onChange={(e) => setNewEventGroups(Number(e.target.value))}
+                      className={`${inputStyle} mt-2`}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((count) => (
+                        <option key={count} value={count}>{count}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              <p className="text-sm text-zinc-400">
+                {newEventType === "Open Play"
+                  ? `One Open Play event will be created with ${newEventGroups} skill level ${newEventGroups === 1 ? "group" : "groups"}. All groups share the same start and end time.`
+                  : "This event will start with one court assignment group. You can add more groups later."}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={addEvent} className="rounded-lg bg-yellow-400 px-5 py-3 font-bold text-black hover:bg-yellow-300">
+                  Create Event
+                </button>
+                <button type="button" onClick={() => setShowEventSetup(false)} className={secondaryButton}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {schedule.events.length === 0 && (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900 p-10 text-center text-zinc-400">
