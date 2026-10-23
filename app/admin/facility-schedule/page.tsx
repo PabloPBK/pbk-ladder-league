@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+
+type WristbandColor = {
+  id: number;
+  name: string;
+  hex_color: string;
+  is_active: boolean;
+};
 
 type Assignment = {
   level: string;
@@ -47,19 +55,6 @@ const LEVELS = [
   "3.75+",
   "4.0+",
   "Custom",
-];
-
-const WRISTBANDS = [
-  "None",
-  "Red",
-  "Orange",
-  "Yellow",
-  "Green",
-  "Blue",
-  "Purple",
-  "Pink",
-  "White",
-  "Black",
 ];
 
 const COURTS = Array.from(
@@ -192,6 +187,8 @@ export default function FacilitySchedulePage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [dirty, setDirty] = useState(false);
   const [openEvents, setOpenEvents] = useState<number[]>([]);
+  const [wristbandColors, setWristbandColors] = useState<WristbandColor[]>([]);
+  const [colorsError, setColorsError] = useState("");
 
   useEffect(() => {
     async function loadSchedule() {
@@ -228,6 +225,22 @@ export default function FacilitySchedulePage() {
     }
 
     loadSchedule();
+
+    async function loadWristbandColors() {
+      try {
+        const response = await fetch("/api/facility-wristband-colors", {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Unable to load wristband colors");
+        const result: { colors?: WristbandColor[] } = await response.json();
+        if (!Array.isArray(result.colors)) throw new Error("Invalid wristband color list");
+        setWristbandColors(result.colors);
+      } catch (error) {
+        setColorsError(error instanceof Error ? error.message : "Unable to load wristband colors");
+      }
+    }
+
+    void loadWristbandColors();
   }, []);
 
   function updateSchedule(next: Schedule) {
@@ -431,6 +444,10 @@ export default function FacilitySchedulePage() {
           <p className="mt-2 text-zinc-400">
             Pickleball Kingdom Lynnwood · 12 Courts
           </p>
+          <Link href="/admin/facility-schedule/colors" className="mt-3 inline-block text-sm font-semibold text-blue-400 hover:text-blue-300">
+            Manage Wristband Colors →
+          </Link>
+          {colorsError && <p className="mt-2 text-sm text-red-300">{colorsError}. Existing assignments remain unchanged; reload to retry.</p>}
         </header>
 
         <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
@@ -741,11 +758,22 @@ export default function FacilitySchedulePage() {
                                   }
                                   className={`${inputStyle} mt-2`}
                                 >
-                                  {WRISTBANDS.map((color) => (
-                                    <option key={color} value={color}>
-                                      {color}
-                                    </option>
-                                  ))}
+                                  <option value="None">None</option>
+                                  {assignment.wristband !== "None" &&
+                                    !wristbandColors.some(
+                                      (color) => color.is_active && color.name === assignment.wristband
+                                    ) && (
+                                      <option value={assignment.wristband}>
+                                        {assignment.wristband} (previously assigned)
+                                      </option>
+                                    )}
+                                  {wristbandColors
+                                    .filter((color) => color.is_active)
+                                    .map((color) => (
+                                      <option key={color.id} value={color.name}>
+                                        {color.name}
+                                      </option>
+                                    ))}
                                 </select>
                               </label>
                             </div>
