@@ -187,7 +187,7 @@ export default function LobbySchedulePage() {
   return (
     <main className="min-h-screen bg-[#081327] px-5 py-6 text-white md:px-10">
       <div className="mx-auto max-w-[1800px]">
-        <header className="mb-6 grid grid-cols-1 items-center gap-5 border-b border-white/15 pb-5 md:grid-cols-[minmax(0,1fr)_minmax(170px,280px)_minmax(0,1fr)]">
+        <header className="mb-6 grid grid-cols-1 items-center gap-5 border-b border-white/15 pb-5 md:grid-cols-[minmax(0,1fr)_minmax(300px,420px)_minmax(0,1fr)]">
           <div className="min-w-0">
             <p className="text-sm font-black uppercase tracking-[0.25em] text-yellow-400">
               Pickleball Kingdom Lynnwood
@@ -209,7 +209,7 @@ export default function LobbySchedulePage() {
               <img
                 src={schedule.logo_url}
                 alt="Pickleball Kingdom Lynnwood"
-                className="max-h-28 w-full max-w-[280px] object-contain"
+                className="max-h-44 w-full max-w-[420px] object-contain"
               />
             ) : null}
           </div>
@@ -238,7 +238,7 @@ export default function LobbySchedulePage() {
               <img
                 src={schedule.logo_url}
                 alt="Pickleball Kingdom Lynnwood"
-                className="mb-10 max-h-[35vh] w-full max-w-[680px] object-contain"
+                className="mb-8 max-h-[48vh] w-full max-w-[1050px] object-contain"
               />
             ) : (
               <h2 className="mb-8 text-3xl font-black text-yellow-400">
