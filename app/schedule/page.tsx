@@ -123,13 +123,34 @@ export default function LobbySchedulePage() {
     return () => window.clearInterval(clock);
   }, []);
 
+  // Use Lynnwood local time, even if the TV/browser has a different timezone.
   const currentMinutes = now
-    ? now.getHours() * 60 + now.getMinutes()
+    ? (() => {
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Los_Angeles",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).formatToParts(now);
+        const hour = Number(parts.find((part) => part.type === "hour")?.value);
+        const minute = Number(parts.find((part) => part.type === "minute")?.value);
+        return hour * 60 + minute;
+      })()
     : null;
 
-  const sortedEvents = [...(schedule?.events || [])].sort(
-    (a, b) => a.start.localeCompare(b.start)
-  );
+  // Show an event from 15 minutes before its start until 15 minutes
+  // before its end. The clock updates every 15 seconds.
+  const sortedEvents = [...(schedule?.events || [])]
+    .filter((event) => {
+      if (currentMinutes === null) return false;
+      const start = timeToMinutes(event.start);
+      const end = timeToMinutes(event.end);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+        return false;
+      }
+      return currentMinutes >= start - 15 && currentMinutes < end - 15;
+    })
+    .sort((a, b) => a.start.localeCompare(b.start));
 
   // Scale the schedule based on the number of events currently displayed.
   const eventCount = sortedEvents.length;
@@ -201,11 +222,11 @@ export default function LobbySchedulePage() {
         {sortedEvents.length === 0 ? (
           <section className="rounded-2xl border border-white/15 bg-white/5 px-8 py-20 text-center">
             <h2 className="text-3xl font-black text-yellow-400">
-              No Events Scheduled
+              No Events Currently Showing
             </h2>
 
             <p className="mt-4 text-xl text-blue-200">
-              Check with our front desk for today&apos;s activities.
+              Upcoming activities will appear 15 minutes before they begin.
             </p>
           </section>
         ) : (
@@ -217,11 +238,12 @@ export default function LobbySchedulePage() {
               const isActive =
                 currentMinutes !== null &&
                 currentMinutes >= start &&
-                currentMinutes < end;
+                currentMinutes < end - 15;
 
-              const isPast =
+              const isStartingSoon =
                 currentMinutes !== null &&
-                currentMinutes >= end;
+                currentMinutes >= start - 15 &&
+                currentMinutes < start;
 
               return (
                 <section
@@ -230,7 +252,7 @@ export default function LobbySchedulePage() {
                     isActive
                       ? "border-yellow-400 bg-[#15294a]"
                       : "border-white/15 bg-[#101f38]"
-                  } ${isPast ? "opacity-60" : ""} ${spacious ? "min-h-[min(58vh,620px)]" : roomy ? "min-h-[260px]" : ""}`}
+                  } ${spacious ? "min-h-[min(58vh,620px)]" : roomy ? "min-h-[260px]" : ""}`}
                 >
                   <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-white/10 ${spacious ? "px-7 py-6" : "px-5 py-4"}`}>
                     <div className="flex flex-wrap items-center gap-4">
@@ -238,6 +260,11 @@ export default function LobbySchedulePage() {
                         {eventName(event)}
                       </h2>
 
+                      {isStartingSoon && (
+                        <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-black">
+                          Starting Soon
+                        </span>
+                      )}
                       {isActive && (
                         <span className="rounded-full bg-green-500 px-3 py-1 text-xs font-black uppercase tracking-wider text-black">
                           Happening Now
