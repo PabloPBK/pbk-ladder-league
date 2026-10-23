@@ -185,41 +185,41 @@ export default function LobbySchedulePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#081327] px-5 py-6 text-white md:px-10">
+    <main className="min-h-screen bg-[#081327] px-5 py-4 text-white md:px-10">
       <div className="mx-auto max-w-[1800px]">
-        <header className="mb-6 grid grid-cols-1 items-center gap-5 border-b border-white/15 pb-5 md:grid-cols-[minmax(0,1fr)_minmax(300px,420px)_minmax(0,1fr)]">
+        <header className="mb-4 grid grid-cols-1 items-center gap-3 border-b border-white/15 pb-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,0.7fr)_minmax(0,1fr)] lg:gap-4">
           <div className="min-w-0">
-            <p className="text-sm font-black uppercase tracking-[0.25em] text-yellow-400">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-yellow-400 sm:text-sm">
               Pickleball Kingdom Lynnwood
             </p>
 
-            <h1 className="mt-2 text-4xl font-black tracking-tight text-white md:text-6xl">
+            <h1 className="mt-1 whitespace-normal text-4xl font-black tracking-tight text-white sm:text-5xl lg:whitespace-nowrap lg:text-[clamp(2.5rem,3.45vw,4rem)]">
               Today&apos;s Schedule
             </h1>
 
-            <p className="mt-3 text-xl font-semibold text-blue-200">
+            <p className="mt-2 text-base font-semibold text-blue-200 lg:whitespace-nowrap lg:text-[clamp(0.8rem,1.12vw,1.25rem)]">
               {schedule?.welcome ||
                 "WELCOME TO PICKLEBALL KINGDOM LYNNWOOD"}
             </p>
           </div>
 
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center overflow-visible">
             {schedule?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={schedule.logo_url}
                 alt="Pickleball Kingdom Lynnwood"
-                className="max-h-44 w-full max-w-[420px] object-contain"
+                className="max-h-32 w-full max-w-[320px] scale-125 object-contain lg:max-h-36"
               />
             ) : null}
           </div>
 
-          <div className="text-left md:text-right">
-            <p className="text-lg font-bold text-blue-200">
+          <div className="text-left lg:text-right">
+            <p className="whitespace-nowrap text-base font-bold text-blue-200 lg:text-lg">
               {dateText}
             </p>
 
-            <p className="mt-1 text-4xl font-black text-yellow-400">
+            <p className="mt-1 whitespace-nowrap text-3xl font-black text-yellow-400 lg:text-4xl">
               {clockText}
             </p>
           </div>
@@ -232,21 +232,26 @@ export default function LobbySchedulePage() {
         )}
 
         {sortedEvents.length === 0 ? (
-          <section className="flex min-h-[55vh] flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-6 py-12 text-center">
+          <section className="flex min-h-[min(59vh,620px)] flex-col items-center justify-center gap-5 overflow-hidden rounded-2xl border border-white/15 bg-white/5 px-5 py-6 text-center sm:gap-7">
             {schedule?.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={schedule.logo_url}
-                alt="Pickleball Kingdom Lynnwood"
-                className="mb-8 max-h-[48vh] w-full max-w-[1050px] object-contain"
-              />
+              <div className="flex h-[min(34vh,340px)] w-full items-center justify-center">
+                {/* The uploaded PNG has generous transparent margins. Scaling the
+                    image enlarges the visible artwork without making the panel
+                    or the message extend beyond the TV viewport. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={schedule.logo_url}
+                  alt="Pickleball Kingdom Lynnwood"
+                  className="h-full w-full max-w-[1050px] scale-150 object-contain"
+                />
+              </div>
             ) : (
-              <h2 className="mb-8 text-3xl font-black text-yellow-400">
+              <h2 className="text-3xl font-black text-yellow-400">
                 Welcome to Pickleball Kingdom Lynnwood
               </h2>
             )}
 
-            <p className="max-w-4xl text-2xl font-bold leading-relaxed text-blue-100 md:text-4xl">
+            <p className="max-w-6xl text-xl font-bold leading-snug text-blue-100 sm:text-2xl lg:text-[clamp(1.5rem,2.4vw,2.5rem)]">
               Upcoming activities will appear 15 minutes before they begin.
             </p>
           </section>
@@ -397,7 +402,7 @@ export default function LobbySchedulePage() {
           </section>
         )}
 
-        <footer className="mt-8 border-t border-white/10 pt-4 text-center text-sm font-semibold text-blue-300">
+        <footer className="mt-4 border-t border-white/10 pt-3 text-center text-sm font-semibold text-blue-300">
           Court assignments and event information may change.
           Please follow staff instructions.
         </footer>
