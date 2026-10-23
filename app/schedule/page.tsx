@@ -276,8 +276,8 @@ export default function LobbySchedulePage() {
                                       ),
                                     }}
                                   />
-                                  <span className="text-sm font-bold text-blue-100">
-                                    {assignment.wristband} Wristband
+<span className="text-xl font-black text-blue-100">
+  {assignment.wristband} Wristband
                                   </span>
                                 </div>
                               )}
