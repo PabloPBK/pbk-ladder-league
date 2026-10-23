@@ -226,6 +226,7 @@ export default function TVScreenSettingsPage() {
                 >
                   <option value="single">Single Display</option>
                   <option value="slideshow">Slideshow</option>
+                  <option value="daily_schedule">Daily Operations Schedule</option>
                 </select>
               </div>
 
