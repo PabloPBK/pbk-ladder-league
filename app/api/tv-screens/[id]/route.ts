@@ -86,9 +86,9 @@ export async function PATCH(
       (location !== null &&
         (typeof location !== "string" ||
           location.length > 150)) ||
-      !["single", "slideshow"].includes(
-        String(display_mode)
-      ) ||
+    !["single", "slideshow", "daily_schedule"].includes(
+  String(display_mode)
+) ||
       typeof slide_duration !== "number" ||
       !Number.isInteger(slide_duration) ||
       slide_duration < 1 ||
