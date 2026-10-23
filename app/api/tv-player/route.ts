@@ -293,9 +293,11 @@ export async function GET(request: NextRequest) {
       id: screen.id,
       name: screen.name,
       display_mode:
-        screen.display_mode === "single"
-          ? "single"
-          : "slideshow",
+  screen.display_mode === "single"
+    ? "single"
+    : screen.display_mode === "daily_schedule"
+      ? "daily_schedule"
+      : "slideshow",
       slide_duration:
         typeof screen.slide_duration === "number" &&
         screen.slide_duration >= 1
