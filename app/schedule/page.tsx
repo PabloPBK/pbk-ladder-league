@@ -22,6 +22,7 @@ type ScheduleEvent = {
 type Schedule = {
   facility: string;
   welcome: string;
+  logo_url?: string;
   announcements: string[];
   events: ScheduleEvent[];
 };
@@ -186,8 +187,8 @@ export default function LobbySchedulePage() {
   return (
     <main className="min-h-screen bg-[#081327] px-5 py-6 text-white md:px-10">
       <div className="mx-auto max-w-[1800px]">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-5 border-b border-white/15 pb-5">
-          <div>
+        <header className="mb-6 grid grid-cols-1 items-center gap-5 border-b border-white/15 pb-5 md:grid-cols-[minmax(0,1fr)_minmax(170px,280px)_minmax(0,1fr)]">
+          <div className="min-w-0">
             <p className="text-sm font-black uppercase tracking-[0.25em] text-yellow-400">
               Pickleball Kingdom Lynnwood
             </p>
@@ -200,6 +201,17 @@ export default function LobbySchedulePage() {
               {schedule?.welcome ||
                 "WELCOME TO PICKLEBALL KINGDOM LYNNWOOD"}
             </p>
+          </div>
+
+          <div className="flex items-center justify-center">
+            {schedule?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={schedule.logo_url}
+                alt="Pickleball Kingdom Lynnwood"
+                className="max-h-28 w-full max-w-[280px] object-contain"
+              />
+            ) : null}
           </div>
 
           <div className="text-left md:text-right">
@@ -220,12 +232,21 @@ export default function LobbySchedulePage() {
         )}
 
         {sortedEvents.length === 0 ? (
-          <section className="rounded-2xl border border-white/15 bg-white/5 px-8 py-20 text-center">
-            <h2 className="text-3xl font-black text-yellow-400">
-              No Events Currently Showing
-            </h2>
+          <section className="flex min-h-[55vh] flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-6 py-12 text-center">
+            {schedule?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={schedule.logo_url}
+                alt="Pickleball Kingdom Lynnwood"
+                className="mb-10 max-h-[35vh] w-full max-w-[680px] object-contain"
+              />
+            ) : (
+              <h2 className="mb-8 text-3xl font-black text-yellow-400">
+                Welcome to Pickleball Kingdom Lynnwood
+              </h2>
+            )}
 
-            <p className="mt-4 text-xl text-blue-200">
+            <p className="max-w-4xl text-2xl font-bold leading-relaxed text-blue-100 md:text-4xl">
               Upcoming activities will appear 15 minutes before they begin.
             </p>
           </section>
