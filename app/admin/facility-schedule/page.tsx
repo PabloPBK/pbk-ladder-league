@@ -46,16 +46,28 @@ const EVENT_TYPES = [
   "Custom",
 ];
 
-const LEVELS = [
-  "ALL LEVELS SOCIAL",
-  "ALL LEVELS COMPETITIVE",
-  "3.0 TO 3.5",
-  "3.25 TO 3.75",
-  "3.5 TO 4.0",
+const OPEN_PLAY_LEVELS = [
+  "Beginner/PB101+",
+  "Intermediate",
+  "Competitive",
+  "All Levels Open Play",
+  "3.0 to 3.5",
+  "3.5 to 4.0",
   "3.75+",
   "4.0+",
+  "4.25+",
+];
+
+const LEVELS = [
+  ...OPEN_PLAY_LEVELS,
   "Custom",
 ];
+
+function levelKey(assignment: Assignment): string {
+  return (assignment.level === "Custom"
+    ? assignment.customLevel
+    : assignment.level).trim().toLowerCase();
+}
 
 const COURTS = Array.from(
   { length: 12 },
@@ -68,9 +80,9 @@ const inputStyle =
 const secondaryButton =
   "rounded-lg border border-zinc-700 px-4 py-2 font-semibold text-zinc-200 hover:bg-zinc-800";
 
-function newAssignment(): Assignment {
+function newAssignment(level = OPEN_PLAY_LEVELS[0]): Assignment {
   return {
-    level: "ALL LEVELS SOCIAL",
+    level,
     customLevel: "",
     wristband: "None",
     courts: [],
@@ -85,7 +97,9 @@ function newEvent(type = "Open Play", groupCount = 1): ScheduleEvent {
     type,
     customType: "",
     details: "",
-    assignments: Array.from({ length: groupCount }, () => newAssignment()),
+    assignments: Array.from({ length: groupCount }, (_, index) =>
+      newAssignment(type === "Open Play" ? OPEN_PLAY_LEVELS[index] ?? "Custom" : OPEN_PLAY_LEVELS[0])
+    ),
   };
 }
 
@@ -109,6 +123,18 @@ function validateSchedule(schedule: Schedule): string | null {
 
     if (!event.assignments.length) {
       return `Event ${i + 1}: Add at least one court assignment.`;
+    }
+
+    if (event.type === "Open Play") {
+      const seenLevels = new Set<string>();
+      for (const assignment of event.assignments) {
+        const key = levelKey(assignment);
+        if (!key) continue;
+        if (seenLevels.has(key)) {
+          return `Event ${i + 1}: Each Open Play level can appear only once in the same timed session (${assignment.level === "Custom" ? assignment.customLevel : assignment.level}).`;
+        }
+        seenLevels.add(key);
+      }
     }
 
     for (let j = 0; j < event.assignments.length; j++) {
@@ -717,7 +743,13 @@ export default function FacilitySchedulePage() {
                               ...event,
                               assignments: [
                                 ...event.assignments,
-                                newAssignment(),
+                                newAssignment(
+                                  event.type === "Open Play"
+                                    ? OPEN_PLAY_LEVELS.find((level) =>
+                                        !event.assignments.some((existing) => levelKey(existing) === level.toLowerCase())
+                                      ) ?? "Custom"
+                                    : OPEN_PLAY_LEVELS[0]
+                                ),
                               ],
                             })
                           }
@@ -772,7 +804,18 @@ export default function FacilitySchedulePage() {
                                   className={`${inputStyle} mt-2`}
                                 >
                                   {LEVELS.map((level) => (
-                                    <option key={level} value={level}>
+                                    <option
+                                      key={level}
+                                      value={level}
+                                      disabled={
+                                        event.type === "Open Play" &&
+                                        level !== "Custom" &&
+                                        level !== assignment.level &&
+                                        event.assignments.some((other, otherIndex) =>
+                                          otherIndex !== assignmentIndex && levelKey(other) === level.toLowerCase()
+                                        )
+                                      }
+                                    >
                                       {level}
                                     </option>
                                   ))}
