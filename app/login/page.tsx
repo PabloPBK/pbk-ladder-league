@@ -1,24 +1,17 @@
+
 "use client";
 
-import {
-  type FormEvent,
-  useState,
-} from "react";
+import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] =
-    useState("");
-  const [password, setPassword] =
-    useState("");
-  const [isSigningIn, setIsSigningIn] =
-    useState(false);
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -26,9 +19,7 @@ export default function LoginPage() {
     event.preventDefault();
 
     if (!email || !password) {
-      setErrorMessage(
-        "Enter your email and password.",
-      );
+      setErrorMessage("Enter your email and password.");
       return;
     }
 
@@ -48,21 +39,16 @@ export default function LoginPage() {
         throw error;
       }
 
-      /*
-       * Read the requested destination only
-       * in the browser, after login.
-       */
-      const params =
-        new URLSearchParams(
-          window.location.search,
-        );
+      const params = new URLSearchParams(
+        window.location.search,
+      );
 
-      const requestedPath =
-        params.get("next");
+      const requestedPath = params.get("next");
 
       const nextPath =
         requestedPath &&
-        requestedPath.startsWith("/")
+        requestedPath.startsWith("/") &&
+        !requestedPath.startsWith("//")
           ? requestedPath
           : "/admin";
 
@@ -114,9 +100,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) =>
-                setEmail(
-                  event.target.value,
-                )
+                setEmail(event.target.value)
               }
               className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-white outline-none transition focus:border-blue-500"
               placeholder="staff@example.com"
@@ -137,9 +121,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) =>
-                setPassword(
-                  event.target.value,
-                )
+                setPassword(event.target.value)
               }
               className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-white outline-none transition focus:border-blue-500"
               placeholder="••••••••"
@@ -157,11 +139,17 @@ export default function LoginPage() {
             disabled={isSigningIn}
             className="h-12 w-full rounded-xl bg-blue-600 px-5 font-black text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-700"
           >
-            {isSigningIn
-              ? "Signing In..."
-              : "Sign In"}
+            {isSigningIn ? "Signing In..." : "Sign In"}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => router.push("/reset-password")}
+          className="mt-3 h-12 w-full rounded-xl border border-zinc-600 bg-zinc-800 px-5 font-bold text-white transition hover:bg-zinc-700"
+        >
+          Reset Password
+        </button>
 
         <p className="mt-6 text-center text-xs text-zinc-500">
           Authorized staff only
