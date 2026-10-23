@@ -41,20 +41,18 @@ export function AppLayout({
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="grid min-h-screen md:grid-cols-[230px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-zinc-800 bg-zinc-950 md:flex md:h-screen md:flex-col md:sticky md:top-0">
+        <aside className="hidden border-r border-zinc-800 bg-zinc-950 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
           <div className="border-b border-zinc-800 p-5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-400">
               Pickleball Kingdom
             </p>
 
             <h1 className="mt-2 text-xl font-black leading-tight text-yellow-400">
-              PBK League
-              <br />
-              Manager
+              PBK Operations
             </h1>
 
-            <p className="mt-2 text-xs text-zinc-500">
-              Tuesday Night DUPR Ladder
+            <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+              League Management · Daily Scheduling · TV Displays
             </p>
           </div>
 
@@ -72,7 +70,7 @@ export function AppLayout({
                 <span className="h-2 w-2 rounded-full bg-green-400" />
 
                 <p className="text-xs font-semibold text-zinc-300">
-                  League system ready
+                  Operations system ready
                 </p>
               </div>
 
@@ -88,7 +86,7 @@ export function AppLayout({
             </p>
 
             <h1 className="mt-1 text-xl font-black text-yellow-400">
-              PBK League Manager
+              PBK Operations
             </h1>
           </header>
 
