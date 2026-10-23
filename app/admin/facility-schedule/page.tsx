@@ -151,6 +151,13 @@ function validateSchedule(schedule: Schedule): string | null {
         return `Event ${i + 1}, group ${j + 1}: Enter a custom level.`;
       }
 
+      if (assignment.wristband !== "None" && event.assignments.some(
+        (other, otherIndex) => otherIndex !== j &&
+          other.wristband.toLowerCase() === assignment.wristband.toLowerCase()
+      )) {
+        return `Event ${i + 1}: Wristband ${assignment.wristband} is assigned to multiple groups.`;
+      }
+
       if (
         assignment.stackCourt !== null &&
         !assignment.courts.includes(assignment.stackCourt)
@@ -377,6 +384,10 @@ export default function FacilitySchedulePage() {
 
     const assignment =
       schedule.events[eventIndex].assignments[assignmentIndex];
+
+    if (schedule.events[eventIndex].assignments.some(
+      (other, index) => index !== assignmentIndex && other.courts.includes(court)
+    )) return;
 
     const courts = assignment.courts.includes(court)
       ? assignment.courts.filter((value) => value !== court)
@@ -852,7 +863,11 @@ export default function FacilitySchedulePage() {
                                       assignmentIndex,
                                       {
                                         ...assignment,
-                                        wristband: e.target.value,
+                                        wristband: event.assignments.some(
+                                          (other, index) => index !== assignmentIndex &&
+                                            e.target.value !== "None" &&
+                                            other.wristband.toLowerCase() === e.target.value.toLowerCase()
+                                        ) ? assignment.wristband : e.target.value,
                                       }
                                     )
                                   }
@@ -869,11 +884,17 @@ export default function FacilitySchedulePage() {
                                     )}
                                   {wristbandColors
                                     .filter((color) => color.is_active)
-                                    .map((color) => (
-                                      <option key={color.id} value={color.name}>
-                                        {color.name}
-                                      </option>
-                                    ))}
+                                    .map((color) => {
+                                      const used = event.assignments.some(
+                                        (other, index) => index !== assignmentIndex &&
+                                          other.wristband.toLowerCase() === color.name.toLowerCase()
+                                      );
+                                      return (
+                                        <option key={color.id} value={color.name} disabled={used}>
+                                          {color.name}{used ? " (in use)" : ""}
+                                        </option>
+                                      );
+                                    })}
                                 </select>
                               </label>
                             </div>
@@ -886,11 +907,16 @@ export default function FacilitySchedulePage() {
                                 {COURTS.map((court) => {
                                   const selected =
                                     assignment.courts.includes(court);
+                                  const usedByOtherGroup = event.assignments.some(
+                                    (other, index) => index !== assignmentIndex && other.courts.includes(court)
+                                  );
 
                                   return (
                                     <button
                                       key={court}
                                       type="button"
+                                      disabled={usedByOtherGroup}
+                                      title={usedByOtherGroup ? "Assigned to another group" : `Court ${court}`}
                                       onClick={() =>
                                         toggleCourt(
                                           eventIndex,
@@ -901,7 +927,9 @@ export default function FacilitySchedulePage() {
                                       className={`rounded-lg border px-2 py-3 text-sm font-bold ${
                                         selected
                                           ? "border-yellow-400 bg-yellow-400 text-black"
-                                          : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-yellow-400"
+                                          : usedByOtherGroup
+                                            ? "cursor-not-allowed border-zinc-800 bg-zinc-900 text-zinc-600 opacity-40"
+                                            : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-yellow-400"
                                       }`}
                                     >
                                       {court}
