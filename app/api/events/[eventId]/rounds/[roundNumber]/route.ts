@@ -1,6 +1,11 @@
+
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireStaffUser } from "@/lib/server/require-auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type RouteContext = {
   params: Promise<{
@@ -14,6 +19,9 @@ export async function GET(
   context: RouteContext,
 ) {
   try {
+    // Only authorized staff can access saved league rounds.
+    await requireStaffUser();
+
     const {
       eventId,
       roundNumber: roundNumberText,
@@ -102,6 +110,7 @@ export async function GET(
     }
 
     const savedCourts = courts ?? [];
+
     const courtIds = savedCourts.map(
       (court) => court.id,
     );
@@ -245,23 +254,45 @@ export async function GET(
       },
     );
 
-    return NextResponse.json({
-      event,
-      round,
-      courts: responseCourts,
-      availableRounds: (allRounds ?? []).map(
-        (savedRound) => savedRound.round_number,
-      ),
-    });
+    return NextResponse.json(
+      {
+        event,
+        round,
+        courts: responseCourts,
+        availableRounds: (allRounds ?? []).map(
+          (savedRound) => savedRound.round_number,
+        ),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "";
+
+    if (message === "AUTH_REQUIRED") {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
+
+    if (message === "STAFF_ACCESS_DENIED") {
+      return NextResponse.json(
+        { error: "Staff access required." },
+        { status: 403 },
+      );
+    }
+
     console.error("Unable to load saved round:", error);
 
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load the saved round.",
+          "Unable to load the saved round.",
       },
       { status: 500 },
     );
