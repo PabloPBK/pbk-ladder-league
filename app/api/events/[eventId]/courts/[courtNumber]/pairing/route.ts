@@ -1,5 +1,7 @@
+
 import { NextResponse } from "next/server";
 
+import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type RouteContext = {
@@ -40,6 +42,55 @@ function getPairingIndex(team1Slots: number[]) {
   return 2;
 }
 
+function errorResponse(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Unable to process court pairing.";
+
+  if (message === "AUTH_REQUIRED") {
+    return NextResponse.json(
+      { error: "Please log in to continue." },
+      { status: 401 },
+    );
+  }
+
+  if (message === "STAFF_ACCESS_DENIED") {
+    return NextResponse.json(
+      { error: "Staff access is required." },
+      { status: 403 },
+    );
+  }
+
+  if (message === "STAFF_CHECK_FAILED") {
+    return NextResponse.json(
+      { error: "Unable to verify staff permissions." },
+      { status: 500 },
+    );
+  }
+
+  console.error("Court pairing error:", error);
+
+  return NextResponse.json(
+    { error: message },
+    { status: 500 },
+  );
+}
+
+function validateNumbers(
+  eventId: string,
+  courtNumber: number,
+  roundNumber: number,
+) {
+  return (
+    Boolean(eventId) &&
+    Number.isInteger(courtNumber) &&
+    courtNumber > 0 &&
+    Number.isInteger(roundNumber) &&
+    roundNumber > 0
+  );
+}
+
 async function loadEditableCourt(
   eventId: string,
   courtNumber: number,
@@ -59,6 +110,12 @@ async function loadEditableCourt(
   if (event.status === "complete") {
     throw new Error(
       "Pairings cannot be changed for a completed event.",
+    );
+  }
+
+  if (roundNumber !== event.current_round) {
+    throw new Error(
+      "Team changes are only allowed in the current round.",
     );
   }
 
@@ -86,16 +143,7 @@ async function loadEditableCourt(
     throw new Error(`Court ${courtNumber} was not found.`);
   }
 
-  if (court.complete) {
-    throw new Error(
-      "Undo or change the score before changing this pairing.",
-    );
-  }
-
-  return {
-    round,
-    court,
-  };
+  return { round, court };
 }
 
 export async function POST(
@@ -103,6 +151,8 @@ export async function POST(
   context: RouteContext,
 ) {
   try {
+    await requireStaffUser();
+
     const { eventId, courtNumber: courtNumberText } =
       await context.params;
 
@@ -111,13 +161,7 @@ export async function POST(
     const roundNumber = Number(body.roundNumber);
     const team1PlayerIds = body.team1PlayerIds ?? [];
 
-    if (
-      !eventId ||
-      !Number.isInteger(roundNumber) ||
-      roundNumber < 1 ||
-      !Number.isInteger(courtNumber) ||
-      courtNumber < 1
-    ) {
+    if (!validateNumbers(eventId, courtNumber, roundNumber)) {
       return NextResponse.json(
         { error: "The event or court number is invalid." },
         { status: 400 },
@@ -125,14 +169,15 @@ export async function POST(
     }
 
     if (
+      !Array.isArray(team1PlayerIds) ||
       team1PlayerIds.length !== 2 ||
+      !team1PlayerIds.every(
+        (id) => typeof id === "string",
+      ) ||
       new Set(team1PlayerIds).size !== 2
     ) {
       return NextResponse.json(
-        {
-          error:
-            "Choose two different players for Team 1.",
-        },
+        { error: "Choose two different Team 1 players." },
         { status: 400 },
       );
     }
@@ -143,14 +188,22 @@ export async function POST(
       roundNumber,
     );
 
-    const {
-      data: courtPlayers,
-      error: courtPlayersError,
-    } = await supabaseAdmin
-      .from("court_players")
-      .select("id, event_player_id, slot_number")
-      .eq("court_id", court.id)
-      .order("slot_number", { ascending: true });
+    if (court.complete) {
+      return NextResponse.json(
+        {
+          error:
+            "Use Correct Teams before changing a completed court.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const { data: courtPlayers, error: courtPlayersError } =
+      await supabaseAdmin
+        .from("court_players")
+        .select("id, event_player_id, slot_number")
+        .eq("court_id", court.id)
+        .order("slot_number", { ascending: true });
 
     if (courtPlayersError) {
       throw courtPlayersError;
@@ -169,25 +222,23 @@ export async function POST(
       courtPlayers as CourtPlayerRecord[];
 
     const eventPlayerIds = typedCourtPlayers.map(
-      (courtPlayer) => courtPlayer.event_player_id,
+      (player) => player.event_player_id,
     );
 
-    const {
-      data: eventPlayers,
-      error: eventPlayersError,
-    } = await supabaseAdmin
-      .from("event_players")
-      .select("id, player_id")
-      .in("id", eventPlayerIds);
+    const { data: eventPlayers, error: eventPlayersError } =
+      await supabaseAdmin
+        .from("event_players")
+        .select("id, player_id")
+        .in("id", eventPlayerIds);
 
     if (eventPlayersError) {
       throw eventPlayersError;
     }
 
     const playerIdByEventPlayerId = new Map(
-      (eventPlayers ?? []).map((eventPlayer) => [
-        eventPlayer.id,
-        eventPlayer.player_id,
+      (eventPlayers ?? []).map((player) => [
+        player.id,
+        player.player_id,
       ]),
     );
 
@@ -264,17 +315,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error("Unable to save court pairing:", error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to save the court pairing.",
-      },
-      { status: 500 },
-    );
+    return errorResponse(error);
   }
 }
 
@@ -283,20 +324,17 @@ export async function DELETE(
   context: RouteContext,
 ) {
   try {
+    await requireStaffUser();
+
     const { eventId, courtNumber: courtNumberText } =
       await context.params;
+
     const courtNumber = Number(courtNumberText);
     const roundNumber = Number(
       new URL(request.url).searchParams.get("roundNumber"),
     );
 
-    if (
-      !eventId ||
-      !Number.isInteger(roundNumber) ||
-      roundNumber < 1 ||
-      !Number.isInteger(courtNumber) ||
-      courtNumber < 1
-    ) {
+    if (!validateNumbers(eventId, courtNumber, roundNumber)) {
       return NextResponse.json(
         { error: "The event or court number is invalid." },
         { status: 400 },
@@ -309,37 +347,83 @@ export async function DELETE(
       roundNumber,
     );
 
-    const { error: resetPlayersError } =
-      await supabaseAdmin
-        .from("court_players")
-        .update({ team_number: null })
-        .eq("court_id", court.id);
-
-    if (resetPlayersError) {
-      throw resetPlayersError;
+    if (court.complete) {
+      return NextResponse.json(
+        {
+          error:
+            "This court has a saved score. Use Correct Teams.",
+        },
+        { status: 409 },
+      );
     }
 
-    const { error: resetCourtError } = await supabaseAdmin
-      .from("courts")
-      .update({ pairing_index: null })
-      .eq("id", court.id);
+    const { error: resetError } = await supabaseAdmin.rpc(
+      "reset_court_for_team_correction",
+      {
+        p_event_id: eventId,
+        p_round_number: roundNumber,
+        p_court_number: courtNumber,
+      },
+    );
 
-    if (resetCourtError) {
-      throw resetCourtError;
+    if (resetError) {
+      throw resetError;
     }
 
     return NextResponse.json({ undone: true });
   } catch (error) {
-    console.error("Unable to undo court pairing:", error);
+    return errorResponse(error);
+  }
+}
 
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to undo the court pairing.",
-      },
-      { status: 500 },
+export async function PATCH(
+  request: Request,
+  context: RouteContext,
+) {
+  try {
+    await requireStaffUser();
+
+    const { eventId, courtNumber: courtNumberText } =
+      await context.params;
+
+    const courtNumber = Number(courtNumberText);
+    const body = (await request.json()) as {
+      roundNumber?: number;
+    };
+    const roundNumber = Number(body.roundNumber);
+
+    if (!validateNumbers(eventId, courtNumber, roundNumber)) {
+      return NextResponse.json(
+        { error: "The event or court number is invalid." },
+        { status: 400 },
+      );
+    }
+
+    await loadEditableCourt(
+      eventId,
+      courtNumber,
+      roundNumber,
     );
+
+    const { error: resetError } = await supabaseAdmin.rpc(
+      "reset_court_for_team_correction",
+      {
+        p_event_id: eventId,
+        p_round_number: roundNumber,
+        p_court_number: courtNumber,
+      },
+    );
+
+    if (resetError) {
+      throw resetError;
+    }
+
+    return NextResponse.json({
+      corrected: true,
+      message:
+        `Court ${courtNumber} score and pairing cleared. Select the correct teams and enter the score again.`,
+    });
+  } catch (error) {
+    return errorResponse(error);
   }
 }
