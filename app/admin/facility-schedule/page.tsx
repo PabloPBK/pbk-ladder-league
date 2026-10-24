@@ -44,6 +44,7 @@ const EVENT_TYPES = [
   "Seasoned and Smashing",
   "Wise Guys",
   "DUPR $$$ Round Robin",
+  "League",
   "Custom",
 ];
 
