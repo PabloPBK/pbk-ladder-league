@@ -351,7 +351,7 @@ export default function LobbySchedulePage() {
                   </div>
 
                   {event.details && (
-                    <p className="px-5 pt-2 text-base font-medium text-blue-200">{event.details}</p>
+                    <p className={`px-5 ${event.type === "League" ? "pt-0.5 text-sm" : "pt-2 text-base"} font-medium text-blue-200`}>{event.details}</p>
                   )}
 
                   {event.type === "League" && event.leagueSnapshot?.courts?.length ? (
@@ -379,10 +379,10 @@ export default function LobbySchedulePage() {
                       const rowBudget = usableHeight / rows;
                       const compact = count >= 7 || rowBudget < 160;
                       const tight = count >= 9 || rowBudget < 135;
-                      const nameSize = tight ? 12 : compact ? 14 : count >= 5 ? 16 : 19;
-                      const headingSize = tight ? 16 : compact ? 19 : 24;
-                      const cardPadding = tight ? 3 : compact ? 5 : 10;
-                      const cardGap = tight ? 3 : 5;
+                      const nameSize = tight ? 11 : compact ? 14 : count >= 5 ? 16 : 19;
+                      const headingSize = tight ? 14 : compact ? 19 : 24;
+                      const cardPadding = tight ? 2 : compact ? 5 : 10;
+                      const cardGap = tight ? 2 : 5;
 
                       return (
                         <div className="px-2 py-0.5 sm:px-3">
@@ -407,7 +407,7 @@ export default function LobbySchedulePage() {
                                 className="min-w-0 rounded-lg border border-blue-400/60 bg-[#071a36]"
                                 style={{ padding: cardPadding }}
                               >
-                                <div className="flex items-center justify-between gap-1 border-b border-blue-300/25 pb-0.5">
+                                <div className="flex items-center justify-between gap-1 border-b border-blue-300/25">
                                   <h3
                                     className="font-black leading-none text-yellow-400"
                                     style={{ fontSize: headingSize }}
@@ -425,7 +425,7 @@ export default function LobbySchedulePage() {
                                     <li
                                       key={`${playerIndex}-${player}`}
                                       className="min-w-0 break-words font-semibold leading-tight text-white"
-                                      style={{ fontSize: nameSize, lineHeight: tight ? 1.1 : 1.2, paddingTop: tight ? 0 : 1 }}
+                                      style={{ fontSize: nameSize, lineHeight: tight ? 1.02 : 1.2, paddingTop: tight ? 0 : 1 }}
                                     >
                                       <span className="mr-1 text-blue-300">{playerIndex + 1}.</span>
                                       {player}
