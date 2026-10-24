@@ -360,33 +360,33 @@ export default function LobbySchedulePage() {
                         (a, b) => a.facilityCourt - b.facilityCourt
                       );
                       const count = courts.length;
-                      // TV browsers (including Silk) often report a CSS width below
-                      // 1050px even on a 1080p TV. Use four columns for 9-12
-                      // courts so all courts fit in three rows instead of four.
-                      const columns = displayWidth >= 760
-                        ? (count <= 4 ? 2 : count <= 6 ? 3 : 4)
-                        : displayWidth >= 520
-                          ? (count <= 2 ? 1 : count <= 6 ? 2 : 3)
-                          : (count <= 3 ? 1 : 2);
+                      // On a landscape TV, always fit 7-12 courts into four
+                      // columns (at most three rows). Silk can report a smaller
+                      // CSS viewport than the television's physical resolution.
+                      const columns = displayWidth >= 550
+                        ? (count <= 2 ? count : count <= 4 ? 2 : count <= 6 ? 3 : 4)
+                        : (count <= 2 ? 1 : 2);
                       const rows = Math.ceil(count / columns);
                       const otherEvents = sortedEvents.filter((item) => item !== event).length;
+                      // Account for the event title, description, labels, footer,
+                      // and other visible content before sizing the court tiles.
                       const usableHeight = Math.max(
-                        180,
-                        displayHeight - 110 - otherEvents * 105 -
-                        (announcementsCount ? 55 + announcementsCount * 20 : 0) -
-                        (event.details ? 30 : 0)
+                        150,
+                        displayHeight - 145 - otherEvents * 110 -
+                        (announcementsCount ? 60 + announcementsCount * 20 : 0) -
+                        (event.details ? 34 : 0)
                       );
                       const rowBudget = usableHeight / rows;
                       const compact = count >= 7 || rowBudget < 160;
-                      const tight = rowBudget < 125;
+                      const tight = count >= 9 || rowBudget < 135;
                       const nameSize = tight ? 12 : compact ? 14 : count >= 5 ? 16 : 19;
-                      const headingSize = tight ? 17 : compact ? 19 : 24;
-                      const cardPadding = tight ? 4 : compact ? 6 : 11;
-                      const cardGap = tight ? 4 : 6;
+                      const headingSize = tight ? 16 : compact ? 19 : 24;
+                      const cardPadding = tight ? 3 : compact ? 5 : 10;
+                      const cardGap = tight ? 3 : 5;
 
                       return (
-                        <div className="px-2 py-1 sm:px-3">
-                          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                        <div className="px-2 py-0.5 sm:px-3">
+                          <div className="mb-0.5 flex flex-wrap items-center justify-between gap-2">
                             <p className="text-xs font-bold uppercase tracking-wide text-blue-200">
                               Starting court assignments · {count} courts · {courts.reduce((total, court) => total + court.players.length, 0)} players
                             </p>
@@ -407,7 +407,7 @@ export default function LobbySchedulePage() {
                                 className="min-w-0 rounded-lg border border-blue-400/60 bg-[#071a36]"
                                 style={{ padding: cardPadding }}
                               >
-                                <div className="mb-1 flex items-center justify-between gap-1 border-b border-blue-300/25 pb-1">
+                                <div className="flex items-center justify-between gap-1 border-b border-blue-300/25 pb-0.5">
                                   <h3
                                     className="font-black leading-none text-yellow-400"
                                     style={{ fontSize: headingSize }}
@@ -425,7 +425,7 @@ export default function LobbySchedulePage() {
                                     <li
                                       key={`${playerIndex}-${player}`}
                                       className="min-w-0 break-words font-semibold leading-tight text-white"
-                                      style={{ fontSize: nameSize, paddingTop: tight ? 0 : 2 }}
+                                      style={{ fontSize: nameSize, lineHeight: tight ? 1.1 : 1.2, paddingTop: tight ? 0 : 1 }}
                                     >
                                       <span className="mr-1 text-blue-300">{playerIndex + 1}.</span>
                                       {player}
