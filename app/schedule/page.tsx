@@ -86,6 +86,8 @@ export default function LobbySchedulePage() {
   const contentViewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState(1);
+  // A fixed desktop-sized canvas prevents Silk from switching to mobile rows.
+  const scheduleCanvasWidth = 1280;
 
   useEffect(() => {
     let active = true;
@@ -188,36 +190,40 @@ export default function LobbySchedulePage() {
       }).format(now)
     : "";
 
-  // Fit the complete activity/announcement area inside the TV viewport.
-  // Recalculate when content or screen size changes, including an iframe resize.
+  // Scale the fixed-width schedule canvas to fit BOTH the available width
+  // and height. CSS transform works consistently in Amazon Silk, unlike zoom.
   useEffect(() => {
     const viewport = contentViewportRef.current;
     const content = contentRef.current;
     if (!viewport || !content) return;
+
     let frame = 0;
     const measure = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const available = viewport.clientHeight;
-        if (!available) return;
-        // scrollHeight is measured in unzoomed layout pixels in browsers
-        // supporting CSS zoom. Restore zoom first for an accurate baseline.
-        content.style.zoom = "1";
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const availableWidth = viewport.clientWidth;
+        const availableHeight = viewport.clientHeight;
+        if (!availableWidth || !availableHeight) return;
+
+        // Transforms do not change scrollHeight, so this is the natural height.
         const naturalHeight = content.scrollHeight;
-        const naturalWidth = content.scrollWidth;
-        const scale = Math.min(1, available / Math.max(naturalHeight, 1),
-          viewport.clientWidth / Math.max(naturalWidth, 1));
-        const safeScale = Math.max(0.35, Math.floor(scale * 1000) / 1000);
-        content.style.zoom = String(safeScale);
-        setFitScale(safeScale);
+        const scale = Math.min(
+          1,
+          availableWidth / scheduleCanvasWidth,
+          availableHeight / Math.max(naturalHeight, 1),
+        );
+        setFitScale(Math.max(0.01, Math.floor(scale * 1000) / 1000));
       });
     };
+
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
+    observer.observe(content);
     window.addEventListener("resize", measure);
     measure();
+
     return () => {
-      cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
@@ -278,8 +284,18 @@ export default function LobbySchedulePage() {
           </div>
         )}
 
-        <div ref={contentViewportRef} className="min-h-0 flex-1 overflow-hidden">
-          <div ref={contentRef} style={{ zoom: fitScale }}>
+        <div ref={contentViewportRef} className="relative min-h-0 flex-1 overflow-hidden">
+          <div
+            ref={contentRef}
+            style={{
+              width: scheduleCanvasWidth,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              transformOrigin: "top left",
+              transform: `scale(${fitScale})`,
+            }}
+          >
         {sortedEvents.length === 0 ? (
           <section className="flex min-h-[min(58dvh,600px)] flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-center">
             {schedule?.logo_url ? (
@@ -343,9 +359,9 @@ export default function LobbySchedulePage() {
                     {assignments.map((assignment, assignmentIndex) => (
                       <div
                         key={assignmentIndex}
-                        className="grid grid-cols-1 items-center gap-3 px-5 py-3 lg:grid-cols-[minmax(210px,1.05fr)_minmax(0,2fr)_minmax(190px,0.95fr)] lg:gap-5"
+                        className="grid grid-cols-[minmax(240px,1.05fr)_minmax(0,2fr)_minmax(230px,0.95fr)] items-center gap-5 px-5 py-3"
                       >
-                        <h3 className="text-xl font-black leading-tight text-white lg:text-[clamp(1.3rem,2vw,2.5rem)]">
+                        <h3 className="text-[28px] font-black leading-tight text-white">
                           {levelName(assignment)}
                         </h3>
 
@@ -355,9 +371,9 @@ export default function LobbySchedulePage() {
                             return (
                               <div
                                 key={court}
-                                className={`flex min-h-[68px] min-w-[68px] flex-col items-center justify-center rounded-xl border-2 px-2 py-1 lg:min-h-[76px] lg:min-w-[76px] ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
+                                className={`flex min-h-[68px] min-w-[68px] flex-col items-center justify-center rounded-xl border-2 px-2 py-1 min-h-[76px] min-w-[76px] ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
                               >
-                                <span className="text-3xl font-black leading-none text-white lg:text-4xl">{court}</span>
+                                <span className="text-4xl font-black leading-none text-white">{court}</span>
                                 <span className={`mt-1 text-[10px] font-black uppercase tracking-wide ${isStack ? "text-yellow-300" : "text-blue-100"}`}>
                                   {isStack ? "Stack" : "Court"}
                                 </span>
@@ -369,14 +385,14 @@ export default function LobbySchedulePage() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 lg:justify-end">
+                        <div className="flex items-center justify-end gap-3">
                           {assignment.wristband && assignment.wristband !== "None" ? (
                             <>
                               <span
-                                className="h-9 w-9 shrink-0 rounded-full border-2 border-white/40 lg:h-11 lg:w-11"
+                                className="h-11 w-11 shrink-0 rounded-full border-2 border-white/40"
                                 style={{ backgroundColor: wristbandColor(assignment.wristband) }}
                               />
-                              <span className="text-lg font-black text-white lg:text-[clamp(1.2rem,1.7vw,2rem)]">
+                              <span className="text-[23px] font-black text-white">
                                 {assignment.wristband} Wristband
                               </span>
                             </>
