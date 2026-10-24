@@ -360,11 +360,13 @@ export default function LobbySchedulePage() {
                         (a, b) => a.facilityCourt - b.facilityCourt
                       );
                       const count = courts.length;
-                      // Favor four columns for full leagues; reduce columns on narrower TVs.
-                      const columns = displayWidth >= 1050
-                        ? (count <= 4 ? 2 : count <= 8 ? 3 : 4)
-                        : displayWidth >= 680
-                          ? (count <= 4 ? 2 : 3)
+                      // TV browsers (including Silk) often report a CSS width below
+                      // 1050px even on a 1080p TV. Use four columns for 9-12
+                      // courts so all courts fit in three rows instead of four.
+                      const columns = displayWidth >= 760
+                        ? (count <= 4 ? 2 : count <= 6 ? 3 : 4)
+                        : displayWidth >= 520
+                          ? (count <= 2 ? 1 : count <= 6 ? 2 : 3)
                           : (count <= 3 ? 1 : 2);
                       const rows = Math.ceil(count / columns);
                       const otherEvents = sortedEvents.filter((item) => item !== event).length;
@@ -375,18 +377,18 @@ export default function LobbySchedulePage() {
                         (event.details ? 30 : 0)
                       );
                       const rowBudget = usableHeight / rows;
-                      const compact = count >= 9 || rowBudget < 160;
+                      const compact = count >= 7 || rowBudget < 160;
                       const tight = rowBudget < 125;
                       const nameSize = tight ? 12 : compact ? 14 : count >= 5 ? 16 : 19;
-                      const headingSize = tight ? 17 : compact ? 20 : 24;
-                      const cardPadding = tight ? 5 : compact ? 7 : 11;
-                      const cardGap = tight ? 4 : 7;
+                      const headingSize = tight ? 17 : compact ? 19 : 24;
+                      const cardPadding = tight ? 4 : compact ? 6 : 11;
+                      const cardGap = tight ? 4 : 6;
 
                       return (
                         <div className="px-2 py-1 sm:px-3">
                           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                             <p className="text-xs font-bold uppercase tracking-wide text-blue-200">
-                              Starting court assignments · {count} courts · {count * 4} players
+                              Starting court assignments · {count} courts · {courts.reduce((total, court) => total + court.players.length, 0)} players
                             </p>
                             <p className="text-xs font-semibold text-yellow-300">
                               Find your name and report to your starting court
