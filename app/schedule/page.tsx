@@ -60,6 +60,14 @@ function wristbandColor(color?: string) {
     Pink: "#ec4899",
     White: "#ffffff",
     Black: "#18181b",
+    Aqua: "#22d3ee",
+    Brown: "#92400e",
+    Chartreuse: "#a3e635",
+    Cranberry: "#be123c",
+    Gold: "#eab308",
+    Gray: "#9ca3af",
+    Lavender: "#c4b5fd",
+    "Neon Green": "#39ff14",
   };
 
   return colors[color || ""] || "#71717a";
@@ -161,8 +169,6 @@ export default function LobbySchedulePage() {
 
   // Scale the schedule based on the number of events currently displayed.
   const eventCount = sortedEvents.length;
-  const spacious = eventCount === 1;
-  const roomy = eventCount === 2;
 
   const dateText = now
     ? new Intl.DateTimeFormat("en-US", {
@@ -299,124 +305,87 @@ export default function LobbySchedulePage() {
             </p>
           </section>
         ) : (
-          <div className={spacious ? "space-y-3" : "space-y-2"}>
+          <div className="space-y-3">
             {sortedEvents.map((event, eventIndex) => {
               const start = timeToMinutes(event.start);
               const end = timeToMinutes(event.end);
-
-              const isActive =
-                currentMinutes !== null &&
-                currentMinutes >= start &&
-                currentMinutes < end - 15;
-
-              const isStartingSoon =
-                currentMinutes !== null &&
-                currentMinutes >= start - 15 &&
-                currentMinutes < start;
+              const isActive = currentMinutes !== null && currentMinutes >= start && currentMinutes < end - 15;
+              const isStartingSoon = currentMinutes !== null && currentMinutes >= start - 15 && currentMinutes < start;
+              const assignments = event.assignments || [];
 
               return (
                 <section
                   key={`${event.start}-${eventIndex}`}
-                  className={`overflow-hidden rounded-2xl border ${
-                    isActive
-                      ? "border-yellow-400 bg-[#15294a]"
-                      : "border-white/15 bg-[#101f38]"
-                  } `}
+                  className={`overflow-hidden rounded-2xl border ${isActive ? "border-blue-400/70 bg-[#0c2b57]" : "border-blue-500/35 bg-[#0b2448]"}`}
                 >
-                  <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-2`}>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <h2 className={`font-black text-yellow-400 ${spacious ? "text-2xl md:text-3xl" : roomy ? "text-xl md:text-2xl" : "text-lg md:text-xl"}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-blue-300/20 px-5 py-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="text-2xl font-black tracking-tight text-yellow-400 lg:text-[clamp(1.6rem,2.5vw,3rem)]">
                         {eventName(event)}
                       </h2>
-
                       {isStartingSoon && (
-                        <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-black">
-                          Starting Soon
-                        </span>
+                        <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black uppercase text-black">Starting Soon</span>
                       )}
                       {isActive && (
-                        <span className="rounded-full bg-green-500 px-3 py-1 text-xs font-black uppercase tracking-wider text-black">
-                          Happening Now
-                        </span>
+                        <span className="rounded-full bg-green-400 px-3 py-1 text-xs font-black uppercase text-black">Happening Now</span>
                       )}
                     </div>
-
-                    <p className={`font-black text-white ${spacious ? "text-lg md:text-2xl" : roomy ? "text-lg md:text-xl" : "text-base md:text-lg"}`}>
-                      {formatTime(event.start)}
-                      {" – "}
-                      {formatTime(event.end)}
+                    <p className="whitespace-nowrap text-lg font-extrabold text-blue-100 lg:text-2xl">
+                      {formatTime(event.start)} - {formatTime(event.end)}
                     </p>
                   </div>
 
                   {event.details && (
-                    <p className="px-4 pt-2 text-sm text-blue-200">
-                      {event.details}
-                    </p>
+                    <p className="px-5 pt-2 text-base font-medium text-blue-200">{event.details}</p>
                   )}
 
-                  <div className={`grid ${spacious ? "gap-3 p-3" : "gap-2 p-2"} ${(event.assignments || []).length > 1 ? "lg:grid-cols-2" : "grid-cols-1"}`}>
-                    {(event.assignments || []).map(
-                      (assignment, assignmentIndex) => (
-                        <div
-                          key={assignmentIndex}
-                          className={`rounded-xl border border-white/10 bg-black/20 ${spacious ? "p-3" : "p-2"}`}
-                        >
-                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <h3 className={`font-black text-white ${spacious ? "text-xl md:text-2xl" : roomy ? "text-lg md:text-xl" : "text-base md:text-lg"}`}>
-                              {levelName(assignment)}
-                            </h3>
+                  <div className="divide-y divide-blue-300/20">
+                    {assignments.map((assignment, assignmentIndex) => (
+                      <div
+                        key={assignmentIndex}
+                        className="grid grid-cols-1 items-center gap-3 px-5 py-3 lg:grid-cols-[minmax(210px,1.05fr)_minmax(0,2fr)_minmax(190px,0.95fr)] lg:gap-5"
+                      >
+                        <h3 className="text-xl font-black leading-tight text-white lg:text-[clamp(1.3rem,2vw,2.5rem)]">
+                          {levelName(assignment)}
+                        </h3>
 
-                            {assignment.wristband &&
-                              assignment.wristband !== "None" && (
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`${spacious ? "h-5 w-5" : "h-5 w-5"} shrink-0 rounded-full border border-white/30`}
-                                    style={{
-                                      backgroundColor: wristbandColor(
-                                        assignment.wristband
-                                      ),
-                                    }}
-                                  />
-                                  <span className={`font-black text-blue-100 ${spacious ? "text-base md:text-lg" : roomy ? "text-sm md:text-base" : "text-sm"}`}>
-                                    {assignment.wristband} Wristband
-                                  </span>
-                                </div>
-                              )}
-                          </div>
-
-                          <div className={`flex flex-wrap ${spacious ? "gap-2" : "gap-2"}`}>
-                            {(assignment.courts || [])
-                              .slice()
-                              .sort((a, b) => a - b)
-                              .map((court) => {
-                                const isStack =
-                                  assignment.stackCourt === court;
-
-                                return (
-                                  <div
-                                    key={court}
-                                    className={`flex flex-col items-center justify-center rounded-xl border-2 ${spacious ? "min-h-14 min-w-14 px-3 py-2 md:min-h-16 md:min-w-16" : roomy ? "min-h-12 min-w-12 px-2 py-1" : "min-h-11 min-w-11 px-2 py-1"} ${
-                                      isStack
-                                        ? "border-yellow-400 bg-yellow-400/15"
-                                        : "border-blue-400/30 bg-blue-900/40"
-                                    }`}
-                                  >
-                                    <span className={`font-black ${spacious ? "text-2xl md:text-3xl" : roomy ? "text-xl md:text-2xl" : "text-xl"}`}>
-                                      {court}
-                                    </span>
-
-                                    {isStack && (
-                                      <span className={`font-black uppercase tracking-wide text-yellow-300 ${spacious ? "text-xs md:text-sm" : "text-[10px]"}`}>
-                                        Stack
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                          </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {(assignment.courts || []).slice().sort((a, b) => a - b).map((court) => {
+                            const isStack = assignment.stackCourt === court;
+                            return (
+                              <div
+                                key={court}
+                                className={`flex min-h-[68px] min-w-[68px] flex-col items-center justify-center rounded-xl border-2 px-2 py-1 lg:min-h-[76px] lg:min-w-[76px] ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
+                              >
+                                <span className="text-3xl font-black leading-none text-white lg:text-4xl">{court}</span>
+                                <span className={`mt-1 text-[10px] font-black uppercase tracking-wide ${isStack ? "text-yellow-300" : "text-blue-100"}`}>
+                                  {isStack ? "Stack" : "Court"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {(assignment.courts || []).length === 0 && (
+                            <span className="text-base font-semibold text-yellow-200">Courts not assigned</span>
+                          )}
                         </div>
-                      )
-                    )}
+
+                        <div className="flex items-center gap-3 lg:justify-end">
+                          {assignment.wristband && assignment.wristband !== "None" ? (
+                            <>
+                              <span
+                                className="h-9 w-9 shrink-0 rounded-full border-2 border-white/40 lg:h-11 lg:w-11"
+                                style={{ backgroundColor: wristbandColor(assignment.wristband) }}
+                              />
+                              <span className="text-lg font-black text-white lg:text-[clamp(1.2rem,1.7vw,2rem)]">
+                                {assignment.wristband} Wristband
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-base font-semibold text-blue-200">No wristband</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </section>
               );
