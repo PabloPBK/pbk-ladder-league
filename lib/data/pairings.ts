@@ -1,3 +1,4 @@
+
 type PairingResult = {
   eventId: string;
   roundNumber: number;
@@ -8,6 +9,8 @@ type PairingResult = {
 type PairingResponse = {
   pairing?: PairingResult;
   undone?: boolean;
+  corrected?: boolean;
+  message?: string;
   error?: string;
 };
 
@@ -92,4 +95,40 @@ export async function undoCourtPairing({
       result.error ?? "Unable to undo the court pairing.",
     );
   }
+}
+
+export async function correctCourtTeams({
+  eventId,
+  courtNumber,
+  roundNumber,
+}: {
+  eventId: string;
+  courtNumber: number;
+  roundNumber: number;
+}) {
+  const response = await fetch(
+    `/api/events/${encodeURIComponent(
+      eventId,
+    )}/courts/${courtNumber}/pairing`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        roundNumber,
+      }),
+    },
+  );
+
+  const result = await readPairingResponse(response);
+
+  if (!response.ok || !result.corrected) {
+    throw new Error(
+      result.error ?? "Unable to correct the court teams.",
+    );
+  }
+
+  return result;
 }
