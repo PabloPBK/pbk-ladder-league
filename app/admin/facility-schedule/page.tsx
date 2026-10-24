@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getActiveLeagueEvent, type LeagueEventRecord } from "@/lib/data/events";
+import { getEventRound } from "@/lib/data/currentRound";
 
 type WristbandColor = {
   id: number;
@@ -18,7 +20,21 @@ type Assignment = {
   stackCourt: number | null;
 };
 
+type LeagueCourtSnapshot = {
+  leagueCourt: number;
+  facilityCourt: number;
+  players: string[];
+};
+
+type LeagueSnapshot = {
+  eventId: string;
+  eventName: string;
+  importedAt: string;
+  courts: LeagueCourtSnapshot[];
+};
+
 type ScheduleEvent = {
+  leagueSnapshot?: LeagueSnapshot;
   start: string;
   end: string;
   type: string;
@@ -111,6 +127,27 @@ function eventName(event: ScheduleEvent) {
     : event.type;
 }
 
+function selectedCourts(event: ScheduleEvent): number[] {
+  return [...new Set(event.assignments.flatMap((a) => a.courts))].sort((a, b) => a - b);
+}
+
+function leagueSnapshotError(event: ScheduleEvent): string | null {
+  if (event.type !== "League" || !event.leagueSnapshot) return null;
+  const selected = selectedCourts(event);
+  const imported = event.leagueSnapshot.courts;
+  if (selected.length !== imported.length) {
+    return "The number of selected facility courts no longer matches the imported league courts. Update the mapping or import again.";
+  }
+  const mapped = imported.map((court) => court.facilityCourt);
+  if (new Set(mapped).size !== mapped.length || mapped.some((court) => !selected.includes(court))) {
+    return "Each imported league court must map to one distinct selected facility court.";
+  }
+  if (imported.some((court) => court.players.length !== 4 || court.players.some((name) => !name.trim()))) {
+    return "Each imported league court must have four named players.";
+  }
+  return null;
+}
+
 function validateSchedule(schedule: Schedule): string | null {
   for (let i = 0; i < schedule.events.length; i++) {
     const event = schedule.events[i];
@@ -122,6 +159,9 @@ function validateSchedule(schedule: Schedule): string | null {
     if (event.type === "Custom" && !event.customType.trim()) {
       return `Event ${i + 1}: Enter a custom event name.`;
     }
+
+    const leagueError = leagueSnapshotError(event);
+    if (leagueError) return `Event ${i + 1}: ${leagueError}`;
 
     if (!event.assignments.length) {
       return `Event ${i + 1}: Add at least one court assignment.`;
@@ -231,6 +271,10 @@ export default function FacilitySchedulePage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoMessage, setLogoMessage] = useState("");
   const [logoError, setLogoError] = useState("");
+  const [activeLeague, setActiveLeague] = useState<LeagueEventRecord | null>(null);
+  const [leagueLoading, setLeagueLoading] = useState(false);
+  const [leagueImporting, setLeagueImporting] = useState<number | null>(null);
+  const [leagueMessage, setLeagueMessage] = useState("");
 
   useEffect(() => {
     async function loadSchedule() {
@@ -284,6 +328,79 @@ export default function FacilitySchedulePage() {
 
     void loadWristbandColors();
   }, []);
+
+  async function refreshActiveLeague() {
+    setLeagueLoading(true);
+    setLeagueMessage("");
+    try {
+      const active = await getActiveLeagueEvent();
+      setActiveLeague(active);
+      if (!active) setLeagueMessage("No active league session found. Start or resume the league in League Manager first.");
+    } catch (error) {
+      setActiveLeague(null);
+      setLeagueMessage(error instanceof Error ? error.message : "Unable to find active league session.");
+    } finally {
+      setLeagueLoading(false);
+    }
+  }
+
+  async function importLeagueRoundOne(eventIndex: number) {
+    if (!schedule || !activeLeague || leagueImporting !== null) return;
+    const event = schedule.events[eventIndex];
+    const physicalCourts = selectedCourts(event);
+    if (physicalCourts.length < 2 || physicalCourts.length > 12) {
+      setLeagueMessage("Select between 2 and 12 facility courts before importing.");
+      return;
+    }
+    if (schedule.schedule_date && activeLeague.event_date !== schedule.schedule_date) {
+      setLeagueMessage(`The active league is dated ${activeLeague.event_date}, but this schedule is for ${schedule.schedule_date}.`);
+      return;
+    }
+    setLeagueImporting(eventIndex);
+    setLeagueMessage("");
+    try {
+      const round = await getEventRound(activeLeague.id, 1);
+      if (round.round.round_number !== 1) throw new Error("The response was not Round 1.");
+      const leagueCourts = [...round.courts].sort((a, b) => a.courtNumber - b.courtNumber);
+      if (leagueCourts.length !== physicalCourts.length) {
+        throw new Error(`Round 1 has ${leagueCourts.length} courts, but this event reserves ${physicalCourts.length}. Select matching facility courts before importing.`);
+      }
+      if (leagueCourts.some((court) => court.players.length !== 4)) {
+        throw new Error("Every starting court must contain four players.");
+      }
+      const snapshot: LeagueSnapshot = {
+        eventId: activeLeague.id,
+        eventName: activeLeague.name,
+        importedAt: new Date().toISOString(),
+        courts: leagueCourts.map((court, index) => ({
+          leagueCourt: court.courtNumber,
+          facilityCourt: physicalCourts[index],
+          players: [...court.players]
+            .sort((a, b) => a.slotNumber - b.slotNumber)
+            .map((player) => player.name),
+        })),
+      };
+      updateEvent(eventIndex, { ...event, leagueSnapshot: snapshot });
+      setLeagueMessage(`Imported ${snapshot.courts.length} starting courts from ${activeLeague.name}. Review the mapping, then Save & Publish.`);
+    } catch (error) {
+      setLeagueMessage(error instanceof Error ? error.message : "Unable to import starting courts.");
+    } finally {
+      setLeagueImporting(null);
+    }
+  }
+
+  function updateLeagueCourtMapping(eventIndex: number, leagueCourt: number, facilityCourt: number) {
+    if (!schedule) return;
+    const event = schedule.events[eventIndex];
+    if (!event.leagueSnapshot) return;
+    const courts = event.leagueSnapshot.courts.map((court) =>
+      court.leagueCourt === leagueCourt ? { ...court, facilityCourt } : court
+    );
+    updateEvent(eventIndex, {
+      ...event,
+      leagueSnapshot: { ...event.leagueSnapshot, courts },
+    });
+  }
 
   function updateSchedule(next: Schedule) {
     setSchedule(next);
@@ -356,6 +473,8 @@ export default function FacilitySchedulePage() {
     const copy = JSON.parse(
       JSON.stringify(schedule.events[index])
     ) as ScheduleEvent;
+    // Never duplicate a published player roster into another event.
+    delete copy.leagueSnapshot;
 
     updateSchedule({
       ...schedule,
@@ -821,6 +940,7 @@ export default function FacilitySchedulePage() {
                             updateEvent(eventIndex, {
                               ...event,
                               type: e.target.value,
+                               leagueSnapshot: e.target.value === "League" ? event.leagueSnapshot : undefined,
                             })
                           }
                           className={`${inputStyle} mt-2`}
@@ -865,6 +985,75 @@ export default function FacilitySchedulePage() {
                         placeholder="Optional description or staff instructions"
                       />
                     </label>
+
+                    {event.type === "League" && (
+                      <section className="space-y-4 rounded-xl border border-yellow-500/40 bg-zinc-950 p-5">
+                        <h3 className="text-lg font-bold text-yellow-400">League Starting Court Assignments</h3>
+                        <p className="text-sm text-zinc-400">
+                          Select 2–12 facility courts below, then import the active league session's original Round 1.
+                          Imported names remain fixed as the ladder progresses.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="min-w-0 flex-1 text-sm text-zinc-200">
+                            {activeLeague
+                              ? `Active session: ${activeLeague.name} (${activeLeague.event_date})`
+                              : "No active league session loaded"}
+                          </div>
+                          <button type="button" onClick={() => void refreshActiveLeague()}
+                            disabled={leagueLoading} className={secondaryButton}>
+                            {leagueLoading ? "Checking..." : "Find Active League"}
+                          </button>
+                          <button type="button" onClick={() => void importLeagueRoundOne(eventIndex)}
+                            disabled={!activeLeague || leagueImporting !== null}
+                            className="rounded-lg bg-yellow-400 px-4 py-2 font-bold text-black hover:bg-yellow-300 disabled:opacity-40">
+                            {leagueImporting === eventIndex ? "Importing..." : "Import Round 1"}
+                          </button>
+                        </div>
+                        {leagueMessage && <p className="text-sm text-blue-300">{leagueMessage}</p>}
+                        {event.leagueSnapshot && (
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-green-300">
+                                Imported from {event.leagueSnapshot.eventName} · {event.leagueSnapshot.courts.length} courts
+                              </p>
+                              <button type="button" className="text-sm font-semibold text-red-300 hover:text-red-200"
+                                onClick={() => updateEvent(eventIndex, { ...event, leagueSnapshot: undefined })}>
+                                Clear Import
+                              </button>
+                            </div>
+                            {leagueSnapshotError(event) && (
+                              <p className="rounded-lg border border-red-700 bg-red-950 p-3 text-sm text-red-200">
+                                {leagueSnapshotError(event)}
+                              </p>
+                            )}
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {event.leagueSnapshot.courts.map((court) => (
+                                <div key={court.leagueCourt} className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+                                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-bold text-yellow-400">League Court {court.leagueCourt}</span>
+                                    <label className="text-xs font-semibold text-zinc-300">
+                                      Facility Court
+                                      <select value={court.facilityCourt}
+                                        onChange={(e) => updateLeagueCourtMapping(eventIndex, court.leagueCourt, Number(e.target.value))}
+                                        className={`${inputStyle} mt-1`}>
+                                        {selectedCourts(event).map((physical) => (
+                                          <option key={physical} value={physical}>Court {physical}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                  </div>
+                                  <ol className="space-y-1 text-sm text-zinc-200">
+                                    {court.players.map((name, playerIndex) => (
+                                      <li key={playerIndex}>{playerIndex + 1}. {name}</li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </section>
+                    )}
 
                     <div className="space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
