@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Assignment = {
   level: string;
@@ -83,11 +83,6 @@ export default function LobbySchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [now, setNow] = useState<Date | null>(null);
-  const contentViewportRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [fitScale, setFitScale] = useState(1);
-  // A fixed desktop-sized canvas prevents Silk from switching to mobile rows.
-  const scheduleCanvasWidth = 1280;
 
   useEffect(() => {
     let active = true;
@@ -190,45 +185,6 @@ export default function LobbySchedulePage() {
       }).format(now)
     : "";
 
-  // Scale the fixed-width schedule canvas to fit BOTH the available width
-  // and height. CSS transform works consistently in Amazon Silk, unlike zoom.
-  useEffect(() => {
-    const viewport = contentViewportRef.current;
-    const content = contentRef.current;
-    if (!viewport || !content) return;
-
-    let frame = 0;
-    const measure = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const availableWidth = viewport.clientWidth;
-        const availableHeight = viewport.clientHeight;
-        if (!availableWidth || !availableHeight) return;
-
-        // Transforms do not change scrollHeight, so this is the natural height.
-        const naturalHeight = content.scrollHeight;
-        const scale = Math.min(
-          1,
-          availableWidth / scheduleCanvasWidth,
-          availableHeight / Math.max(naturalHeight, 1),
-        );
-        setFitScale(Math.max(0.01, Math.floor(scale * 1000) / 1000));
-      });
-    };
-
-    const observer = new ResizeObserver(measure);
-    observer.observe(viewport);
-    observer.observe(content);
-    window.addEventListener("resize", measure);
-    measure();
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [schedule, sortedEvents.length, now?.getMinutes()]);
-
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#081327] text-2xl font-bold text-white">
@@ -238,7 +194,7 @@ export default function LobbySchedulePage() {
   }
 
   return (
-    <main className="h-[100dvh] overflow-hidden bg-[#081327] px-4 py-3 text-white md:px-6">
+    <main className="h-screen h-[100dvh] overflow-hidden bg-[#081327] px-4 py-3 text-white md:px-6">
       <div className="mx-auto flex h-full max-w-[1800px] min-h-0 flex-col">
         <header className="mb-2 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-white/15 pb-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.45fr)_minmax(0,0.75fr)] lg:gap-3">
           <div className="min-w-0">
@@ -284,18 +240,7 @@ export default function LobbySchedulePage() {
           </div>
         )}
 
-        <div ref={contentViewportRef} className="relative min-h-0 flex-1 overflow-hidden">
-          <div
-            ref={contentRef}
-            style={{
-              width: scheduleCanvasWidth,
-              position: "absolute",
-              top: 0,
-              left: 0,
-              transformOrigin: "top left",
-              transform: `scale(${fitScale})`,
-            }}
-          >
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {sortedEvents.length === 0 ? (
           <section className="flex min-h-[min(58dvh,600px)] flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-center">
             {schedule?.logo_url ? (
@@ -321,7 +266,7 @@ export default function LobbySchedulePage() {
             </p>
           </section>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {sortedEvents.map((event, eventIndex) => {
               const start = timeToMinutes(event.start);
               const end = timeToMinutes(event.end);
@@ -334,7 +279,7 @@ export default function LobbySchedulePage() {
                   key={`${event.start}-${eventIndex}`}
                   className={`overflow-hidden rounded-2xl border ${isActive ? "border-blue-400/70 bg-[#0c2b57]" : "border-blue-500/35 bg-[#0b2448]"}`}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-blue-300/20 px-5 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-blue-300/20 px-5 py-2">
                     <div className="flex flex-wrap items-center gap-3">
                       <h2 className="text-2xl font-black tracking-tight text-yellow-400 lg:text-[clamp(1.6rem,2.5vw,3rem)]">
                         {eventName(event)}
@@ -359,21 +304,21 @@ export default function LobbySchedulePage() {
                     {assignments.map((assignment, assignmentIndex) => (
                       <div
                         key={assignmentIndex}
-                        className="grid grid-cols-[minmax(240px,1.05fr)_minmax(0,2fr)_minmax(230px,0.95fr)] items-center gap-5 px-5 py-3"
+                        className="grid grid-cols-[minmax(0,30%)_minmax(0,43%)_minmax(0,27%)] items-center gap-2 px-4 py-2 sm:gap-3 sm:px-5"
                       >
-                        <h3 className="text-[28px] font-black leading-tight text-white">
+                        <h3 className="text-[clamp(17px,2vw,28px)] font-black leading-tight text-white">
                           {levelName(assignment)}
                         </h3>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {(assignment.courts || []).slice().sort((a, b) => a - b).map((court) => {
                             const isStack = assignment.stackCourt === court;
                             return (
                               <div
                                 key={court}
-                                className={`flex min-h-[68px] min-w-[68px] flex-col items-center justify-center rounded-xl border-2 px-2 py-1 min-h-[76px] min-w-[76px] ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
+                                className={`flex h-[clamp(46px,5vw,76px)] w-[clamp(46px,5vw,76px)] flex-col items-center justify-center rounded-xl border-2 px-1 py-1 ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
                               >
-                                <span className="text-4xl font-black leading-none text-white">{court}</span>
+                                <span className="text-[clamp(22px,3vw,38px)] font-black leading-none text-white">{court}</span>
                                 <span className={`mt-1 text-[10px] font-black uppercase tracking-wide ${isStack ? "text-yellow-300" : "text-blue-100"}`}>
                                   {isStack ? "Stack" : "Court"}
                                 </span>
@@ -385,14 +330,14 @@ export default function LobbySchedulePage() {
                           )}
                         </div>
 
-                        <div className="flex items-center justify-end gap-3">
+                        <div className="flex items-center justify-end gap-2">
                           {assignment.wristband && assignment.wristband !== "None" ? (
                             <>
                               <span
-                                className="h-11 w-11 shrink-0 rounded-full border-2 border-white/40"
+                                className="h-[clamp(25px,3.3vw,44px)] w-[clamp(25px,3.3vw,44px)] shrink-0 rounded-full border-2 border-white/40"
                                 style={{ backgroundColor: wristbandColor(assignment.wristband) }}
                               />
-                              <span className="text-[23px] font-black text-white">
+                              <span className="text-[clamp(14px,1.7vw,23px)] font-black leading-tight text-white">
                                 {assignment.wristband} Wristband
                               </span>
                             </>
@@ -430,7 +375,6 @@ export default function LobbySchedulePage() {
           </section>
         )}
 
-          </div>
         </div>
 
         <footer className="mt-2 shrink-0 border-t border-white/10 pt-2 text-center text-xs font-semibold text-blue-300">
