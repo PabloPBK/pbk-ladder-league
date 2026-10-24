@@ -99,6 +99,7 @@ export default function LobbySchedulePage() {
   const [now, setNow] = useState<Date | null>(null);
   const displayRef = useRef<HTMLDivElement>(null);
   const [displayHeight, setDisplayHeight] = useState(720);
+  const [displayWidth, setDisplayWidth] = useState(1280);
 
   useEffect(() => {
     let active = true;
@@ -206,7 +207,10 @@ export default function LobbySchedulePage() {
   useEffect(() => {
     const element = displayRef.current;
     if (!element) return;
-    const measure = () => setDisplayHeight(element.clientHeight);
+    const measure = () => {
+      setDisplayHeight(element.clientHeight);
+      setDisplayWidth(element.clientWidth);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -351,48 +355,87 @@ export default function LobbySchedulePage() {
                   )}
 
                   {event.type === "League" && event.leagueSnapshot?.courts?.length ? (
-                    <div className="px-3 py-2 sm:px-4">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-bold uppercase tracking-wide text-blue-200">
-                          Starting court assignments · {event.leagueSnapshot.courts.length} courts
-                        </p>
-                        <p className="text-xs font-semibold text-yellow-300">
-                          Find your name and report to your starting court
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
-                        {[...event.leagueSnapshot.courts]
-                          .sort((a, b) => a.facilityCourt - b.facilityCourt)
-                          .map((court) => (
-                            <div
-                              key={`${court.leagueCourt}-${court.facilityCourt}`}
-                              className="min-w-0 rounded-xl border border-blue-400/60 bg-[#071a36] px-3 py-2"
-                            >
-                              <div className="mb-1 flex items-center justify-between gap-2 border-b border-blue-300/25 pb-1">
-                                <h3 className="text-xl font-black text-yellow-400 lg:text-2xl">
-                                  Court {court.facilityCourt}
-                                </h3>
-                                {court.leagueCourt !== court.facilityCourt && (
-                                  <span className="text-xs font-semibold text-blue-200">
-                                    League {court.leagueCourt}
-                                  </span>
-                                )}
-                              </div>
-                              <ol className="space-y-0.5">
-                                {court.players.map((player, playerIndex) => (
-                                  <li
-                                    key={`${playerIndex}-${player}`}
-                                    className="break-words text-sm font-semibold leading-snug text-white lg:text-base"
+                    (() => {
+                      const courts = [...event.leagueSnapshot.courts].sort(
+                        (a, b) => a.facilityCourt - b.facilityCourt
+                      );
+                      const count = courts.length;
+                      // Favor four columns for full leagues; reduce columns on narrower TVs.
+                      const columns = displayWidth >= 1050
+                        ? (count <= 4 ? 2 : count <= 8 ? 3 : 4)
+                        : displayWidth >= 680
+                          ? (count <= 4 ? 2 : 3)
+                          : (count <= 3 ? 1 : 2);
+                      const rows = Math.ceil(count / columns);
+                      const otherEvents = sortedEvents.filter((item) => item !== event).length;
+                      const usableHeight = Math.max(
+                        180,
+                        displayHeight - 110 - otherEvents * 105 -
+                        (announcementsCount ? 55 + announcementsCount * 20 : 0) -
+                        (event.details ? 30 : 0)
+                      );
+                      const rowBudget = usableHeight / rows;
+                      const compact = count >= 9 || rowBudget < 160;
+                      const tight = rowBudget < 125;
+                      const nameSize = tight ? 12 : compact ? 14 : count >= 5 ? 16 : 19;
+                      const headingSize = tight ? 17 : compact ? 20 : 24;
+                      const cardPadding = tight ? 5 : compact ? 7 : 11;
+                      const cardGap = tight ? 4 : 7;
+
+                      return (
+                        <div className="px-2 py-1 sm:px-3">
+                          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-bold uppercase tracking-wide text-blue-200">
+                              Starting court assignments · {count} courts · {count * 4} players
+                            </p>
+                            <p className="text-xs font-semibold text-yellow-300">
+                              Find your name and report to your starting court
+                            </p>
+                          </div>
+                          <div
+                            className="grid"
+                            style={{
+                              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                              gap: cardGap,
+                            }}
+                          >
+                            {courts.map((court) => (
+                              <div
+                                key={`${court.leagueCourt}-${court.facilityCourt}`}
+                                className="min-w-0 rounded-lg border border-blue-400/60 bg-[#071a36]"
+                                style={{ padding: cardPadding }}
+                              >
+                                <div className="mb-1 flex items-center justify-between gap-1 border-b border-blue-300/25 pb-1">
+                                  <h3
+                                    className="font-black leading-none text-yellow-400"
+                                    style={{ fontSize: headingSize }}
                                   >
-                                    <span className="mr-1 text-blue-300">{playerIndex + 1}.</span>
-                                    {player}
-                                  </li>
-                                ))}
-                              </ol>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
+                                    Court {court.facilityCourt}
+                                  </h3>
+                                  {court.leagueCourt !== court.facilityCourt && (
+                                    <span className="text-[10px] font-semibold text-blue-200">
+                                      League {court.leagueCourt}
+                                    </span>
+                                  )}
+                                </div>
+                                <ol className="min-w-0">
+                                  {court.players.map((player, playerIndex) => (
+                                    <li
+                                      key={`${playerIndex}-${player}`}
+                                      className="min-w-0 break-words font-semibold leading-tight text-white"
+                                      style={{ fontSize: nameSize, paddingTop: tight ? 0 : 2 }}
+                                    >
+                                      <span className="mr-1 text-blue-300">{playerIndex + 1}.</span>
+                                      {player}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()
                   ) : (
                     <div className="divide-y divide-blue-300/20">
                       {assignments.map((assignment, assignmentIndex) => (
