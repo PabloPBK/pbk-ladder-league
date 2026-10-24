@@ -10,7 +10,21 @@ type Assignment = {
   stackCourt?: number | null;
 };
 
+type LeagueCourtSnapshot = {
+  leagueCourt: number;
+  facilityCourt: number;
+  players: string[];
+};
+
+type LeagueSnapshot = {
+  eventId: string;
+  eventName: string;
+  importedAt: string;
+  courts: LeagueCourtSnapshot[];
+};
+
 type ScheduleEvent = {
+  leagueSnapshot?: LeagueSnapshot;
   start: string;
   end: string;
   type: string;
@@ -336,8 +350,52 @@ export default function LobbySchedulePage() {
                     <p className="px-5 pt-2 text-base font-medium text-blue-200">{event.details}</p>
                   )}
 
-                  <div className="divide-y divide-blue-300/20">
-                    {assignments.map((assignment, assignmentIndex) => (
+                  {event.type === "League" && event.leagueSnapshot?.courts?.length ? (
+                    <div className="px-3 py-2 sm:px-4">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-bold uppercase tracking-wide text-blue-200">
+                          Starting court assignments · {event.leagueSnapshot.courts.length} courts
+                        </p>
+                        <p className="text-xs font-semibold text-yellow-300">
+                          Find your name and report to your starting court
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+                        {[...event.leagueSnapshot.courts]
+                          .sort((a, b) => a.facilityCourt - b.facilityCourt)
+                          .map((court) => (
+                            <div
+                              key={`${court.leagueCourt}-${court.facilityCourt}`}
+                              className="min-w-0 rounded-xl border border-blue-400/60 bg-[#071a36] px-3 py-2"
+                            >
+                              <div className="mb-1 flex items-center justify-between gap-2 border-b border-blue-300/25 pb-1">
+                                <h3 className="text-xl font-black text-yellow-400 lg:text-2xl">
+                                  Court {court.facilityCourt}
+                                </h3>
+                                {court.leagueCourt !== court.facilityCourt && (
+                                  <span className="text-xs font-semibold text-blue-200">
+                                    League {court.leagueCourt}
+                                  </span>
+                                )}
+                              </div>
+                              <ol className="space-y-0.5">
+                                {court.players.map((player, playerIndex) => (
+                                  <li
+                                    key={`${playerIndex}-${player}`}
+                                    className="break-words text-sm font-semibold leading-snug text-white lg:text-base"
+                                  >
+                                    <span className="mr-1 text-blue-300">{playerIndex + 1}.</span>
+                                    {player}
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-blue-300/20">
+                      {assignments.map((assignment, assignmentIndex) => (
                       <div
                         key={assignmentIndex}
                         className="grid grid-cols-[minmax(0,30%)_minmax(0,43%)_minmax(0,27%)] items-center gap-2 px-4 sm:gap-3 sm:px-5"
@@ -387,7 +445,8 @@ export default function LobbySchedulePage() {
                         </div>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  )}
                 </section>
               );
             })}
