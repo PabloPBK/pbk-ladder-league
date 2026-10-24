@@ -183,6 +183,8 @@ export default function WalkingPage() {
     const isEditingAnyScore = Object.values(
   editingScoreCourts,
 ).some(Boolean);
+  const [correctionCourtNumber, setCorrectionCourtNumber] =
+    useState("");
   const [savingCourtNumber, setSavingCourtNumber] =
     useState<number | null>(null);
   const [savingScoreCourtNumber, setSavingScoreCourtNumber] =
@@ -540,6 +542,7 @@ const loadViewedRound = useCallback(
       }));
 
       await loadViewedRound(viewedRoundNumber);
+      setCorrectionCourtNumber("");
       setActionMessage(
         `Court ${courtNumber} score and pairing cleared. Select the correct teams and enter the score again.`,
       );
@@ -991,6 +994,58 @@ async function handleCompleteSession() {
           />
         </section>
 
+        {viewedRoundNumber === currentRound &&
+          activeEvent.status !== "complete" && (
+            <section className="mb-4 rounded-xl border border-yellow-500/30 bg-zinc-900 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="font-bold text-white">Correct a Court</h2>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Choose a court with a saved score. Its score and teams will be cleared after confirmation.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <label className="flex flex-col gap-1 text-sm font-semibold text-zinc-300">
+                    Court number
+                    <select
+                      value={correctionCourtNumber}
+                      onChange={(event) => setCorrectionCourtNumber(event.target.value)}
+                      className="min-h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-white"
+                    >
+                      <option value="">Select a court</option>
+                      {courts.filter((court) =>
+                        matchCenter?.courts.some(
+                          (saved) => saved.courtNumber === court.id && saved.complete,
+                        ),
+                      ).map((court) => (
+                        <option key={court.id} value={court.id}>
+                          Court {court.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={
+                      !correctionCourtNumber ||
+                      !matchCenter?.courts.some(
+                        (saved) =>
+                          saved.courtNumber === Number(correctionCourtNumber) &&
+                          saved.complete,
+                      ) ||
+                      savingCourtNumber !== null ||
+                      savingScoreCourtNumber !== null
+                    }
+                    onClick={() => void handleCorrectTeams(Number(correctionCourtNumber))}
+                    className="min-h-11 rounded-xl border border-yellow-500/50 bg-yellow-500/10 px-4 font-bold text-yellow-300 hover:bg-yellow-500/20 disabled:opacity-50"
+                  >
+                    {savingCourtNumber !== null ? "Updating..." : "Correct Selected Court"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
         {viewedRoundNumber === 1 && (
           <section className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1246,25 +1301,20 @@ async function handleCompleteSession() {
                     </div>
 
                     {viewedRoundNumber === currentRound &&
-                      activeEvent.status !== "complete" && (
+                      activeEvent.status !== "complete" &&
+                      !savedCourt.complete && (
                         <button
                           type="button"
                           disabled={
                             savingCourtNumber !== null ||
                             savingScoreCourtNumber !== null
                           }
-                          onClick={() =>
-                            void (savedCourt.complete
-                              ? handleCorrectTeams(court.id)
-                              : handleUndoPairing(court.id))
-                          }
+                          onClick={() => void handleUndoPairing(court.id)}
                           className="mt-3 min-h-11 w-full rounded-xl border border-yellow-500/40 bg-yellow-500/10 font-bold text-yellow-300 transition hover:bg-yellow-500/15 disabled:opacity-50"
                         >
                           {savingCourtNumber === court.id
                             ? "Updating Teams..."
-                            : savedCourt.complete
-                              ? "Correct Teams (Erase Score)"
-                              : "Undo Pairing"}
+                            : "Undo Pairing"}
                         </button>
                       )}
 
