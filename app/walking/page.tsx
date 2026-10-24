@@ -25,6 +25,7 @@ import {
 import {
   saveCustomCourtPairing,
   undoCourtPairing,
+  correctCourtTeams,
 } from "../../lib/data/pairings";
 import {
   generateSavedNextRound,
@@ -491,6 +492,62 @@ const loadViewedRound = useCallback(
         error instanceof Error
           ? error.message
           : `Unable to undo Court ${courtNumber} pairing.`,
+      );
+    } finally {
+      setSavingCourtNumber(null);
+    }
+  }
+
+  async function handleCorrectTeams(courtNumber: number) {
+    if (
+      !activeEvent ||
+      savingCourtNumber !== null ||
+      savingScoreCourtNumber !== null ||
+      viewedRoundNumber !== currentRound ||
+      activeEvent.status === "complete"
+    ) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Correct teams on Court ${courtNumber}?\n\nThis will permanently erase this court's saved score and winner. You must select the correct teams and enter the score again. Other courts will not be changed.`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setSavingCourtNumber(courtNumber);
+      setActionError("");
+      setActionMessage("");
+
+      await correctCourtTeams({
+        eventId: activeEvent.id,
+        courtNumber,
+        roundNumber: viewedRoundNumber,
+      });
+
+      setPairingDrafts((current) => ({
+        ...current,
+        [courtNumber]: { firstPlayerId: "", secondPlayerId: "" },
+      }));
+      setScoreDrafts((current) => ({
+        ...current,
+        [courtNumber]: { team1Score: "", team2Score: "" },
+      }));
+      setEditingScoreCourts((current) => ({
+        ...current,
+        [courtNumber]: false,
+      }));
+
+      await loadViewedRound(viewedRoundNumber);
+      setActionMessage(
+        `Court ${courtNumber} score and pairing cleared. Select the correct teams and enter the score again.`,
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : `Unable to correct Court ${courtNumber} teams.`,
       );
     } finally {
       setSavingCourtNumber(null);
@@ -1188,16 +1245,28 @@ async function handleCompleteSession() {
                       </div>
                     </div>
 
-                    {!savedCourt.complete && (
-                      <button
-                        type="button"
-                        disabled={savingCourtNumber !== null}
-                        onClick={() => void handleUndoPairing(court.id)}
-                        className="mt-3 min-h-11 w-full rounded-xl border border-yellow-500/40 bg-yellow-500/10 font-bold text-yellow-300 transition hover:bg-yellow-500/15"
-                      >
-                        Undo Pairing
-                      </button>
-                    )}
+                    {viewedRoundNumber === currentRound &&
+                      activeEvent.status !== "complete" && (
+                        <button
+                          type="button"
+                          disabled={
+                            savingCourtNumber !== null ||
+                            savingScoreCourtNumber !== null
+                          }
+                          onClick={() =>
+                            void (savedCourt.complete
+                              ? handleCorrectTeams(court.id)
+                              : handleUndoPairing(court.id))
+                          }
+                          className="mt-3 min-h-11 w-full rounded-xl border border-yellow-500/40 bg-yellow-500/10 font-bold text-yellow-300 transition hover:bg-yellow-500/15 disabled:opacity-50"
+                        >
+                          {savingCourtNumber === court.id
+                            ? "Updating Teams..."
+                            : savedCourt.complete
+                              ? "Correct Teams (Erase Score)"
+                              : "Undo Pairing"}
+                        </button>
+                      )}
 
                     <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                       <input
