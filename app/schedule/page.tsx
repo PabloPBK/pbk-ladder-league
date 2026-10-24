@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Assignment = {
   level: string;
@@ -83,6 +83,8 @@ export default function LobbySchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [now, setNow] = useState<Date | null>(null);
+  const displayRef = useRef<HTMLDivElement>(null);
+  const [displayHeight, setDisplayHeight] = useState(720);
 
   useEffect(() => {
     let active = true;
@@ -185,6 +187,40 @@ export default function LobbySchedulePage() {
       }).format(now)
     : "";
 
+  // Measure the actual available height on Silk and desktop. ResizeObserver
+  // responds when the browser toolbar appears or disappears.
+  useEffect(() => {
+    const element = displayRef.current;
+    if (!element) return;
+    const measure = () => setDisplayHeight(element.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [loading]);
+
+  const visibleGroups = sortedEvents.reduce(
+    (total, event) => total + (event.assignments?.length || 0), 0
+  );
+  const announcementsCount = schedule?.announcements?.filter((a) => a.trim()).length || 0;
+  // Reserve space for event titles, optional descriptions and announcements.
+  // Keep full width; change only vertical density when the TV is short.
+  const reservedHeight = sortedEvents.length * 68 +
+    sortedEvents.reduce((total, event) => total + (event.details ? 28 : 0), 0) +
+    (announcementsCount ? 48 + announcementsCount * 18 : 0) + 18;
+  const groupBudget = visibleGroups
+    ? (displayHeight - reservedHeight) / visibleGroups
+    : 82;
+  const tileSize = Math.max(38, Math.min(76, Math.floor(groupBudget - 8)));
+  const groupPadding = groupBudget >= 85 ? 8 : groupBudget >= 65 ? 4 : 2;
+  const courtFont = Math.max(22, Math.min(38, Math.round(tileSize * 0.51)));
+  const levelFont = Math.max(18, Math.min(28, Math.round(tileSize * 0.38)));
+  const wristbandFont = Math.max(15, Math.min(23, Math.round(tileSize * 0.31)));
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#081327] text-2xl font-bold text-white">
@@ -194,9 +230,9 @@ export default function LobbySchedulePage() {
   }
 
   return (
-    <main className="h-screen h-[100dvh] overflow-hidden bg-[#081327] px-4 py-3 text-white md:px-6">
+    <main className="h-screen h-[100dvh] overflow-hidden bg-[#081327] px-3 py-1 text-white md:px-5">
       <div className="mx-auto flex h-full max-w-[1800px] min-h-0 flex-col">
-        <header className="mb-2 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-white/15 pb-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.45fr)_minmax(0,0.75fr)] lg:gap-3">
+        <header className="mb-1 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-white/15 pb-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.45fr)_minmax(0,0.75fr)] lg:gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-yellow-400 sm:text-sm">
               Pickleball Kingdom Lynnwood
@@ -240,7 +276,7 @@ export default function LobbySchedulePage() {
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div ref={displayRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {sortedEvents.length === 0 ? (
           <section className="flex min-h-[min(58dvh,600px)] flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-center">
             {schedule?.logo_url ? (
@@ -279,7 +315,7 @@ export default function LobbySchedulePage() {
                   key={`${event.start}-${eventIndex}`}
                   className={`overflow-hidden rounded-2xl border ${isActive ? "border-blue-400/70 bg-[#0c2b57]" : "border-blue-500/35 bg-[#0b2448]"}`}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-blue-300/20 px-5 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-blue-300/20 px-4 py-1">
                     <div className="flex flex-wrap items-center gap-3">
                       <h2 className="text-2xl font-black tracking-tight text-yellow-400 lg:text-[clamp(1.6rem,2.5vw,3rem)]">
                         {eventName(event)}
@@ -304,9 +340,11 @@ export default function LobbySchedulePage() {
                     {assignments.map((assignment, assignmentIndex) => (
                       <div
                         key={assignmentIndex}
-                        className="grid grid-cols-[minmax(0,30%)_minmax(0,43%)_minmax(0,27%)] items-center gap-2 px-4 py-2 sm:gap-3 sm:px-5"
+                        className="grid grid-cols-[minmax(0,30%)_minmax(0,43%)_minmax(0,27%)] items-center gap-2 px-4 sm:gap-3 sm:px-5"
+                        style={{ paddingTop: groupPadding, paddingBottom: groupPadding }}
                       >
-                        <h3 className="text-[clamp(17px,2vw,28px)] font-black leading-tight text-white">
+                        <h3 className="font-black leading-tight text-white"
+                          style={{ fontSize: levelFont }}>
                           {levelName(assignment)}
                         </h3>
 
@@ -316,9 +354,10 @@ export default function LobbySchedulePage() {
                             return (
                               <div
                                 key={court}
-                                className={`flex h-[clamp(46px,5vw,76px)] w-[clamp(46px,5vw,76px)] flex-col items-center justify-center rounded-xl border-2 px-1 py-1 ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
+                                className={`flex shrink-0 flex-col items-center justify-center rounded-xl border-2 px-1 py-0.5 ${isStack ? "border-yellow-400 bg-yellow-400/15" : "border-blue-400 bg-blue-500/20"}`}
+                                style={{ height: tileSize, width: tileSize }}
                               >
-                                <span className="text-[clamp(22px,3vw,38px)] font-black leading-none text-white">{court}</span>
+                                <span className="font-black leading-none text-white" style={{ fontSize: courtFont }}>{court}</span>
                                 <span className={`mt-1 text-[10px] font-black uppercase tracking-wide ${isStack ? "text-yellow-300" : "text-blue-100"}`}>
                                   {isStack ? "Stack" : "Court"}
                                 </span>
@@ -334,10 +373,11 @@ export default function LobbySchedulePage() {
                           {assignment.wristband && assignment.wristband !== "None" ? (
                             <>
                               <span
-                                className="h-[clamp(25px,3.3vw,44px)] w-[clamp(25px,3.3vw,44px)] shrink-0 rounded-full border-2 border-white/40"
-                                style={{ backgroundColor: wristbandColor(assignment.wristband) }}
+                                className="shrink-0 rounded-full border-2 border-white/40"
+                                style={{ backgroundColor: wristbandColor(assignment.wristband), width: Math.min(44, tileSize * 0.6), height: Math.min(44, tileSize * 0.6) }}
                               />
-                              <span className="text-[clamp(14px,1.7vw,23px)] font-black leading-tight text-white">
+                              <span className="font-black leading-tight text-white"
+                                style={{ fontSize: wristbandFont }}>
                                 {assignment.wristband} Wristband
                               </span>
                             </>
@@ -355,7 +395,7 @@ export default function LobbySchedulePage() {
         )}
 
         {schedule?.announcements?.some((item) => item.trim()) && (
-          <section className="mt-2 rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-3">
+          <section className="mt-1 rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-2">
             <h2 className="mb-1 text-base font-black uppercase tracking-wide text-yellow-400">
               Club Announcements
             </h2>
@@ -377,7 +417,7 @@ export default function LobbySchedulePage() {
 
         </div>
 
-        <footer className="mt-2 shrink-0 border-t border-white/10 pt-2 text-center text-xs font-semibold text-blue-300">
+        <footer className="mt-1 shrink-0 border-t border-white/10 pt-1 text-center text-xs font-semibold text-blue-300">
           Court assignments and event information may change.
           Please follow staff instructions.
         </footer>
