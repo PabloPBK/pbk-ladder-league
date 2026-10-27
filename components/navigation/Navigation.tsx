@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -43,9 +44,53 @@ const groups: NavGroup[] = [
     label: "Facility Operations",
     icon: "🗓️",
     links: [
-      { href: "/admin/facility-schedule", label: "Daily Schedule Manager", icon: "🗓️" },
-      { href: "/admin/facility-schedule/colors", label: "Wristband Colors", icon: "🎨" },
-      { href: "/admin/tv-manager", label: "TV Display Manager", icon: "🖥️" },
+      {
+        href: "/admin/facility-schedule",
+        label: "Daily Schedule Manager",
+        icon: "🗓️",
+      },
+      {
+        href: "/admin/facility-schedule/colors",
+        label: "Wristband Colors",
+        icon: "🎨",
+      },
+      {
+        href: "/admin/tv-manager",
+        label: "TV Display Manager",
+        icon: "🖥️",
+      },
+    ],
+  },
+  {
+    id: "pb101",
+    label: "PB101+ Guest Journey",
+    icon: "🎓",
+    links: [
+      {
+        href: "/admin/pb101",
+        label: "PB101+ Dashboard",
+        icon: "📊",
+      },
+      {
+        href: "/admin/pb101/guests",
+        label: "Guest Registration",
+        icon: "👤",
+      },
+      {
+        href: "/admin/pb101/attendance",
+        label: "Daily Attendance",
+        icon: "📅",
+      },
+      {
+        href: "/admin/pb101/emails",
+        label: "Automated Emails",
+        icon: "✉️",
+      },
+      {
+        href: "/admin/pb101/reports",
+        label: "Reports",
+        icon: "📈",
+      },
     ],
   },
   {
@@ -53,7 +98,11 @@ const groups: NavGroup[] = [
     label: "Player Management",
     icon: "👥",
     links: [
-      { href: "/admin/player-directory", label: "Player Directory", icon: "📋" },
+      {
+        href: "/admin/player-directory",
+        label: "Player Directory",
+        icon: "📋",
+      },
     ],
   },
 ];
@@ -61,30 +110,39 @@ const groups: NavGroup[] = [
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/admin") return pathname === "/admin";
+
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function activeGroup(pathname: string) {
-  // Prefer the most specific matching route when a parent has child pages.
   const matches = groups.flatMap((group) =>
     group.links
       .filter((link) => isActive(pathname, link.href))
-      .map((link) => ({ id: group.id, length: link.href.length })),
+      .map((link) => ({
+        id: group.id,
+        length: link.href.length,
+      })),
   );
+
   matches.sort((a, b) => b.length - a.length);
+
   return matches[0]?.id ?? "general";
 }
 
 export function Navigation() {
   const pathname = usePathname();
   const currentGroup = activeGroup(pathname);
+
   const [expanded, setExpanded] = useState<string[]>([currentGroup]);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     setExpanded((previous) =>
-      previous.includes(currentGroup) ? previous : [...previous, currentGroup],
+      previous.includes(currentGroup)
+        ? previous
+        : [...previous, currentGroup],
     );
+
     setMobileOpen(false);
   }, [currentGroup, pathname]);
 
@@ -100,6 +158,7 @@ export function Navigation() {
     return groups.map((group) => {
       const open = expanded.includes(group.id);
       const selected = currentGroup === group.id;
+
       return (
         <div key={group.id} className="mb-2">
           <button
@@ -117,14 +176,20 @@ export function Navigation() {
               <span aria-hidden="true">{group.icon}</span>
               <span>{group.label}</span>
             </span>
+
             <span aria-hidden="true" className="text-xs text-zinc-400">
               {open ? "▾" : "▸"}
             </span>
           </button>
+
           {open && (
-            <div id={`nav-group-${group.id}`} className="mt-1 space-y-1 pl-2">
+            <div
+              id={`nav-group-${group.id}`}
+              className="mt-1 space-y-1 pl-2"
+            >
               {group.links.map((link) => {
                 const active = isActive(pathname, link.href);
+
                 return (
                   <Link
                     key={link.href}
@@ -151,7 +216,10 @@ export function Navigation() {
 
   return (
     <>
-      <nav aria-label="Primary navigation" className="hidden flex-col md:flex">
+      <nav
+        aria-label="Primary navigation"
+        className="hidden flex-col md:flex"
+      >
         {renderGroups()}
       </nav>
 
@@ -164,15 +232,25 @@ export function Navigation() {
             {renderGroups()}
           </nav>
         )}
+
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" onClick={() => setMobileOpen(false)} className="text-sm font-bold text-yellow-400">
+          <Link
+            href="/"
+            onClick={() => setMobileOpen(false)}
+            className="text-sm font-bold text-yellow-400"
+          >
             🏠 Home
           </Link>
+
           <button
             type="button"
             onClick={() => setMobileOpen((previous) => !previous)}
             aria-expanded={mobileOpen}
-            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-label={
+              mobileOpen
+                ? "Close navigation menu"
+                : "Open navigation menu"
+            }
             className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white"
           >
             {mobileOpen ? "Close ✕" : "☰ Menu"}
