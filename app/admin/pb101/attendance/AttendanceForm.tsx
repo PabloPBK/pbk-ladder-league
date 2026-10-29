@@ -17,8 +17,22 @@ type Guest = {
   status: string;
 };
 
+type AttendanceRecord = {
+  id: string;
+  guestId: string;
+  date: string;
+  program: string;
+  activityName: string | null;
+  attendanceStatus: string;
+  isIncluded: boolean | null;
+  chargeAmount: number;
+  paymentStatus: string | null;
+  paymentNotes: string | null;
+};
+
 type Props = {
   guests: Guest[];
+  attendanceHistory: AttendanceRecord[];
 };
 
 const PROGRAMS = [
@@ -51,7 +65,28 @@ function localToday() {
   return `${year}-${month}-${day}`;
 }
 
-export default function AttendanceForm({ guests }: Props) {
+function activityLabel(record: AttendanceRecord) {
+  if (record.program === "other") {
+    return record.activityName || "Other Activity";
+  }
+
+  return (
+    PROGRAMS.find((item) => item.value === record.program)
+      ?.label || record.program
+  );
+}
+
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(value);
+}
+
+export default function AttendanceForm({
+  guests,
+  attendanceHistory,
+}: Props) {
   const [mode, setMode] = useState<"individual" | "bulk">(
     "individual"
   );
@@ -72,6 +107,10 @@ export default function AttendanceForm({ guests }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+
+  const selectedGuest = guests.find(
+    (guest) => guest.id === guestId
+  );
 
   const eligibleGuests = useMemo(() => {
     return guests.filter(
@@ -94,9 +133,49 @@ export default function AttendanceForm({ guests }: Props) {
     );
   }, [eligibleGuests, search]);
 
-  const selectedGuest = guests.find(
-    (guest) => guest.id === guestId
-  );
+  const guestHistory = useMemo(() => {
+    return attendanceHistory
+      .filter((record) => record.guestId === guestId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [attendanceHistory, guestId]);
+
+  const summary = useMemo(() => {
+    const attended = guestHistory.filter(
+      (record) => record.attendanceStatus === "attended"
+    );
+
+    const totalCharges = attended.reduce(
+      (sum, record) => sum + record.chargeAmount,
+      0
+    );
+
+    const outstanding = attended
+      .filter((record) => record.paymentStatus === "unpaid")
+      .reduce(
+        (sum, record) => sum + record.chargeAmount,
+        0
+      );
+
+    const uniqueDates = new Set(
+      attended.map((record) => record.date)
+    );
+
+    return {
+      activities: attended.length,
+      visits: uniqueDates.size,
+      complimentary: attended.filter(
+        (record) =>
+          record.isIncluded === true ||
+          (record.isIncluded === null &&
+            record.program !== "other")
+      ).length,
+      paidActivities: attended.filter(
+        (record) => record.program === "other"
+      ).length,
+      totalCharges,
+      outstanding,
+    };
+  }, [guestHistory]);
 
   const isOther = program === "other";
 
@@ -115,9 +194,9 @@ export default function AttendanceForm({ guests }: Props) {
 
   function toggleAllVisible() {
     const visibleIds = visibleGuests.map((guest) => guest.id);
-    const allSelected = visibleIds.every((id) =>
-      selectedIds.includes(id)
-    );
+    const allSelected =
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => selectedIds.includes(id));
 
     if (allSelected) {
       setSelectedIds((current) =>
@@ -138,8 +217,19 @@ export default function AttendanceForm({ guests }: Props) {
       return;
     }
 
-    if (!date) {
-      setMessage("Please select an activity date.");
+    if (!date || date > localToday()) {
+      setMessage("Select a valid activity date.");
+      return;
+    }
+
+    if (
+      !selectedGuest ||
+      date < selectedGuest.trialStart ||
+      date >= selectedGuest.trialEnd
+    ) {
+      setMessage(
+        "The activity date must be within this guest's trial."
+      );
       return;
     }
 
@@ -190,6 +280,13 @@ export default function AttendanceForm({ guests }: Props) {
   async function saveBulk() {
     resetMessage();
 
+    if (program === "other") {
+      setMessage(
+        "Other activities must be recorded individually."
+      );
+      return;
+    }
+
     const validIds = selectedIds.filter((id) =>
       eligibleGuests.some((guest) => guest.id === id)
     );
@@ -204,10 +301,7 @@ export default function AttendanceForm({ guests }: Props) {
     try {
       const result = await savePB101Attendance({
         date,
-        program:
-          program === "other"
-            ? "beginner_pathway_open_play"
-            : program,
+        program,
         guestIds: validIds,
       });
 
@@ -261,7 +355,7 @@ export default function AttendanceForm({ guests }: Props) {
         </button>
       </div>
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
+      <div className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="text-xl font-black text-yellow-400">
           {mode === "individual"
             ? "Record Individual Guest Activity"
@@ -277,13 +371,40 @@ export default function AttendanceForm({ guests }: Props) {
             <select
               value={guestId}
               onChange={(event) => {
-                setGuestId(event.target.value);
+                const id = event.target.value;
+                setGuestId(id);
+
+                const guest = guests.find(
+                  (item) => item.id === id
+                );
+
+                if (guest) {
+                  const today = localToday();
+                  const lastTrialDay = new Date(
+                    `${guest.trialEnd}T00:00:00Z`
+                  );
+                  lastTrialDay.setUTCDate(
+                    lastTrialDay.getUTCDate() - 1
+                  );
+
+                  const lastDate = lastTrialDay
+                    .toISOString()
+                    .slice(0, 10);
+
+                  setDate(
+                    today < guest.trialStart
+                      ? guest.trialStart
+                      : today > lastDate
+                        ? lastDate
+                        : today
+                  );
+                }
+
                 resetMessage();
               }}
               className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-white"
             >
               <option value="">Choose a guest</option>
-
               {guests.map((guest) => (
                 <option key={guest.id} value={guest.id}>
                   {guest.name} — {guest.email}
@@ -292,9 +413,10 @@ export default function AttendanceForm({ guests }: Props) {
             </select>
 
             {selectedGuest && (
-              <div className="rounded-xl bg-zinc-800 p-4 text-sm space-y-1">
+              <div className="space-y-1 rounded-xl bg-zinc-800 p-4 text-sm">
                 <p>
-                  <strong>Coach:</strong> {selectedGuest.coach}
+                  <strong>Coach:</strong>{" "}
+                  {selectedGuest.coach || "Not assigned"}
                 </p>
                 <p>
                   <strong>Trial:</strong>{" "}
@@ -356,7 +478,7 @@ export default function AttendanceForm({ guests }: Props) {
         </div>
 
         {mode === "individual" && isOther && (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-4">
+          <div className="space-y-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
             <p className="font-bold text-amber-300">
               Outside PB101+ Program — Charge Required
             </p>
@@ -365,7 +487,6 @@ export default function AttendanceForm({ guests }: Props) {
               <label className="block text-sm font-semibold">
                 Activity Name
               </label>
-
               <input
                 type="text"
                 value={activityName}
@@ -381,7 +502,6 @@ export default function AttendanceForm({ guests }: Props) {
               <label className="block text-sm font-semibold">
                 Charge Amount ($)
               </label>
-
               <input
                 type="number"
                 min="0"
@@ -399,39 +519,33 @@ export default function AttendanceForm({ guests }: Props) {
               <label className="block text-sm font-semibold">
                 Payment Notes (Optional)
               </label>
-
               <textarea
                 value={paymentNotes}
                 onChange={(event) =>
                   setPaymentNotes(event.target.value)
                 }
-                placeholder="Payment details or staff notes"
                 rows={3}
+                placeholder="Payment details or staff notes"
                 className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-white"
               />
             </div>
 
             <p className="text-sm text-amber-200">
-              This activity will be recorded as unpaid until
-              staff confirms payment.
+              The charge will be marked unpaid until staff
+              confirms payment.
             </p>
           </div>
         )}
 
         {mode === "bulk" && (
           <div className="space-y-4">
-            <p className="text-sm text-zinc-400">
-              Select guests who attended this complimentary
-              PB101+ activity.
-            </p>
-
             <input
               type="text"
               value={search}
               onChange={(event) =>
                 setSearch(event.target.value)
               }
-              placeholder="Search by name, email, or coach"
+              placeholder="Search guests by name, email, or coach"
               className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-white"
             />
 
@@ -515,6 +629,110 @@ export default function AttendanceForm({ guests }: Props) {
               : "Save Bulk Attendance"}
         </button>
       </div>
+
+      {mode === "individual" && selectedGuest && (
+        <div className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <div>
+            <h2 className="text-xl font-black text-yellow-400">
+              Seven-Day Activity History
+            </h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Recorded activities for {selectedGuest.name}.
+              Newly saved activities appear after the page
+              refreshes.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            {[
+              ["Activities", String(summary.activities)],
+              ["Days Visited", String(summary.visits)],
+              [
+                "Complimentary",
+                String(summary.complimentary),
+              ],
+              [
+                "Outside Program",
+                String(summary.paidActivities),
+              ],
+              ["Total Charges", money(summary.totalCharges)],
+              ["Outstanding", money(summary.outstanding)],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-xl bg-zinc-800 p-4"
+              >
+                <p className="text-xs text-zinc-400">
+                  {label}
+                </p>
+                <p className="mt-2 text-xl font-black text-white">
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-zinc-700">
+            <table className="w-full min-w-[700px] text-left text-sm">
+              <thead className="bg-zinc-800 text-zinc-300">
+                <tr>
+                  <th className="p-3">Date</th>
+                  <th className="p-3">Activity</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">Charge</th>
+                  <th className="p-3">Payment</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {guestHistory.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="p-6 text-center text-zinc-400"
+                    >
+                      No activities recorded for this guest yet.
+                    </td>
+                  </tr>
+                ) : (
+                  guestHistory.map((record) => (
+                    <tr
+                      key={record.id}
+                      className="border-t border-zinc-800"
+                    >
+                      <td className="p-3">{record.date}</td>
+                      <td className="p-3 font-semibold">
+                        {activityLabel(record)}
+                      </td>
+                      <td className="p-3">
+                        {record.isIncluded === true ||
+                        (record.isIncluded === null &&
+                          record.program !== "other")
+                          ? "Complimentary"
+                          : "Outside Program"}
+                      </td>
+                      <td className="p-3">
+                        {money(record.chargeAmount)}
+                      </td>
+                      <td className="p-3 capitalize">
+                        {(
+                          record.paymentStatus ||
+                          "not_required"
+                        ).replaceAll("_", " ")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-xs text-zinc-500">
+            Charges are tracked here but are not automatically
+            collected through PodPlay.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
