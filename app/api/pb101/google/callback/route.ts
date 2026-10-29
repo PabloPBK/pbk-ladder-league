@@ -8,46 +8,69 @@ export const dynamic = "force-dynamic";
 
 const SENDER_EMAIL = "pablo@pickleballkingdomlynnwood.com";
 
+const GMAIL_SEND_SCOPE =
+  "https://www.googleapis.com/auth/gmail.send";
+
 function redirectWithStatus(
   request: NextRequest,
   status: string
 ) {
-  const url = new URL("/admin/pb101/emails", request.url);
+  const url = new URL(
+    "/admin/pb101/emails",
+    request.url
+  );
+
   url.searchParams.set("google", status);
 
   const response = NextResponse.redirect(url);
 
-  response.cookies.set("pb101_google_oauth_state", "", {
-    httpOnly: true,
-    secure: url.protocol === "https:",
-    sameSite: "lax",
-    path: "/api/pb101/google",
-    maxAge: 0,
-  });
+  response.cookies.set(
+    "pb101_google_oauth_state",
+    "",
+    {
+      httpOnly: true,
+      secure: url.protocol === "https:",
+      sameSite: "lax",
+      path: "/api/pb101/google",
+      maxAge: 0,
+    }
+  );
 
   return response;
 }
 
 export async function GET(request: NextRequest) {
+  // Only authenticated staff can complete authorization.
   try {
     await requireStaffUser();
   } catch {
-    return redirectWithStatus(request, "unauthorized");
+    return redirectWithStatus(
+      request,
+      "unauthorized"
+    );
   }
 
   const params = request.nextUrl.searchParams;
 
   if (params.has("error")) {
-    return redirectWithStatus(request, "denied");
+    return redirectWithStatus(
+      request,
+      "denied"
+    );
   }
 
+  // Verify OAuth state to prevent CSRF.
   const receivedState = params.get("state");
+
   const savedState = request.cookies.get(
     "pb101_google_oauth_state"
   )?.value;
 
   if (!receivedState || !savedState) {
-    return redirectWithStatus(request, "invalid_state");
+    return redirectWithStatus(
+      request,
+      "invalid_state"
+    );
   }
 
   const received = Buffer.from(receivedState);
@@ -57,20 +80,30 @@ export async function GET(request: NextRequest) {
     received.length !== saved.length ||
     !timingSafeEqual(received, saved)
   ) {
-    return redirectWithStatus(request, "invalid_state");
+    return redirectWithStatus(
+      request,
+      "invalid_state"
+    );
   }
 
   const code = params.get("code");
 
   if (!code) {
-    return redirectWithStatus(request, "missing_code");
+    return redirectWithStatus(
+      request,
+      "missing_code"
+    );
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientSecret =
+    process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return redirectWithStatus(request, "missing_config");
+    return redirectWithStatus(
+      request,
+      "missing_config"
+    );
   }
 
   const redirectUri = new URL(
@@ -79,12 +112,15 @@ export async function GET(request: NextRequest) {
   ).toString();
 
   try {
+    // Exchange Google's one-time authorization code
+    // for access and refresh tokens.
     const tokenResponse = await fetch(
       "https://oauth2.googleapis.com/token",
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type":
+            "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           code,
@@ -102,56 +138,92 @@ export async function GET(request: NextRequest) {
         "Google token exchange failed:",
         tokenResponse.status
       );
-      return redirectWithStatus(request, "token_error");
+
+      return redirectWithStatus(
+        request,
+        "token_error"
+      );
     }
 
-    const tokens = (await tokenResponse.json()) as {
-      access_token?: string;
-      refresh_token?: string;
-      scope?: string;
-    };
-
-    if (!tokens.refresh_token || !tokens.access_token) {
-      return redirectWithStatus(request, "no_refresh_token");
-    }
-
-    const scopes = new Set(
-      (tokens.scope ?? "").split(" ").filter(Boolean)
-    );
+    const tokens =
+      (await tokenResponse.json()) as {
+        access_token?: string;
+        refresh_token?: string;
+        scope?: string;
+      };
 
     if (
-      !scopes.has(
-        "https://www.googleapis.com/auth/gmail.send"
-      )
+      !tokens.access_token ||
+      !tokens.refresh_token
     ) {
-      return redirectWithStatus(request, "missing_scope");
+      return redirectWithStatus(
+        request,
+        "no_refresh_token"
+      );
     }
 
-    const profileResponse = await fetch(
-      "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+    // Ensure Google granted the required
+    // Gmail send-only permission.
+    const scopes = new Set(
+      (tokens.scope ?? "")
+        .split(" ")
+        .filter(Boolean)
+    );
+
+    if (!scopes.has(GMAIL_SEND_SCOPE)) {
+      return redirectWithStatus(
+        request,
+        "missing_scope"
+      );
+    }
+
+    // Confirm the Google account identity using
+    // Google's token information endpoint.
+    // This does not require Gmail inbox access.
+    const tokenInfoResponse = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(
+        tokens.access_token
+      )}`,
       {
-        headers: {
-          Authorization: `Bearer ${tokens.access_token}`,
-        },
         cache: "no-store",
       }
     );
 
-    if (!profileResponse.ok) {
-      return redirectWithStatus(request, "profile_error");
+    if (!tokenInfoResponse.ok) {
+      return redirectWithStatus(
+        request,
+        "identity_error"
+      );
     }
 
-    const profile = (await profileResponse.json()) as {
-      emailAddress?: string;
-    };
+    const tokenInfo =
+      (await tokenInfoResponse.json()) as {
+        email?: string;
+        verified_email?: boolean | string;
+        aud?: string;
+      };
 
+    // The token must belong to our OAuth client.
+    if (tokenInfo.aud !== clientId) {
+      return redirectWithStatus(
+        request,
+        "wrong_client"
+      );
+    }
+
+    // Only connect Pablo's Workspace account.
     if (
-      profile.emailAddress?.toLowerCase() !==
-      SENDER_EMAIL.toLowerCase()
+      !tokenInfo.email ||
+      tokenInfo.email.toLowerCase() !==
+        SENDER_EMAIL.toLowerCase()
     ) {
-      return redirectWithStatus(request, "wrong_account");
+      return redirectWithStatus(
+        request,
+        "wrong_account"
+      );
     }
 
+    // Store the refresh token server-side.
     const { error } = await supabaseAdmin
       .from("pb101_google_oauth")
       .upsert(
@@ -161,7 +233,9 @@ export async function GET(request: NextRequest) {
           refresh_token: tokens.refresh_token,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "id" }
+        {
+          onConflict: "id",
+        }
       );
 
     if (error) {
@@ -169,12 +243,26 @@ export async function GET(request: NextRequest) {
         "Unable to store Google OAuth credentials:",
         error.message
       );
-      return redirectWithStatus(request, "storage_error");
+
+      return redirectWithStatus(
+        request,
+        "storage_error"
+      );
     }
 
-    return redirectWithStatus(request, "connected");
+    return redirectWithStatus(
+      request,
+      "connected"
+    );
   } catch (error) {
-    console.error("PB101 Google OAuth callback failed:", error);
-    return redirectWithStatus(request, "error");
+    console.error(
+      "PB101 Google OAuth callback failed:",
+      error
+    );
+
+    return redirectWithStatus(
+      request,
+      "error"
+    );
   }
 }
