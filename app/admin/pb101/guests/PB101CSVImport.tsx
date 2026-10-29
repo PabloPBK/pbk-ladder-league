@@ -79,6 +79,7 @@ export function PB101CSVImport() {
   const [guests, setGuests] = useState<CSVGuest[]>([]);
   const [coaches, setCoaches] = useState<string[]>([]);
   const [selectedCoach, setSelectedCoach] = useState("");
+  const [classDate, setClassDate] = useState("");
   const [error, setError] = useState("");
 
   async function handleFile(
@@ -88,6 +89,7 @@ export function PB101CSVImport() {
     setGuests([]);
     setCoaches([]);
     setSelectedCoach("");
+    setClassDate("");
     setFileName("");
 
     const file = event.target.files?.[0];
@@ -370,7 +372,46 @@ export function PB101CSVImport() {
               </p>
             )}
           </div>
+<div className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
+  <h3 className="font-bold text-yellow-400">
+    PB101 Class Completion Date
+  </h3>
 
+  <p className="mt-2 text-sm text-zinc-400">
+    Select the date these guests completed PB101.
+    Their seven-day trial will begin on this date,
+    regardless of when the CSV is uploaded.
+  </p>
+
+  <label
+    htmlFor="pb101_class_date"
+    className="mt-4 block text-sm font-semibold text-zinc-300"
+  >
+    Class Date (Required)
+  </label>
+
+  <input
+    id="pb101_class_date"
+    type="date"
+    required
+    value={classDate}
+    max={new Date().toLocaleDateString("en-CA")}
+    onChange={(event) => setClassDate(event.target.value)}
+    className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white"
+  />
+
+  {classDate && (
+    <p className="mt-3 text-sm text-green-400">
+      Selected class date: {classDate}
+    </p>
+  )}
+
+  {!classDate && (
+    <p className="mt-3 text-xs text-amber-400">
+      A class date must be selected before guests can be imported.
+    </p>
+  )}
+</div>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               {
