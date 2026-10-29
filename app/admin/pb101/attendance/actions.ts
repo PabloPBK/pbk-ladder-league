@@ -20,36 +20,88 @@ type AttendanceRequest = {
   guestIds: string[];
 };
 
-type AttendanceResult = {
+type IndividualActivityRequest = {
+  guestId: string;
+  date: string;
+  program: Program;
+  activityName?: string;
+  chargeAmount?: number;
+  paymentNotes?: string;
+};
+
+type ActionResult = {
   success: boolean;
   saved: number;
   message: string;
 };
 
+function validDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00Z`);
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+}
+
+function validUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function validProgram(value: string): value is Program {
+  return PROGRAMS.some((program) => program === value);
+}
+
+async function verifyGuests(
+  guestIds: string[],
+  date: string
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("pb101_guests")
+    .select("id, trial_start_date, trial_end_date")
+    .in("id", guestIds);
+
+  if (error || !data || data.length !== guestIds.length) {
+    return false;
+  }
+
+  return data.every(
+    (guest) =>
+      guest.trial_start_date <= date &&
+      date < guest.trial_end_date
+  );
+}
+
+// Existing bulk attendance workflow.
+// Only complimentary PB101+ activities are allowed here.
 export async function savePB101Attendance(
   request: AttendanceRequest
-): Promise<AttendanceResult> {
+): Promise<ActionResult> {
   const user = await requireStaffUser();
 
-  const date = request.date;
-  const program = request.program;
+  if (!validDate(request.date)) {
+    return {
+      success: false,
+      saved: 0,
+      message: "Select a valid attendance date.",
+    };
+  }
 
   if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-    Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+    !validProgram(request.program) ||
+    request.program === "other"
   ) {
     return {
       success: false,
       saved: 0,
-      message: "Please select a valid attendance date.",
-    };
-  }
-
-  if (!PROGRAMS.includes(program)) {
-    return {
-      success: false,
-      saved: 0,
-      message: "Please select a valid PB101+ activity.",
+      message:
+        "Bulk attendance is only available for complimentary PB101+ activities.",
     };
   }
 
@@ -68,13 +120,7 @@ export async function savePB101Attendance(
 
   if (
     guestIds.length > 200 ||
-    guestIds.some(
-      (id) =>
-        typeof id !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          id
-        )
-    )
+    guestIds.some((id) => !validUUID(id))
   ) {
     return {
       success: false,
@@ -83,45 +129,24 @@ export async function savePB101Attendance(
     };
   }
 
-  const { data: guests, error: guestError } =
-    await supabaseAdmin
-      .from("pb101_guests")
-      .select("id, trial_start_date, trial_end_date, status")
-      .in("id", guestIds);
-
-  if (guestError || !guests) {
-    return {
-      success: false,
-      saved: 0,
-      message: "Unable to verify selected guests.",
-    };
-  }
-
-  const eligibleIds = new Set(
-    guests
-      .filter(
-        (guest) =>
-          guest.status === "active" &&
-          guest.trial_start_date <= date &&
-          date < guest.trial_end_date
-      )
-      .map((guest) => guest.id)
-  );
-
-  if (guestIds.some((id) => !eligibleIds.has(id))) {
+  if (!(await verifyGuests(guestIds, request.date))) {
     return {
       success: false,
       saved: 0,
       message:
-        "One or more guests are outside their active seven-day trial.",
+        "One or more guests are outside their seven-day trial.",
     };
   }
 
   const records = guestIds.map((guestId) => ({
     guest_id: guestId,
-    attendance_date: date,
-    program,
+    attendance_date: request.date,
+    program: request.program,
+    activity_name: null,
     attendance_status: "attended",
+    is_included: true,
+    charge_amount: 0,
+    payment_status: "not_required",
     recorded_by: user.id,
   }));
 
@@ -133,23 +158,136 @@ export async function savePB101Attendance(
     .select("id");
 
   if (error) {
-    console.error("PB101 attendance save failed:", error);
+    console.error("PB101 bulk attendance error:", error);
 
     return {
       success: false,
       saved: 0,
-      message: "Unable to save attendance. Please try again.",
+      message: "Unable to save bulk attendance.",
     };
   }
 
   revalidatePath("/admin/pb101/attendance");
-  revalidatePath("/admin/pb101");
+  revalidatePath("/admin/pb101/reports");
 
   return {
     success: true,
     saved: data?.length ?? 0,
-    message: `Attendance saved for ${
-      data?.length ?? 0
-    } guest(s).`,
+    message: `Attendance saved for ${data?.length ?? 0} guest(s).`,
+  };
+}
+
+// New individual activity entry.
+// Supports all PB101+ activities and paid activities.
+export async function savePB101IndividualActivity(
+  request: IndividualActivityRequest
+): Promise<ActionResult> {
+  const user = await requireStaffUser();
+
+  if (!validUUID(request.guestId)) {
+    return {
+      success: false,
+      saved: 0,
+      message: "Select a valid guest.",
+    };
+  }
+
+  if (!validDate(request.date)) {
+    return {
+      success: false,
+      saved: 0,
+      message: "Select a valid activity date.",
+    };
+  }
+
+  if (!validProgram(request.program)) {
+    return {
+      success: false,
+      saved: 0,
+      message: "Select a valid activity.",
+    };
+  }
+
+  if (!(await verifyGuests([request.guestId], request.date))) {
+    return {
+      success: false,
+      saved: 0,
+      message:
+        "The activity date must be within the guest's seven-day trial.",
+    };
+  }
+
+  const isIncluded = request.program !== "other";
+
+  const activityName = isIncluded
+    ? null
+    : request.activityName?.trim();
+
+  if (!isIncluded && !activityName) {
+    return {
+      success: false,
+      saved: 0,
+      message: "Enter the name of the other activity.",
+    };
+  }
+
+  const chargeAmount = isIncluded
+    ? 0
+    : request.chargeAmount;
+
+  if (
+    !isIncluded &&
+    (typeof chargeAmount !== "number" ||
+      !Number.isFinite(chargeAmount) ||
+      chargeAmount < 0 ||
+      chargeAmount > 10000)
+  ) {
+    return {
+      success: false,
+      saved: 0,
+      message: "Enter a valid charge amount.",
+    };
+  }
+
+  const record = {
+    guest_id: request.guestId,
+    attendance_date: request.date,
+    program: request.program,
+    activity_name: activityName,
+    attendance_status: "attended",
+    is_included: isIncluded,
+    charge_amount: chargeAmount,
+    payment_status: isIncluded
+      ? "not_required"
+      : "unpaid",
+    payment_notes: request.paymentNotes?.trim() || null,
+    recorded_by: user.id,
+  };
+
+  const { error } = await supabaseAdmin
+    .from("pb101_attendance")
+    .upsert(record, {
+      onConflict: "guest_id,attendance_date,program",
+    });
+
+  if (error) {
+    console.error("PB101 individual activity error:", error);
+
+    return {
+      success: false,
+      saved: 0,
+      message: "Unable to save the activity.",
+    };
+  }
+
+  revalidatePath("/admin/pb101/attendance");
+  revalidatePath("/admin/pb101/reports");
+
+  return {
+    success: true,
+    saved: 1,
+    message: isIncluded
+      ? "Complimentary activity recorded successfully."
+      : "Activity recorded and flagged for payment.",
   };
 }
