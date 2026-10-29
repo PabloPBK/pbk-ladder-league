@@ -1,76 +1,88 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import {
+  createCipheriv,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 const SENDER_EMAIL = "pablo@pickleballkingdomlynnwood.com";
-
+const REDIRECT_URI =
+  "https://leagues.zz2pickleball.com/api/pb101/google/callback";
 const GMAIL_SEND_SCOPE =
   "https://www.googleapis.com/auth/gmail.send";
+
+function encryptToken(token: string): string {
+  const keyHex = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
+
+  if (!keyHex || !/^[0-9a-fA-F]{64}$/.test(keyHex)) {
+    throw new Error("Invalid Google token encryption key.");
+  }
+
+  const key = Buffer.from(keyHex, "hex");
+  const iv = randomBytes(12);
+
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(token, "utf8"),
+    cipher.final(),
+  ]);
+
+  const authTag = cipher.getAuthTag();
+
+  return [
+    "v1",
+    iv.toString("base64url"),
+    authTag.toString("base64url"),
+    encrypted.toString("base64url"),
+  ].join(":");
+}
 
 function redirectWithStatus(
   request: NextRequest,
   status: string
 ) {
-  const url = new URL(
-    "/admin/pb101/emails",
-    request.url
-  );
-
+  const url = new URL("/admin/pb101/emails", request.url);
   url.searchParams.set("google", status);
 
   const response = NextResponse.redirect(url);
 
-  response.cookies.set(
-    "pb101_google_oauth_state",
-    "",
-    {
-      httpOnly: true,
-      secure: url.protocol === "https:",
-      sameSite: "lax",
-      path: "/api/pb101/google",
-      maxAge: 0,
-    }
-  );
+  response.cookies.set("pb101_google_oauth_state", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/api/pb101/google",
+    maxAge: 0,
+  });
 
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  // Only authenticated staff can complete authorization.
   try {
     await requireStaffUser();
   } catch {
-    return redirectWithStatus(
-      request,
-      "unauthorized"
-    );
+    return redirectWithStatus(request, "unauthorized");
   }
 
   const params = request.nextUrl.searchParams;
 
   if (params.has("error")) {
-    return redirectWithStatus(
-      request,
-      "denied"
-    );
+    return redirectWithStatus(request, "denied");
   }
 
-  // Verify OAuth state to prevent CSRF.
   const receivedState = params.get("state");
-
   const savedState = request.cookies.get(
     "pb101_google_oauth_state"
   )?.value;
 
   if (!receivedState || !savedState) {
-    return redirectWithStatus(
-      request,
-      "invalid_state"
-    );
+    return redirectWithStatus(request, "invalid_state");
   }
 
   const received = Buffer.from(receivedState);
@@ -80,53 +92,35 @@ export async function GET(request: NextRequest) {
     received.length !== saved.length ||
     !timingSafeEqual(received, saved)
   ) {
-    return redirectWithStatus(
-      request,
-      "invalid_state"
-    );
+    return redirectWithStatus(request, "invalid_state");
   }
 
   const code = params.get("code");
 
   if (!code) {
-    return redirectWithStatus(
-      request,
-      "missing_code"
-    );
+    return redirectWithStatus(request, "missing_code");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret =
-    process.env.GOOGLE_CLIENT_SECRET;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return redirectWithStatus(
-      request,
-      "missing_config"
-    );
+    return redirectWithStatus(request, "missing_config");
   }
 
-  const redirectUri = new URL(
-    "/api/pb101/google/callback",
-    request.url
-  ).toString();
-
   try {
-    // Exchange Google's one-time authorization code
-    // for access and refresh tokens.
     const tokenResponse = await fetch(
       "https://oauth2.googleapis.com/token",
       {
         method: "POST",
         headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           code,
           client_id: clientId,
           client_secret: clientSecret,
-          redirect_uri: redirectUri,
+          redirect_uri: REDIRECT_URI,
           grant_type: "authorization_code",
         }),
         cache: "no-store",
@@ -135,134 +129,104 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       console.error(
-        "Google token exchange failed:",
+        "Google OAuth token exchange failed:",
         tokenResponse.status
       );
-
-      return redirectWithStatus(
-        request,
-        "token_error"
-      );
+      return redirectWithStatus(request, "token_error");
     }
 
-    const tokens =
-      (await tokenResponse.json()) as {
-        access_token?: string;
-        refresh_token?: string;
-        scope?: string;
-      };
+    const tokens = (await tokenResponse.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      scope?: string;
+      id_token?: string;
+    };
 
-    if (
-      !tokens.access_token ||
-      !tokens.refresh_token
-    ) {
-      return redirectWithStatus(
-        request,
-        "no_refresh_token"
-      );
+    if (!tokens.access_token || !tokens.refresh_token) {
+      return redirectWithStatus(request, "no_refresh_token");
     }
 
-    // Ensure Google granted the required
-    // Gmail send-only permission.
     const scopes = new Set(
-      (tokens.scope ?? "")
-        .split(" ")
-        .filter(Boolean)
+      (tokens.scope ?? "").split(" ").filter(Boolean)
     );
 
     if (!scopes.has(GMAIL_SEND_SCOPE)) {
-      return redirectWithStatus(
-        request,
-        "missing_scope"
-      );
+      return redirectWithStatus(request, "missing_scope");
     }
 
-    // Confirm the Google account identity using
-    // Google's token information endpoint.
-    // This does not require Gmail inbox access.
-    const tokenInfoResponse = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(
-        tokens.access_token
+    // Verify the Google account through its signed ID token.
+    const idToken = tokens.id_token;
+
+    if (!idToken) {
+      return redirectWithStatus(request, "identity_error");
+    }
+
+    const identityResponse = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
+        idToken
       )}`,
-      {
-        cache: "no-store",
-      }
+      { cache: "no-store" }
     );
 
-    if (!tokenInfoResponse.ok) {
-      return redirectWithStatus(
-        request,
-        "identity_error"
-      );
+    if (!identityResponse.ok) {
+      return redirectWithStatus(request, "identity_error");
     }
 
-    const tokenInfo =
-      (await tokenInfoResponse.json()) as {
-        email?: string;
-        verified_email?: boolean | string;
-        aud?: string;
-      };
+    const identity = (await identityResponse.json()) as {
+      aud?: string;
+      iss?: string;
+      email?: string;
+      email_verified?: string | boolean;
+    };
 
-    // The token must belong to our OAuth client.
-    if (tokenInfo.aud !== clientId) {
-      return redirectWithStatus(
-        request,
-        "wrong_client"
-      );
-    }
-
-    // Only connect Pablo's Workspace account.
     if (
-      !tokenInfo.email ||
-      tokenInfo.email.toLowerCase() !==
-        SENDER_EMAIL.toLowerCase()
+      identity.aud !== clientId ||
+      ![
+        "accounts.google.com",
+        "https://accounts.google.com",
+      ].includes(identity.iss ?? "")
     ) {
-      return redirectWithStatus(
-        request,
-        "wrong_account"
-      );
+      return redirectWithStatus(request, "wrong_client");
     }
 
-    // Store the refresh token server-side.
+    if (
+      identity.email?.toLowerCase() !== SENDER_EMAIL ||
+      !(
+        identity.email_verified === true ||
+        identity.email_verified === "true"
+      )
+    ) {
+      return redirectWithStatus(request, "wrong_account");
+    }
+
+    // Encrypt the refresh token before storing it.
+    const encryptedRefreshToken = encryptToken(
+      tokens.refresh_token
+    );
+
     const { error } = await supabaseAdmin
       .from("pb101_google_oauth")
       .upsert(
         {
           id: 1,
           sender_email: SENDER_EMAIL,
-          refresh_token: tokens.refresh_token,
+          refresh_token: encryptedRefreshToken,
           updated_at: new Date().toISOString(),
         },
-        {
-          onConflict: "id",
-        }
+        { onConflict: "id" }
       );
 
     if (error) {
       console.error(
-        "Unable to store Google OAuth credentials:",
+        "Google OAuth storage failed:",
         error.message
       );
-
-      return redirectWithStatus(
-        request,
-        "storage_error"
-      );
+      return redirectWithStatus(request, "storage_error");
     }
 
-    return redirectWithStatus(
-      request,
-      "connected"
-    );
+    return redirectWithStatus(request, "connected");
   } catch (error) {
-    console.error(
-      "PB101 Google OAuth callback failed:",
-      error
-    );
-
-    return redirectWithStatus(
-      request,
-      "error"
-    );
+    console.error("PB101 Google OAuth callback error:", error);
+    return redirectWithStatus(request, "error");
   }
 }
