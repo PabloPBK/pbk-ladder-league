@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, type ChangeEvent } from "react";
+import { importPB101Guests } from "./import-actions";
 
 type CSVGuest = {
   row: number;
@@ -10,7 +11,6 @@ type CSVGuest = {
   phone: string;
   invitationType: string;
   status: string;
-  coach: string;
   eligible: boolean;
   reason: string;
 };
@@ -80,7 +80,18 @@ export function PB101CSVImport() {
   const [coaches, setCoaches] = useState<string[]>([]);
   const [selectedCoach, setSelectedCoach] = useState("");
   const [classDate, setClassDate] = useState("");
+
   const [error, setError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importCompleted, setImportCompleted] = useState(false);
+
+  function resetImportResult() {
+    setImportMessage("");
+    setImportErrors([]);
+    setImportCompleted(false);
+  }
 
   async function handleFile(
     event: ChangeEvent<HTMLInputElement>
@@ -91,6 +102,7 @@ export function PB101CSVImport() {
     setSelectedCoach("");
     setClassDate("");
     setFileName("");
+    resetImportResult();
 
     const file = event.target.files?.[0];
 
@@ -114,8 +126,7 @@ export function PB101CSVImport() {
       function column(...names: string[]) {
         return headers.findIndex((header) =>
           names.some(
-            (name) =>
-              header === normalizeHeader(name)
+            (name) => header === normalizeHeader(name)
           )
         );
       }
@@ -147,7 +158,6 @@ export function PB101CSVImport() {
         );
       }
 
-      // Identify coaches separately from guests.
       const detectedCoaches = Array.from(
         new Set(
           rows
@@ -167,8 +177,6 @@ export function PB101CSVImport() {
 
       setCoaches(detectedCoaches);
 
-      // Automatically select a coach only when
-      // the CSV identifies exactly one.
       const defaultCoach =
         detectedCoaches.length === 1
           ? detectedCoaches[0]
@@ -207,7 +215,7 @@ export function PB101CSVImport() {
           let reason = "";
 
           if (invitationType === "COACH") {
-            reason = "Coach — excluded from guest roster";
+            reason = "Coach - excluded from guest roster";
           } else if (
             invitationType !== "EVENT_SIGNUP"
           ) {
@@ -247,7 +255,6 @@ export function PB101CSVImport() {
             phone,
             invitationType,
             status,
-            coach: defaultCoach,
             eligible: reason === "",
             reason,
           };
@@ -276,6 +283,61 @@ export function PB101CSVImport() {
     (guest) => guest.invitationType === "COACH"
   );
 
+  async function handleImport() {
+    if (importing || importCompleted) return;
+
+    if (!classDate || !selectedCoach) {
+      setImportMessage(
+        "Please select the PB101 class date and coach."
+      );
+      return;
+    }
+
+    if (eligible.length === 0) {
+      setImportMessage("No eligible guests to import.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Import ${eligible.length} checked-in guest(s) ` +
+        `from ${classDate}, assigned to ${selectedCoach}?`
+    );
+
+    if (!confirmed) return;
+
+    setImporting(true);
+    setImportMessage("");
+    setImportErrors([]);
+
+    try {
+      const result = await importPB101Guests({
+        fileName,
+        classDate,
+        coach: selectedCoach,
+        guests: guests.map((guest) => ({
+          name: guest.name,
+          email: guest.email,
+          phone: guest.phone,
+          invitationType: guest.invitationType,
+          status: guest.status,
+        })),
+      });
+
+      setImportMessage(result.message);
+      setImportErrors(result.errors);
+
+      if (result.imported > 0 || result.success) {
+        setImportCompleted(true);
+      }
+    } catch {
+      setImportMessage(
+        "Import failed. Please try again or contact an administrator."
+      );
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
       <h2 className="text-xl font-bold text-yellow-400">
@@ -300,6 +362,7 @@ export function PB101CSVImport() {
           id="pb101_csv"
           type="file"
           accept=".csv,text/csv"
+          disabled={importing}
           onChange={handleFile}
           className="block w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-sm text-white"
         />
@@ -328,7 +391,7 @@ export function PB101CSVImport() {
             {coaches.length === 0 ? (
               <p className="mt-2 text-sm text-amber-300">
                 No coach was identified in this file.
-                Staff must assign one before importing.
+                A coach must be assigned before importing.
               </p>
             ) : (
               <p className="mt-2 text-sm text-zinc-300">
@@ -348,14 +411,14 @@ export function PB101CSVImport() {
             <select
               id="import_coach"
               value={selectedCoach}
-              onChange={(event) =>
-                setSelectedCoach(event.target.value)
-              }
+              disabled={importing || importCompleted}
+              onChange={(event) => {
+                setSelectedCoach(event.target.value);
+                resetImportResult();
+              }}
               className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white"
             >
-              <option value="">
-                Select coach
-              </option>
+              <option value="">Select coach</option>
 
               {coaches.map((coach) => (
                 <option key={coach} value={coach}>
@@ -368,50 +431,52 @@ export function PB101CSVImport() {
               <p className="mt-2 text-xs text-amber-300">
                 Multiple coaches were found. Select the
                 appropriate coach for this group.
-                Individual assignments can be added later.
               </p>
             )}
           </div>
-<div className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
-  <h3 className="font-bold text-yellow-400">
-    PB101 Class Completion Date
-  </h3>
 
-  <p className="mt-2 text-sm text-zinc-400">
-    Select the date these guests completed PB101.
-    Their seven-day trial will begin on this date,
-    regardless of when the CSV is uploaded.
-  </p>
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
+            <h3 className="font-bold text-yellow-400">
+              PB101 Class Completion Date
+            </h3>
 
-  <label
-    htmlFor="pb101_class_date"
-    className="mt-4 block text-sm font-semibold text-zinc-300"
-  >
-    Class Date (Required)
-  </label>
+            <p className="mt-2 text-sm text-zinc-400">
+              Select the actual date these guests completed
+              PB101. Their seven-day trial will begin on
+              this date, regardless of when the CSV is uploaded.
+            </p>
 
-  <input
-    id="pb101_class_date"
-    type="date"
-    required
-    value={classDate}
-    max={new Date().toLocaleDateString("en-CA")}
-    onChange={(event) => setClassDate(event.target.value)}
-    className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white"
-  />
+            <label
+              htmlFor="pb101_class_date"
+              className="mt-4 block text-sm font-semibold text-zinc-300"
+            >
+              Class Date (Required)
+            </label>
 
-  {classDate && (
-    <p className="mt-3 text-sm text-green-400">
-      Selected class date: {classDate}
-    </p>
-  )}
+            <input
+              id="pb101_class_date"
+              type="date"
+              required
+              value={classDate}
+              disabled={importing || importCompleted}
+              onChange={(event) => {
+                setClassDate(event.target.value);
+                resetImportResult();
+              }}
+              className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white"
+            />
 
-  {!classDate && (
-    <p className="mt-3 text-xs text-amber-400">
-      A class date must be selected before guests can be imported.
-    </p>
-  )}
-</div>
+            {classDate ? (
+              <p className="mt-3 text-sm text-green-400">
+                Selected class date: {classDate}
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-amber-400">
+                A class date is required before importing.
+              </p>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               {
@@ -434,6 +499,7 @@ export function PB101CSVImport() {
                 <p className="text-xs text-zinc-400">
                   {item.label}
                 </p>
+
                 <p className="mt-1 text-2xl font-black text-white">
                   {item.count}
                 </p>
@@ -479,7 +545,7 @@ export function PB101CSVImport() {
                     <td className="px-3 py-3">
                       {guest.eligible
                         ? selectedCoach || "Not assigned"
-                        : "—"}
+                        : "-"}
                     </td>
 
                     <td className="px-3 py-3">
@@ -501,15 +567,57 @@ export function PB101CSVImport() {
             </table>
           </div>
 
-          <p className="text-xs text-zinc-500">
-            Preview only. No records are saved.
-            Coaches are excluded from the guest roster.
-            Existing database duplicates will be checked
-            before actual importing is enabled.
-          </p>
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
+            <h3 className="font-bold text-yellow-400">
+              Confirm Guest Import
+            </h3>
+
+            <p className="mt-2 text-sm text-zinc-300">
+              {eligible.length} eligible guest(s) will be
+              submitted. Existing database guests will be
+              skipped. No automated emails will be sent.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={
+                importing ||
+                importCompleted ||
+                eligible.length === 0 ||
+                !classDate ||
+                !selectedCoach
+              }
+              className="mt-4 rounded-xl bg-yellow-400 px-5 py-3 font-bold text-black disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {importing
+                ? "Importing..."
+                : importCompleted
+                  ? "Import Completed"
+                  : `Import ${eligible.length} Guest(s)`}
+            </button>
+
+            {importMessage && (
+              <p
+                role="status"
+                className="mt-3 text-sm text-white"
+              >
+                {importMessage}
+              </p>
+            )}
+
+            {importErrors.length > 0 && (
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-400">
+                {importErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <p className="text-xs text-zinc-500">
-            Coach records detected: {coachRows.length}
+            Coach records detected: {coachRows.length}.
+            Coaches are excluded from the guest roster.
           </p>
         </div>
       )}
