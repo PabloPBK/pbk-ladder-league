@@ -34,6 +34,18 @@ type ActionResult = {
   message: string;
 };
 
+const REASONS: ConversionReason[] = [
+  "community",
+  "coaching",
+  "fitness",
+  "competition",
+  "schedule",
+  "pricing",
+  "location",
+  "not_ready",
+  "other",
+];
+
 function validUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value
@@ -52,18 +64,6 @@ function validDate(value: string): boolean {
     date.toISOString().slice(0, 10) === value
   );
 }
-
-const REASONS: ConversionReason[] = [
-  "community",
-  "coaching",
-  "fitness",
-  "competition",
-  "schedule",
-  "pricing",
-  "location",
-  "not_ready",
-  "other",
-];
 
 export async function savePB101MembershipDecision(
   request: SaveDecisionRequest
@@ -116,7 +116,7 @@ export async function savePB101MembershipDecision(
   const { data: guest, error: lookupError } =
     await supabaseAdmin
       .from("pb101_guests")
-      .select("id, status, converted_at")
+      .select("id, status, converted_at, trial_end_date")
       .eq("id", request.guestId)
       .maybeSingle();
 
@@ -127,10 +127,9 @@ export async function savePB101MembershipDecision(
     };
   }
 
-  // The existing database status options include:
-  // active, expired, converted, paused, declined.
-  // "Considering" is represented as active or expired,
-  // depending on the guest's existing trial status.
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
+
   let databaseStatus: string;
 
   if (request.decision === "converted") {
@@ -139,15 +138,14 @@ export async function savePB101MembershipDecision(
     databaseStatus = "declined";
   } else {
     databaseStatus =
-      guest.status === "active" ? "active" : "expired";
+      guest.trial_end_date < today ? "expired" : "active";
   }
-
-  const now = new Date().toISOString();
 
   const { error: updateError } = await supabaseAdmin
     .from("pb101_guests")
     .update({
       status: databaseStatus,
+      membership_decision: request.decision,
       conversion_reason: request.reason,
       conversion_notes: notes || null,
       decision_recorded_at: now,
