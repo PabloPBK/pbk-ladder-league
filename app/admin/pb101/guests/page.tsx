@@ -4,6 +4,7 @@ import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { GuestRegistrationForm } from "./GuestRegistrationForm";
 import { PB101CSVImport } from "./PB101CSVImport";
+import MembershipDecisionForm from "./MembershipDecisionForm";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,15 @@ type PB101Guest = {
   first_name: string;
   last_name: string;
   email: string;
+  phone: string | null;
   coach_name: string | null;
   trial_start_date: string;
   trial_end_date: string;
   status: string;
+  membership_decision: string | null;
+  conversion_reason: string | null;
+  conversion_notes: string | null;
+  follow_up_date: string | null;
 };
 
 export default async function PB101GuestsPage() {
@@ -24,7 +30,7 @@ export default async function PB101GuestsPage() {
   const { data, error } = await supabaseAdmin
     .from("pb101_guests")
     .select(
-      "id, first_name, last_name, email, coach_name, trial_start_date, trial_end_date, status"
+      "id, first_name, last_name, email, phone, coach_name, trial_start_date, trial_end_date, status, membership_decision, conversion_reason, conversion_notes, follow_up_date"
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -38,11 +44,14 @@ export default async function PB101GuestsPage() {
   return (
     <AppLayout
       title="PB101+ Guest Registration"
-      description="Register new guests, assign their PB101 coach, and track seven-day trials."
+      description="Register guests, manage seven-day trials, and track membership decisions."
     >
-     <div className="mx-auto max-w-6xl space-y-6">
-  <GuestRegistrationForm />
-  <PB101CSVImport />
+      <div className="mx-auto max-w-6xl space-y-6">
+        <GuestRegistrationForm />
+
+        <PB101CSVImport />
+
+        <MembershipDecisionForm guests={guests} />
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -73,7 +82,10 @@ export default async function PB101GuestsPage() {
                     <th className="px-3 py-3">PB101 Coach</th>
                     <th className="px-3 py-3">Trial Starts</th>
                     <th className="px-3 py-3">Trial Ends</th>
-                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3">Trial Status</th>
+                    <th className="px-3 py-3">
+                      Membership Decision
+                    </th>
                   </tr>
                 </thead>
 
@@ -106,6 +118,34 @@ export default async function PB101GuestsPage() {
                       <td className="px-3 py-3">
                         <span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-blue-300">
                           {guest.status}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            guest.membership_decision ===
+                            "converted"
+                              ? "bg-green-950 text-green-300"
+                              : guest.membership_decision ===
+                                  "declined"
+                                ? "bg-red-950 text-red-300"
+                                : guest.membership_decision ===
+                                    "considering"
+                                  ? "bg-yellow-950 text-yellow-300"
+                                  : "bg-zinc-800 text-zinc-400"
+                          }`}
+                        >
+                          {guest.membership_decision ===
+                          "converted"
+                            ? "Converted"
+                            : guest.membership_decision ===
+                                "declined"
+                              ? "Declined"
+                              : guest.membership_decision ===
+                                  "considering"
+                                ? "Considering"
+                                : "Not Recorded"}
                         </span>
                       </td>
                     </tr>
