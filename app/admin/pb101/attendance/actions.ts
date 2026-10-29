@@ -155,13 +155,44 @@ export async function savePB101Attendance(
     recorded_by: user.id,
   }));
 
-  const { data, error } = await supabaseAdmin
+  const { data: existing, error: lookupError } =
+  await supabaseAdmin
     .from("pb101_attendance")
-    .upsert(records, {
-      onConflict: "guest_id,attendance_date,program",
-      ignoreDuplicates: true,
-    })
-    .select("id");
+    .select("guest_id")
+    .eq("attendance_date", request.date)
+    .eq("program", request.program)
+    .in("guest_id", guestIds);
+
+if (lookupError) {
+  console.error("PB101 bulk lookup error:", lookupError);
+
+  return {
+    success: false,
+    saved: 0,
+    message: "Unable to check existing attendance.",
+  };
+}
+
+const existingIds = new Set(
+  (existing ?? []).map((row) => row.guest_id)
+);
+
+const newRecords = records.filter(
+  (record) => !existingIds.has(record.guest_id)
+);
+
+if (newRecords.length === 0) {
+  return {
+    success: true,
+    saved: 0,
+    message: "All selected guests already have attendance recorded.",
+  };
+}
+
+const { data, error } = await supabaseAdmin
+  .from("pb101_attendance")
+  .insert(newRecords)
+  .select("id");
 
   if (error) {
     console.error("PB101 bulk attendance error:", error);
