@@ -9,12 +9,17 @@ export const dynamic = "force-dynamic";
 export default async function PB101AttendancePage() {
   await requireStaffUser();
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const [guestsResult, attendanceResult] = await Promise.all([
     supabaseAdmin
       .from("pb101_guests")
       .select(
-        "id, first_name, last_name, email, coach_name, trial_start_date, trial_end_date, status"
+        "id, first_name, last_name, email, coach_name, trial_start_date, trial_end_date, status, membership_decision"
       )
+      .lte("trial_start_date", today)
+      .gte("trial_end_date", today)
+      .in("status", ["active", "expired"])
       .order("first_name", { ascending: true })
       .limit(1000),
 
@@ -43,17 +48,23 @@ export default async function PB101AttendancePage() {
     throw new Error("Unable to load PB101 attendance.");
   }
 
-  const guests = (guestsResult.data ?? []).map((guest) => ({
-    id: guest.id,
-    name: `${guest.first_name ?? ""} ${
-      guest.last_name ?? ""
-    }`.trim(),
-    email: guest.email ?? "",
-    coach: guest.coach_name ?? "",
-    trialStart: guest.trial_start_date,
-    trialEnd: guest.trial_end_date,
-    status: guest.status,
-  }));
+  const guests = (guestsResult.data ?? [])
+    .filter(
+      (guest) =>
+        guest.membership_decision !== "converted" &&
+        guest.membership_decision !== "declined"
+    )
+    .map((guest) => ({
+      id: guest.id,
+      name: `${guest.first_name ?? ""} ${
+        guest.last_name ?? ""
+      }`.trim(),
+      email: guest.email ?? "",
+      coach: guest.coach_name ?? "",
+      trialStart: guest.trial_start_date,
+      trialEnd: guest.trial_end_date,
+      status: guest.status,
+    }));
 
   const attendanceHistory = (attendanceResult.data ?? []).map(
     (record) => ({
@@ -73,7 +84,7 @@ export default async function PB101AttendancePage() {
   return (
     <AppLayout
       title="PB101+ Attendance"
-      description="Track every activity during the seven-day guest experience."
+      description="Track activities for guests currently participating in their seven-day PB101+ experience."
     >
       <div className="mx-auto max-w-6xl">
         <AttendanceForm
