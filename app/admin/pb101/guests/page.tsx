@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { GuestRegistrationForm } from "./GuestRegistrationForm";
+import { PB101CSVImport } from "./PB101CSVImport";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,9 @@ export default async function PB101GuestsPage() {
       title="PB101+ Guest Registration"
       description="Register new guests, assign their PB101 coach, and track seven-day trials."
     >
-      <div className="mx-auto max-w-6xl space-y-6">
-        <GuestRegistrationForm />
+     <div className="mx-auto max-w-6xl space-y-6">
+  <GuestRegistrationForm />
+  <PB101CSVImport />
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
