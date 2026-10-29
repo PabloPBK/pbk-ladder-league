@@ -1,14 +1,15 @@
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { requireStaffUser } from "@/lib/server/require-auth";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const REDIRECT_URI =
   "https://leagues.zz2pickleball.com/api/pb101/google/callback";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await requireStaffUser();
   } catch {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
   if (!clientId) {
     return NextResponse.json(
-      { error: "Google OAuth client ID is not configured." },
+      { error: "Google OAuth client ID is missing." },
       { status: 500 }
     );
   }
