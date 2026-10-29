@@ -78,8 +78,11 @@ async function verifyGuests(
   );
 }
 
-// Existing bulk attendance workflow.
-// Only complimentary PB101+ activities are allowed here.
+// -----------------------------------------------------
+// BULK ATTENDANCE
+// Complimentary PB101+ activities only.
+// -----------------------------------------------------
+
 export async function savePB101Attendance(
   request: AttendanceRequest
 ): Promise<ActionResult> {
@@ -138,6 +141,8 @@ export async function savePB101Attendance(
     };
   }
 
+  // Insert new records only. Do not overwrite
+  // attendance records that already exist.
   const records = guestIds.map((guestId) => ({
     guest_id: guestId,
     attendance_date: request.date,
@@ -154,6 +159,7 @@ export async function savePB101Attendance(
     .from("pb101_attendance")
     .upsert(records, {
       onConflict: "guest_id,attendance_date,program",
+      ignoreDuplicates: true,
     })
     .select("id");
 
@@ -170,15 +176,20 @@ export async function savePB101Attendance(
   revalidatePath("/admin/pb101/attendance");
   revalidatePath("/admin/pb101/reports");
 
+  const saved = data?.length ?? 0;
+
   return {
     success: true,
-    saved: data?.length ?? 0,
-    message: `Attendance saved for ${data?.length ?? 0} guest(s).`,
+    saved,
+    message: `Saved ${saved} new attendance record(s).`,
   };
 }
 
-// New individual activity entry.
-// Supports all PB101+ activities and paid activities.
+// -----------------------------------------------------
+// INDIVIDUAL ACTIVITY
+// Supports complimentary and paid activities.
+// -----------------------------------------------------
+
 export async function savePB101IndividualActivity(
   request: IndividualActivityRequest
 ): Promise<ActionResult> {
@@ -249,25 +260,59 @@ export async function savePB101IndividualActivity(
     };
   }
 
-  const record = {
-    guest_id: request.guestId,
-    attendance_date: request.date,
-    program: request.program,
-    activity_name: activityName,
-    attendance_status: "attended",
-    is_included: isIncluded,
-    charge_amount: chargeAmount,
-    payment_status: isIncluded
-      ? "not_required"
-      : "unpaid",
-    payment_notes: request.paymentNotes?.trim() || null,
-    recorded_by: user.id,
-  };
+  // Look for an existing record so we don't
+  // accidentally overwrite attendance or billing.
+  let existingQuery = supabaseAdmin
+    .from("pb101_attendance")
+    .select("id")
+    .eq("guest_id", request.guestId)
+    .eq("attendance_date", request.date)
+    .eq("program", request.program);
+
+  if (request.program === "other") {
+    existingQuery = existingQuery.ilike(
+      "activity_name",
+      activityName!
+    );
+  }
+
+  const { data: existing, error: lookupError } =
+    await existingQuery.limit(1);
+
+  if (lookupError) {
+    console.error("PB101 attendance lookup error:", lookupError);
+
+    return {
+      success: false,
+      saved: 0,
+      message: "Unable to check existing attendance.",
+    };
+  }
+
+  if (existing && existing.length > 0) {
+    return {
+      success: false,
+      saved: 0,
+      message:
+        "This activity is already recorded for this guest on this date.",
+    };
+  }
 
   const { error } = await supabaseAdmin
     .from("pb101_attendance")
-    .upsert(record, {
-      onConflict: "guest_id,attendance_date,program",
+    .insert({
+      guest_id: request.guestId,
+      attendance_date: request.date,
+      program: request.program,
+      activity_name: activityName,
+      attendance_status: "attended",
+      is_included: isIncluded,
+      charge_amount: chargeAmount,
+      payment_status: isIncluded
+        ? "not_required"
+        : "unpaid",
+      payment_notes: request.paymentNotes?.trim() || null,
+      recorded_by: user.id,
     });
 
   if (error) {
@@ -276,7 +321,10 @@ export async function savePB101IndividualActivity(
     return {
       success: false,
       saved: 0,
-      message: "Unable to save the activity.",
+      message:
+        error.code === "23505"
+          ? "This activity is already recorded for this guest on this date."
+          : "Unable to save the activity.",
     };
   }
 
