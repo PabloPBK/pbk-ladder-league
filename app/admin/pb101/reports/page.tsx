@@ -126,41 +126,62 @@ export default async function PB101ReportsPage() {
           </div>
         </div>
 
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-xl font-black text-yellow-400">
-            Downloadable Reports
-          </h2>
+        
+<section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+  <h2 className="text-xl font-black text-yellow-400">
+    Downloadable Reports
+  </h2>
 
-          <p className="text-sm text-zinc-400">
-            This dashboard is the foundation for the
-            downloadable reports. The CSV download
-            endpoints will be added in the next steps.
-          </p>
+  <p className="text-sm text-zinc-400">
+    Download guest participation and billing information
+    as CSV files. Both reports can be opened in Excel.
+  </p>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl bg-zinc-800 p-5">
-              <h3 className="font-bold">
-                Guest Journey Summary
-              </h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                One row per guest with coach, trial dates,
-                activity totals, membership status, and
-                charges.
-              </p>
-            </div>
+  <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-4 rounded-xl bg-zinc-800 p-5">
+      <div>
+        <h3 className="text-lg font-bold text-white">
+          Guest Journey Summary
+        </h3>
 
-            <div className="rounded-xl bg-zinc-800 p-5">
-              <h3 className="font-bold">
-                Detailed Activity Report
-              </h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                One row per activity, including activity
-                date, complimentary or paid status, charge
-                amount, and payment status.
-              </p>
-            </div>
-          </div>
-        </section>
+        <p className="mt-2 text-sm text-zinc-400">
+          One row per guest, including coach, trial dates,
+          activities attended, membership status,
+          total charges, paid amounts, waived amounts,
+          and outstanding balance.
+        </p>
+      </div>
+
+      <a
+        href="/admin/pb101/reports/guest-csv"
+        className="inline-flex rounded-xl bg-yellow-400 px-5 py-3 font-bold text-black hover:bg-yellow-300"
+      >
+        Download Guest Summary CSV
+      </a>
+    </div>
+
+    <div className="space-y-4 rounded-xl bg-zinc-800 p-5">
+      <div>
+        <h3 className="text-lg font-bold text-white">
+          Detailed Activity Report
+        </h3>
+
+        <p className="mt-2 text-sm text-zinc-400">
+          One row per recorded activity, including
+          guest information, activity date, activity type,
+          charge amount, payment status, and notes.
+        </p>
+      </div>
+
+      <a
+        href="/admin/pb101/reports/activity-csv"
+        className="inline-flex rounded-xl bg-yellow-400 px-5 py-3 font-bold text-black hover:bg-yellow-300"
+      >
+        Download Activity Report CSV
+      </a>
+    </div>
+  </div>
+</section>
 
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-xl font-black text-yellow-400">
