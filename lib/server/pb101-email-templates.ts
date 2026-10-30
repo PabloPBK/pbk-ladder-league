@@ -1,5 +1,5 @@
 
-export type PB101EmailDay = 0 | 2 | 4 | 6 | 8;
+export type PB101EmailDay = 0 | 2 | 4 | 6 | 9;
 
 export type PB101EmailTemplate = {
   day: PB101EmailDay;
@@ -110,8 +110,8 @@ We hope to keep seeing you on the courts!
 The Pickleball Kingdom Team`,
     },
 
-    8: {
-      day: 8,
+    9: {
+      day: 9,
       subject: "Your pickleball journey doesn't have to end!",
       text: `Hi ${firstName},
 
