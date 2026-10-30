@@ -46,6 +46,9 @@ export async function registerPB101Guest(
       formData.get("pb101_completed_at") ?? ""
     ).trim();
 
+    const emailConsent =
+      formData.get("email_consent") === "yes";
+
     if (
       !firstName ||
       !lastName ||
@@ -68,9 +71,7 @@ export async function registerPB101Guest(
 
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(completionDate) ||
-      Number.isNaN(
-        Date.parse(`${completionDate}T00:00:00Z`)
-      ) ||
+      Number.isNaN(Date.parse(`${completionDate}T00:00:00Z`)) ||
       new Date(`${completionDate}T00:00:00Z`)
         .toISOString()
         .slice(0, 10) !== completionDate
@@ -122,6 +123,10 @@ export async function registerPB101Guest(
           pb101_completed_at: completionDate,
           trial_start_date: completionDate,
           status: "active",
+          email_opted_out: false,
+          email_consent_at: emailConsent
+            ? new Date().toISOString()
+            : null,
         })
         .select("id")
         .single();
@@ -139,30 +144,31 @@ export async function registerPB101Guest(
       };
     }
 
-    // Prepare emails only if the guest has recorded
-    // email consent. The scheduler checks consent,
-    // opt-outs, and existing scheduled emails.
-    let schedulingMessage = "";
+    let message = "Guest registered successfully.";
 
-    try {
-      const scheduledCount =
-        await schedulePB101Emails(newGuest.id);
+    if (emailConsent) {
+      try {
+        const scheduledCount =
+          await schedulePB101Emails(newGuest.id);
 
-      if (scheduledCount > 0) {
-        schedulingMessage =
-          ` ${scheduledCount} PB101+ emails scheduled.`;
-      } else {
-        schedulingMessage =
-          " No emails scheduled; email consent must be recorded first.";
+        message =
+          `Guest registered successfully. ` +
+          `${scheduledCount} PB101+ emails scheduled.`;
+      } catch (scheduleError) {
+        console.error(
+          "PB101 email scheduling failed:",
+          scheduleError
+        );
+
+        message =
+          "Guest registered successfully, but the " +
+          "follow-up emails could not be scheduled. " +
+          "Please notify an administrator.";
       }
-    } catch (schedulingError) {
-      console.error(
-        "PB101 email scheduling failed:",
-        schedulingError
-      );
-
-      schedulingMessage =
-        " Email scheduling needs attention; guest registration was saved.";
+    } else {
+      message =
+        "Guest registered successfully. No emails " +
+        "scheduled because email consent was not recorded.";
     }
 
     revalidatePath("/admin/pb101/guests");
@@ -170,11 +176,13 @@ export async function registerPB101Guest(
 
     return {
       success: true,
-      message:
-        `Guest registered successfully.${schedulingMessage}`,
+      message,
     };
   } catch (error) {
-    console.error("PB101 registration error:", error);
+    console.error(
+      "PB101 registration error:",
+      error
+    );
 
     return {
       success: false,
