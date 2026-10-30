@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import TestEmailButton from "./TestEmailButton";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,25 @@ export default async function PB101EmailsPage({
                 : "Connect Gmail"}
             </Link>
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="text-xl font-bold text-white">
+            Gmail Test Email
+          </h2>
+
+          <p className="mt-3 text-zinc-300">
+            Verify that the PB101+ system can send
+            emails through the connected Gmail account.
+          </p>
+
+          {connected ? (
+            <TestEmailButton />
+          ) : (
+            <p className="mt-4 text-sm text-yellow-400">
+              Connect Gmail before sending a test email.
+            </p>
+          )}
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
