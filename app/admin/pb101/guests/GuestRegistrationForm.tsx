@@ -12,11 +12,7 @@ const initialState: GuestRegistrationState = {
   message: "",
 };
 
-// We can update this list as coaches are added.
-const coaches = [
-  "Zack",
-  "Other",
-];
+const coaches = ["Zack", "Other"];
 
 export function GuestRegistrationForm() {
   const [state, formAction, isPending] = useActionState(
@@ -46,7 +42,11 @@ export function GuestRegistrationForm() {
         </p>
       </div>
 
-      <form ref={formRef} action={formAction} className="space-y-5">
+      <form
+        ref={formRef}
+        action={formAction}
+        className="space-y-5"
+      >
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label
@@ -177,6 +177,32 @@ export function GuestRegistrationForm() {
             className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-blue-500"
             placeholder="Interests, goals, or helpful notes for follow-up..."
           />
+        </div>
+
+        <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-4">
+          <label
+            htmlFor="email_consent"
+            className="flex cursor-pointer items-start gap-3"
+          >
+            <input
+              id="email_consent"
+              name="email_consent"
+              type="checkbox"
+              value="yes"
+              className="mt-1 h-5 w-5 shrink-0 accent-yellow-400"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-white">
+                Guest agreed to receive PB101+ emails
+              </span>
+              <span className="mt-1 block text-sm text-zinc-400">
+                Check this only after the guest has agreed
+                to receive the five PB101+ follow-up emails:
+                Welcome, Day 2, Day 4, Day 6, and Day 9.
+                Leave unchecked if consent was not given.
+              </span>
+            </span>
+          </label>
         </div>
 
         {state.message && (
