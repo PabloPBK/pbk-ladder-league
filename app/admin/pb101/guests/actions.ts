@@ -4,6 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { schedulePB101Emails } from "@/lib/server/pb101-email-scheduler";
 
 export type GuestRegistrationState = {
   success: boolean;
@@ -67,7 +68,9 @@ export async function registerPB101Guest(
 
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(completionDate) ||
-      Number.isNaN(Date.parse(`${completionDate}T00:00:00Z`)) ||
+      Number.isNaN(
+        Date.parse(`${completionDate}T00:00:00Z`)
+      ) ||
       new Date(`${completionDate}T00:00:00Z`)
         .toISOString()
         .slice(0, 10) !== completionDate
@@ -87,7 +90,10 @@ export async function registerPB101Guest(
         .maybeSingle();
 
     if (lookupError) {
-      console.error("PB101 guest lookup failed:", lookupError);
+      console.error(
+        "PB101 guest lookup failed:",
+        lookupError
+      );
 
       return {
         success: false,
@@ -103,41 +109,77 @@ export async function registerPB101Guest(
       };
     }
 
-    const { error: insertError } = await supabaseAdmin
-      .from("pb101_guests")
-      .insert({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone: phone || null,
-        coach_name: coachName || null,
-        coach_notes: coachNotes || null,
-        pb101_completed_at: completionDate,
-        trial_start_date: completionDate,
-        status: "active",
-      });
+    const { data: newGuest, error: insertError } =
+      await supabaseAdmin
+        .from("pb101_guests")
+        .insert({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          phone: phone || null,
+          coach_name: coachName || null,
+          coach_notes: coachNotes || null,
+          pb101_completed_at: completionDate,
+          trial_start_date: completionDate,
+          status: "active",
+        })
+        .select("id")
+        .single();
 
-    if (insertError) {
-      console.error("PB101 registration failed:", insertError);
+    if (insertError || !newGuest) {
+      console.error(
+        "PB101 registration failed:",
+        insertError
+      );
 
       return {
         success: false,
-        message: "Unable to register the guest. Please try again.",
+        message:
+          "Unable to register the guest. Please try again.",
       };
     }
 
+    // Prepare emails only if the guest has recorded
+    // email consent. The scheduler checks consent,
+    // opt-outs, and existing scheduled emails.
+    let schedulingMessage = "";
+
+    try {
+      const scheduledCount =
+        await schedulePB101Emails(newGuest.id);
+
+      if (scheduledCount > 0) {
+        schedulingMessage =
+          ` ${scheduledCount} PB101+ emails scheduled.`;
+      } else {
+        schedulingMessage =
+          " No emails scheduled; email consent must be recorded first.";
+      }
+    } catch (schedulingError) {
+      console.error(
+        "PB101 email scheduling failed:",
+        schedulingError
+      );
+
+      schedulingMessage =
+        " Email scheduling needs attention; guest registration was saved.";
+    }
+
     revalidatePath("/admin/pb101/guests");
+    revalidatePath("/admin/pb101/emails");
 
     return {
       success: true,
-      message: "Guest registered successfully.",
+      message:
+        `Guest registered successfully.${schedulingMessage}`,
     };
   } catch (error) {
     console.error("PB101 registration error:", error);
 
     return {
       success: false,
-      message: "Registration failed. Please verify staff access.",
+      message:
+        "Registration failed. Please verify staff access.",
     };
   }
 }
