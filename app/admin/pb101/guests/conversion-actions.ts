@@ -10,6 +10,12 @@ type MembershipDecision =
   | "declined"
   | "considering";
 
+type MembershipType =
+  | "Ace Select"
+  | "Ace"
+  | "Team"
+  | "Royal Family";
+
 type ConversionReason =
   | "community"
   | "coaching"
@@ -24,6 +30,7 @@ type ConversionReason =
 type SaveDecisionRequest = {
   guestId: string;
   decision: MembershipDecision;
+  membershipType?: string | null;
   reason: ConversionReason;
   notes?: string;
   followUpDate?: string | null;
@@ -44,6 +51,13 @@ const REASONS: ConversionReason[] = [
   "location",
   "not_ready",
   "other",
+];
+
+const MEMBERSHIP_TYPES: MembershipType[] = [
+  "Ace Select",
+  "Ace",
+  "Team",
+  "Royal Family",
 ];
 
 function validUUID(value: string): boolean {
@@ -93,6 +107,23 @@ export async function savePB101MembershipDecision(
       success: false,
       message: "Select a valid decision reason.",
     };
+  }
+
+  const membershipType = request.membershipType?.trim() || null;
+
+  if (request.decision === "converted") {
+    if (
+      !membershipType ||
+      !MEMBERSHIP_TYPES.includes(
+        membershipType as MembershipType
+      )
+    ) {
+      return {
+        success: false,
+        message:
+          "Please select a valid membership type: Ace Select, Ace, Team, or Royal Family.",
+      };
+    }
   }
 
   const notes = request.notes?.trim() ?? "";
@@ -146,6 +177,10 @@ export async function savePB101MembershipDecision(
     .update({
       status: databaseStatus,
       membership_decision: request.decision,
+      membership_type:
+        request.decision === "converted"
+          ? membershipType
+          : null,
       conversion_reason: request.reason,
       conversion_notes: notes || null,
       decision_recorded_at: now,
@@ -170,9 +205,9 @@ export async function savePB101MembershipDecision(
     };
   }
 
-  // Cancel all unsent follow-up emails when a guest
+  // Cancel pending follow-up emails when a guest
   // converts or declines membership.
-  // Already-sent emails are never modified.
+  // Already-sent emails remain unchanged.
   if (
     request.decision === "converted" ||
     request.decision === "declined"
@@ -212,7 +247,7 @@ export async function savePB101MembershipDecision(
     success: true,
     message:
       request.decision === "converted"
-        ? "Guest marked as converted to membership."
+        ? `Guest converted to ${membershipType} membership.`
         : request.decision === "declined"
           ? "Guest marked as declined."
           : "Guest marked as still considering membership.",
