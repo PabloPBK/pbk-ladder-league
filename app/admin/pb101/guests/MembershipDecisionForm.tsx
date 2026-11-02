@@ -21,6 +21,7 @@ type Guest = {
 
 type Props = {
   guests: Guest[];
+  initialGuestId?: string;
 };
 
 const REASONS = [
@@ -49,6 +50,7 @@ type ConversionReason =
 
 export default function MembershipDecisionForm({
   guests,
+  initialGuestId = "",
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,7 +105,8 @@ export default function MembershipDecisionForm({
     setFollowUpDate(guest.follow_up_date || "");
   }
 
-  const linkedGuestId = searchParams.get("guestId");
+  const linkedGuestId =
+  searchParams.get("guestId") || initialGuestId;
 
   useEffect(() => {
     if (!linkedGuestId) return;
