@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { savePB101MembershipDecision } from "./conversion-actions";
 
 type Guest = {
@@ -51,6 +51,8 @@ export default function MembershipDecisionForm({
   guests,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const formRef = useRef<HTMLElement>(null);
 
   const [guestId, setGuestId] = useState("");
   const [decision, setDecision] =
@@ -100,6 +102,27 @@ export default function MembershipDecisionForm({
     setNotes(guest.conversion_notes || "");
     setFollowUpDate(guest.follow_up_date || "");
   }
+
+  const linkedGuestId = searchParams.get("guestId");
+
+  useEffect(() => {
+    if (!linkedGuestId) return;
+
+    const guestExists = guests.some(
+      (guest) => guest.id === linkedGuestId
+    );
+
+    if (!guestExists) return;
+
+    selectGuest(linkedGuestId);
+
+    formRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    // Re-run when the guest ID in the URL changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedGuestId, guests]);
 
   async function handleSave(
     event: React.FormEvent<HTMLFormElement>
@@ -152,7 +175,11 @@ export default function MembershipDecisionForm({
   );
 
   return (
-    <section className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+    <section
+      ref={formRef}
+      id="membership-decision-form"
+      className="scroll-mt-6 space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
+    >
       <div>
         <h2 className="text-xl font-black text-yellow-400">
           Membership Conversion Tracking
