@@ -221,7 +221,6 @@ export default async function PB101DashboardPage() {
     href={`/admin/pb101/guests?guestId=${guest.id}`}
     className="block rounded-lg border-b border-zinc-800 p-2 transition hover:bg-zinc-800"
   >
-                          >
                             <p className="font-semibold text-white">
                               {guest.first_name}{" "}
                               {guest.last_name}
@@ -233,7 +232,7 @@ export default async function PB101DashboardPage() {
                               Trial ended:{" "}
                               {guest.trial_end_date}
                             </p>
-                          </div>
+                          </Link>
                         ))}
                       </div>
                     )}
