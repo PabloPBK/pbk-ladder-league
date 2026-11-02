@@ -170,6 +170,39 @@ export async function savePB101MembershipDecision(
     };
   }
 
+  // Cancel all unsent follow-up emails when a guest
+  // converts or declines membership.
+  // Already-sent emails are never modified.
+  if (
+    request.decision === "converted" ||
+    request.decision === "declined"
+  ) {
+    const { error: cancelError } = await supabaseAdmin
+      .from("pb101_email_log")
+      .update({
+        status: "cancelled",
+        error_message:
+          request.decision === "converted"
+            ? "Guest converted to membership."
+            : "Guest declined membership.",
+      })
+      .eq("guest_id", request.guestId)
+      .eq("status", "pending");
+
+    if (cancelError) {
+      console.error(
+        "PB101 pending email cancellation error:",
+        cancelError
+      );
+
+      return {
+        success: false,
+        message:
+          "Membership decision was saved, but pending email cancellation failed. Please contact an administrator.",
+      };
+    }
+  }
+
   revalidatePath("/admin/pb101");
   revalidatePath("/admin/pb101/guests");
   revalidatePath("/admin/pb101/reports");
