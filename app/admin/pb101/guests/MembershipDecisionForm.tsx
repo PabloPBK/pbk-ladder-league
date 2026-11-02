@@ -12,6 +12,7 @@ type Guest = {
   email: string;
   status: string;
   membership_decision: string | null;
+  membership_type?: string | null;
   conversion_reason: string | null;
   conversion_notes: string | null;
   follow_up_date: string | null;
@@ -34,7 +35,17 @@ const REASONS = [
   { value: "other", label: "Other" },
 ] as const;
 
+const MEMBERSHIP_TYPES = [
+  "Ace Select",
+  "Ace",
+  "Team",
+  "Royal Family",
+] as const;
+
 type Decision = "converted" | "declined" | "considering";
+
+type ConversionReason =
+  (typeof REASONS)[number]["value"];
 
 export default function MembershipDecisionForm({
   guests,
@@ -44,7 +55,9 @@ export default function MembershipDecisionForm({
   const [guestId, setGuestId] = useState("");
   const [decision, setDecision] =
     useState<Decision>("considering");
-  const [reason, setReason] = useState("not_ready");
+  const [membershipType, setMembershipType] = useState("");
+  const [reason, setReason] =
+    useState<ConversionReason>("not_ready");
   const [notes, setNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -54,11 +67,13 @@ export default function MembershipDecisionForm({
   function selectGuest(id: string) {
     setGuestId(id);
     setMessage("");
+    setIsError(false);
 
     const guest = guests.find((item) => item.id === id);
 
     if (!guest) {
       setDecision("considering");
+      setMembershipType("");
       setReason("not_ready");
       setNotes("");
       setFollowUpDate("");
@@ -75,7 +90,13 @@ export default function MembershipDecisionForm({
         : "considering"
     );
 
-    setReason(guest.conversion_reason || "not_ready");
+    setMembershipType(guest.membership_type || "");
+
+    const savedReason = REASONS.find(
+      (item) => item.value === guest.conversion_reason
+    );
+
+    setReason(savedReason?.value || "not_ready");
     setNotes(guest.conversion_notes || "");
     setFollowUpDate(guest.follow_up_date || "");
   }
@@ -91,23 +112,23 @@ export default function MembershipDecisionForm({
       return;
     }
 
+    if (decision === "converted" && !membershipType) {
+      setMessage("Please select the membership purchased.");
+      setIsError(true);
+      return;
+    }
+
     setSaving(true);
     setMessage("");
+    setIsError(false);
 
     try {
       const result = await savePB101MembershipDecision({
         guestId,
         decision,
-        reason: reason as
-          | "community"
-          | "coaching"
-          | "fitness"
-          | "competition"
-          | "schedule"
-          | "pricing"
-          | "location"
-          | "not_ready"
-          | "other",
+        membershipType:
+          decision === "converted" ? membershipType : null,
+        reason,
         notes,
         followUpDate: followUpDate || null,
       });
@@ -137,8 +158,9 @@ export default function MembershipDecisionForm({
           Membership Conversion Tracking
         </h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Record membership decisions, guest feedback,
-          and follow-up dates after the PB101+ experience.
+          Record membership decisions, membership types,
+          guest feedback, and follow-up dates after the
+          PB101+ experience.
         </p>
       </div>
 
@@ -184,6 +206,12 @@ export default function MembershipDecisionForm({
               {selectedGuest.membership_decision ||
                 "No decision recorded"}
             </p>
+            {selectedGuest.membership_type && (
+              <p className="mt-1">
+                <strong>Membership purchased:</strong>{" "}
+                {selectedGuest.membership_type}
+              </p>
+            )}
           </div>
         )}
 
@@ -197,9 +225,10 @@ export default function MembershipDecisionForm({
           <select
             id="membership-decision"
             value={decision}
-            onChange={(event) =>
-              setDecision(event.target.value as Decision)
-            }
+            onChange={(event) => {
+              setDecision(event.target.value as Decision);
+              setMessage("");
+            }}
             className="w-full rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-white"
           >
             <option value="considering">
@@ -214,6 +243,35 @@ export default function MembershipDecisionForm({
           </select>
         </div>
 
+        {decision === "converted" && (
+          <div>
+            <label
+              htmlFor="membership-type"
+              className="mb-2 block text-sm font-semibold text-white"
+            >
+              Membership Purchased *
+            </label>
+            <select
+              id="membership-type"
+              value={membershipType}
+              onChange={(event) =>
+                setMembershipType(event.target.value)
+              }
+              required
+              className="w-full rounded-xl border border-yellow-500 bg-zinc-800 p-3 text-white"
+            >
+              <option value="">
+                Select membership type
+              </option>
+              {MEMBERSHIP_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <label
             htmlFor="membership-reason"
@@ -225,7 +283,7 @@ export default function MembershipDecisionForm({
             id="membership-reason"
             value={reason}
             onChange={(event) =>
-              setReason(event.target.value)
+              setReason(event.target.value as ConversionReason)
             }
             className="w-full rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-white"
           >
