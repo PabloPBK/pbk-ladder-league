@@ -34,7 +34,11 @@ function pacificToday(): string {
   }).format(new Date());
 }
 
-export default async function PB101GuestsPage() {
+export default async function PB101GuestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ guestId?: string }>;
+}) {
   await requireStaffUser();
 
   const { data, error } = await supabaseAdmin
@@ -49,8 +53,15 @@ export default async function PB101GuestsPage() {
     console.error("Unable to load PB101 guests:", error);
   }
 
-  const guests = (data ?? []) as PB101Guest[];
+    const guests = (data ?? []) as PB101Guest[];
   const today = pacificToday();
+
+  const { guestId } = await searchParams;
+
+  const selectedGuestId =
+    guestId && guests.some((guest) => guest.id === guestId)
+      ? guestId
+      : "";
 
   const needsDecision = guests.filter(
     (guest) =>
@@ -122,8 +133,10 @@ export default async function PB101GuestsPage() {
 
         <PB101CSVImport />
 
-        <MembershipDecisionForm guests={guests} />
-
+        <MembershipDecisionForm
+  guests={guests}
+  initialGuestId={selectedGuestId}
+/>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white">
