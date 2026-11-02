@@ -216,9 +216,11 @@ export default async function PB101DashboardPage() {
                     ) : (
                       <div className="mt-3 space-y-3">
                         {decisionRequired.map((guest) => (
-                          <div
-                            key={guest.id}
-                            className="border-b border-zinc-800 pb-3 last:border-0 last:pb-0"
+  <Link
+    key={guest.id}
+    href={`/admin/pb101/guests?guestId=${guest.id}`}
+    className="block rounded-lg border-b border-zinc-800 p-2 transition hover:bg-zinc-800"
+  >
                           >
                             <p className="font-semibold text-white">
                               {guest.first_name}{" "}
