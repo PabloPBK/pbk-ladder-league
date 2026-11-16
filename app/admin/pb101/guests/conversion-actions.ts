@@ -109,7 +109,8 @@ export async function savePB101MembershipDecision(
     };
   }
 
-  const membershipType = request.membershipType?.trim() || null;
+  const membershipType =
+    request.membershipType?.trim() || null;
 
   if (request.decision === "converted") {
     if (
@@ -135,7 +136,8 @@ export async function savePB101MembershipDecision(
     };
   }
 
-  const followUpDate = request.followUpDate?.trim() || null;
+  const followUpDate =
+    request.followUpDate?.trim() || null;
 
   if (followUpDate && !validDate(followUpDate)) {
     return {
@@ -147,7 +149,9 @@ export async function savePB101MembershipDecision(
   const { data: guest, error: lookupError } =
     await supabaseAdmin
       .from("pb101_guests")
-      .select("id, status, converted_at, trial_end_date")
+      .select(
+        "id, status, converted_at, trial_end_date"
+      )
       .eq("id", request.guestId)
       .maybeSingle();
 
@@ -169,29 +173,32 @@ export async function savePB101MembershipDecision(
     databaseStatus = "declined";
   } else {
     databaseStatus =
-      guest.trial_end_date < today ? "expired" : "active";
+      guest.trial_end_date < today
+        ? "expired"
+        : "active";
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from("pb101_guests")
-    .update({
-      status: databaseStatus,
-      membership_decision: request.decision,
-      membership_type:
-        request.decision === "converted"
-          ? membershipType
-          : null,
-      conversion_reason: request.reason,
-      conversion_notes: notes || null,
-      decision_recorded_at: now,
-      follow_up_date: followUpDate,
-      converted_at:
-        request.decision === "converted"
-          ? guest.converted_at || now
-          : null,
-      updated_at: now,
-    })
-    .eq("id", request.guestId);
+  const { error: updateError } =
+    await supabaseAdmin
+      .from("pb101_guests")
+      .update({
+        status: databaseStatus,
+        membership_decision: request.decision,
+        membership_type:
+          request.decision === "converted"
+            ? membershipType
+            : null,
+        conversion_reason: request.reason,
+        conversion_notes: notes || null,
+        decision_recorded_at: now,
+        follow_up_date: followUpDate,
+        converted_at:
+          request.decision === "converted"
+            ? guest.converted_at || now
+            : null,
+        updated_at: now,
+      })
+      .eq("id", request.guestId);
 
   if (updateError) {
     console.error(
@@ -212,17 +219,18 @@ export async function savePB101MembershipDecision(
     request.decision === "converted" ||
     request.decision === "declined"
   ) {
-    const { error: cancelError } = await supabaseAdmin
-      .from("pb101_email_log")
-      .update({
-        status: "cancelled",
-        error_message:
-          request.decision === "converted"
-            ? "Guest converted to membership."
-            : "Guest declined membership.",
-      })
-      .eq("guest_id", request.guestId)
-      .eq("status", "pending");
+    const { error: cancelError } =
+      await supabaseAdmin
+        .from("pb101_email_log")
+        .update({
+          status: "cancelled",
+          error_message:
+            request.decision === "converted"
+              ? "Guest converted to membership."
+              : "Guest declined membership.",
+        })
+        .eq("guest_id", request.guestId)
+        .eq("status", "pending");
 
     if (cancelError) {
       console.error(
@@ -249,10 +257,19 @@ export async function savePB101MembershipDecision(
       request.decision === "converted"
         ? `Guest converted to ${membershipType} membership.`
         : request.decision === "declined"
-      
+          ? "Guest marked as declined."
+          : "Guest marked as still considering membership.",
+  };
+}
+
 type CompleteFollowUpRequest = {
   guestId: string;
-  contactMethod: "phone" | "email" | "text" | "in_person" | "other";
+  contactMethod:
+    | "phone"
+    | "email"
+    | "text"
+    | "in_person"
+    | "other";
   notes?: string;
   outcome?: string;
   nextFollowUpDate?: string | null;
@@ -264,82 +281,129 @@ export async function completePB101FollowUp(
   await requireStaffUser();
 
   if (!validUUID(request.guestId)) {
-    return { success: false, message: "Invalid guest." };
+    return {
+      success: false,
+      message: "Invalid guest.",
+    };
   }
 
-  const methods = ["phone", "email", "text", "in_person", "other"];
+  const methods = [
+    "phone",
+    "email",
+    "text",
+    "in_person",
+    "other",
+  ];
 
   if (!methods.includes(request.contactMethod)) {
-    return { success: false, message: "Select a contact method." };
+    return {
+      success: false,
+      message: "Select a contact method.",
+    };
   }
 
   const notes = request.notes?.trim() || "";
   const outcome = request.outcome?.trim() || "";
-  const nextDate = request.nextFollowUpDate?.trim() || null;
+  const nextDate =
+    request.nextFollowUpDate?.trim() || null;
 
-  if (notes.length > 2000 || outcome.length > 500) {
-    return { success: false, message: "Follow-up notes are too long." };
+  if (
+    notes.length > 2000 ||
+    outcome.length > 500
+  ) {
+    return {
+      success: false,
+      message: "Follow-up notes are too long.",
+    };
   }
 
   if (nextDate && !validDate(nextDate)) {
-    return { success: false, message: "Invalid next follow-up date." };
+    return {
+      success: false,
+      message: "Invalid next follow-up date.",
+    };
   }
 
-  const { data: guest, error: lookupError } = await supabaseAdmin
-    .from("pb101_guests")
-    .select("id, follow_up_date, follow_up_completed_at")
-    .eq("id", request.guestId)
-    .maybeSingle();
+  const { data: guest, error: lookupError } =
+    await supabaseAdmin
+      .from("pb101_guests")
+      .select(
+        "id, follow_up_date, follow_up_completed_at"
+      )
+      .eq("id", request.guestId)
+      .maybeSingle();
 
   if (lookupError || !guest) {
-    return { success: false, message: "Guest not found." };
+    return {
+      success: false,
+      message: "Guest not found.",
+    };
   }
 
   if (!guest.follow_up_date) {
-    return { success: false, message: "No scheduled follow-up exists." };
+    return {
+      success: false,
+      message: "No scheduled follow-up exists.",
+    };
   }
 
   if (guest.follow_up_completed_at) {
     return {
       success: false,
-      message: "This follow-up is already completed.",
+      message:
+        "This follow-up is already completed.",
     };
   }
 
   const now = new Date().toISOString();
 
-  const { error: historyError } = await supabaseAdmin
-    .from("pb101_follow_up_history")
-    .insert({
-      guest_id: request.guestId,
-      contact_date: now,
-      contact_method: request.contactMethod,
-      notes: notes || null,
-      outcome: outcome || null,
-      next_follow_up_date: nextDate,
-    });
+  const { error: historyError } =
+    await supabaseAdmin
+      .from("pb101_follow_up_history")
+      .insert({
+        guest_id: request.guestId,
+        contact_date: now,
+        contact_method: request.contactMethod,
+        notes: notes || null,
+        outcome: outcome || null,
+        next_follow_up_date: nextDate,
+      });
 
   if (historyError) {
-    console.error("PB101 follow-up history error:", historyError);
+    console.error(
+      "PB101 follow-up history error:",
+      historyError
+    );
+
     return {
       success: false,
       message: "Unable to save follow-up history.",
     };
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from("pb101_guests")
-    .update({
-      follow_up_completed_at: nextDate ? null : now,
-      follow_up_date: nextDate || guest.follow_up_date,
-      updated_at: now,
-    })
-    .eq("id", request.guestId)
-    .eq("follow_up_date", guest.follow_up_date)
-    .is("follow_up_completed_at", null);
+  const { error: updateError } =
+    await supabaseAdmin
+      .from("pb101_guests")
+      .update({
+        follow_up_completed_at:
+          nextDate ? null : now,
+        follow_up_date:
+          nextDate || guest.follow_up_date,
+        updated_at: now,
+      })
+      .eq("id", request.guestId)
+      .eq(
+        "follow_up_date",
+        guest.follow_up_date
+      )
+      .is("follow_up_completed_at", null);
 
   if (updateError) {
-    console.error("PB101 follow-up completion error:", updateError);
+    console.error(
+      "PB101 follow-up completion error:",
+      updateError
+    );
+
     return {
       success: false,
       message:
@@ -356,10 +420,5 @@ export async function completePB101FollowUp(
     message: nextDate
       ? "Follow-up recorded and next contact scheduled."
       : "Follow-up completed. Guest history preserved.",
-  };
-}
-
-          ? "Guest marked as declined."
-          : "Guest marked as still considering membership.",
   };
 }
