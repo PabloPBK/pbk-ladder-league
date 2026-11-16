@@ -44,9 +44,12 @@ export default function ClubRatingSessionsPage() {
       setLoading(true);
       setErrorMessage("");
 
-      const response = await fetch("/api/club-rating/sessions", {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        "/api/club-rating/sessions",
+        {
+          cache: "no-store",
+        }
+      );
 
       const result =
         (await response.json()) as SessionsResponse;
@@ -85,16 +88,19 @@ export default function ClubRatingSessionsPage() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      const response = await fetch("/api/club-rating/sessions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionName,
-          sessionDate,
-        }),
-      });
+      const response = await fetch(
+        "/api/club-rating/sessions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sessionName,
+            sessionDate,
+          }),
+        }
+      );
 
       const result =
         (await response.json()) as SessionsResponse;
@@ -251,30 +257,52 @@ export default function ClubRatingSessionsPage() {
                 </thead>
 
                 <tbody>
-                  {sessions.map((session) => (
-                    <tr
-                      key={session.id}
-                      className="border-t border-zinc-800"
-                    >
-                      <td className="px-5 py-4 font-semibold text-white">
-                        {session.session_name ?? "Unnamed Session"}
-                      </td>
+                  {sessions.map((session) => {
+                    const canImport = [
+                      "scheduled",
+                      "in_progress",
+                    ].includes(session.status);
 
-                      <td className="px-5 py-4 text-zinc-300">
-                        {formatDate(session.session_date)}
-                      </td>
+                    return (
+                      <tr
+                        key={session.id}
+                        className="border-t border-zinc-800"
+                      >
+                        <td className="px-5 py-4 font-semibold text-white">
+                          {session.session_name ??
+                            "Unnamed Session"}
+                        </td>
 
-                      <td className="px-5 py-4">
-                        <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold capitalize text-blue-300">
-                          {session.status.replace(/_/g, " ")}
-                        </span>
-                      </td>
+                        <td className="px-5 py-4 text-zinc-300">
+                          {formatDate(session.session_date)}
+                        </td>
 
-                      <td className="px-5 py-4 text-sm text-zinc-400">
-                        Roster import coming next
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-5 py-4">
+                          <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold capitalize text-blue-300">
+                            {session.status.replace(
+                              /_/g,
+                              " "
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          {canImport ? (
+                            <Link
+                              href={`/admin/club-rating/sessions/${session.id}`}
+                              className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500"
+                            >
+                              Import Roster
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-zinc-500">
+                              Import unavailable
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
