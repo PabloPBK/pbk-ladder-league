@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -22,6 +21,71 @@ function getTVDatabase() {
 }
 
 type TVDatabase = ReturnType<typeof getTVDatabase>;
+
+// Reuse signed URLs instead of creating new ones every 30 seconds.
+// The Supabase Storage bucket remains private.
+const MEDIA_BUCKET = "tv-media";
+const SIGNED_URL_LIFETIME_SECONDS = 24 * 60 * 60;
+const REFRESH_BUFFER_SECONDS = 60 * 60;
+
+async function getCachedMediaUrl(
+  db: TVDatabase,
+  storagePath: string
+): Promise<string> {
+  const refreshBefore = new Date(
+    Date.now() + REFRESH_BUFFER_SECONDS * 1000
+  ).toISOString();
+
+  const { data: cached, error: cacheError } = await db
+    .from("tv_media_url_cache")
+    .select("signed_url, expires_at")
+    .eq("storage_path", storagePath)
+    .gt("expires_at", refreshBefore)
+    .maybeSingle();
+
+  if (cacheError) {
+    throw cacheError;
+  }
+
+  if (cached?.signed_url) {
+    return cached.signed_url;
+  }
+
+  const { data, error } = await db.storage
+    .from(MEDIA_BUCKET)
+    .createSignedUrl(
+      storagePath,
+      SIGNED_URL_LIFETIME_SECONDS
+    );
+
+  if (error || !data?.signedUrl) {
+    throw error ?? new Error("Unable to sign TV media");
+  }
+
+  const now = Date.now();
+
+  const { error: saveError } = await db
+    .from("tv_media_url_cache")
+    .upsert(
+      {
+        storage_path: storagePath,
+        signed_url: data.signedUrl,
+        expires_at: new Date(
+          now + SIGNED_URL_LIFETIME_SECONDS * 1000
+        ).toISOString(),
+        updated_at: new Date(now).toISOString(),
+      },
+      {
+        onConflict: "storage_path",
+      }
+    );
+
+  if (saveError) {
+    throw saveError;
+  }
+
+  return data.signedUrl;
+}
 
 function isUUID(value: unknown): value is string {
   return (
@@ -99,7 +163,9 @@ async function loadRosterData(
     .eq("id", eventId)
     .maybeSingle();
 
-  if (eventError) throw eventError;
+  if (eventError) {
+    throw eventError;
+  }
 
   if (!event) {
     return {
@@ -117,9 +183,12 @@ async function loadRosterData(
       )
       .eq("event_id", eventId);
 
-  if (playersError) throw playersError;
+  if (playersError) {
+    throw playersError;
+  }
 
-  const rosterPlayers = (players ?? []) as RosterPlayer[];
+  const rosterPlayers =
+    (players ?? []) as RosterPlayer[];
 
   const { data: teams, error: teamsError } =
     await db
@@ -127,12 +196,18 @@ async function loadRosterData(
       .select("id, player1_id, player2_id")
       .eq("event_id", eventId);
 
-  if (teamsError) throw teamsError;
+  if (teamsError) {
+    throw teamsError;
+  }
 
-  const rosterTeams = (teams ?? []) as RosterTeam[];
+  const rosterTeams =
+    (teams ?? []) as RosterTeam[];
 
   const playerMap = new Map(
-    rosterPlayers.map((player) => [player.id, player])
+    rosterPlayers.map((player) => [
+      player.id,
+      player,
+    ])
   );
 
   const assignedIds = new Set<string>();
@@ -145,10 +220,17 @@ async function loadRosterData(
   if (mediaType === "roster_teams") {
     const entries = rosterTeams
       .map((team) => {
-        const player1 = playerMap.get(team.player1_id);
-        const player2 = playerMap.get(team.player2_id);
+        const player1 = playerMap.get(
+          team.player1_id
+        );
 
-        if (!player1 || !player2) return null;
+        const player2 = playerMap.get(
+          team.player2_id
+        );
+
+        if (!player1 || !player2) {
+          return null;
+        }
 
         const rating1 = getRating(
           player1,
@@ -162,7 +244,9 @@ async function loadRosterData(
 
         const combinedRating =
           rating1 !== null && rating2 !== null
-            ? Number((rating1 + rating2).toFixed(2))
+            ? Number(
+                (rating1 + rating2).toFixed(2)
+              )
             : null;
 
         return {
@@ -176,10 +260,18 @@ async function loadRosterData(
       })
       .filter((entry) => entry !== null)
       .sort((a, b) => {
-        if (a.combined_rating === null) return 1;
-        if (b.combined_rating === null) return -1;
+        if (a.combined_rating === null) {
+          return 1;
+        }
 
-        return b.combined_rating - a.combined_rating;
+        if (b.combined_rating === null) {
+          return -1;
+        }
+
+        return (
+          b.combined_rating -
+          a.combined_rating
+        );
       })
       .map((entry, index) => ({
         ...entry,
@@ -194,7 +286,9 @@ async function loadRosterData(
   }
 
   const entries = rosterPlayers
-    .filter((player) => !assignedIds.has(player.id))
+    .filter(
+      (player) => !assignedIds.has(player.id)
+    )
     .map((player) => ({
       id: player.id,
       name: player.full_name,
@@ -204,8 +298,13 @@ async function loadRosterData(
       ),
     }))
     .sort((a, b) => {
-      if (a.rating === null) return 1;
-      if (b.rating === null) return -1;
+      if (a.rating === null) {
+        return 1;
+      }
+
+      if (b.rating === null) {
+        return -1;
+      }
 
       return b.rating - a.rating;
     })
@@ -221,16 +320,24 @@ async function loadRosterData(
   };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest
+) {
   try {
     const screenId =
-      request.nextUrl.searchParams.get("screen_id");
+      request.nextUrl.searchParams.get(
+        "screen_id"
+      );
 
     const displayToken =
-      request.nextUrl.searchParams.get("token");
+      request.nextUrl.searchParams.get(
+        "token"
+      );
 
     const shortCode =
-      request.nextUrl.searchParams.get("short_code");
+      request.nextUrl.searchParams.get(
+        "short_code"
+      );
 
     const db = getTVDatabase();
 
@@ -238,11 +345,16 @@ export async function GET(request: NextRequest) {
 
     if (shortCode !== null) {
       // Public, read-only TV display access.
-      // Only active screens with registered short codes
-      // can be accessed through this method.
-      if (!/^tv[a-z0-9]{1,30}$/.test(shortCode)) {
+      // Only active screens with registered
+      // short codes are accessible.
+
+      if (
+        !/^tv[a-z0-9]{1,30}$/.test(shortCode)
+      ) {
         return jsonResponse(
-          { error: "Invalid TV address" },
+          {
+            error: "Invalid TV address",
+          },
           400
         );
       }
@@ -256,14 +368,23 @@ export async function GET(request: NextRequest) {
         .eq("is_active", true)
         .maybeSingle();
 
-      if (result.error) throw result.error;
+      if (result.error) {
+        throw result.error;
+      }
 
       screen = result.data;
     } else {
-      // Preserve the existing token-based TV Player.
-      if (!isUUID(screenId) || !isUUID(displayToken)) {
+      // Preserve token-based TV access.
+
+      if (
+        !isUUID(screenId) ||
+        !isUUID(displayToken)
+      ) {
         return jsonResponse(
-          { error: "Invalid TV display credentials" },
+          {
+            error:
+              "Invalid TV display credentials",
+          },
           400
         );
       }
@@ -277,14 +398,18 @@ export async function GET(request: NextRequest) {
         .eq("display_token", displayToken)
         .maybeSingle();
 
-      if (result.error) throw result.error;
+      if (result.error) {
+        throw result.error;
+      }
 
       screen = result.data;
     }
 
     if (!screen || !screen.is_active) {
       return jsonResponse(
-        { error: "TV display unavailable" },
+        {
+          error: "TV display unavailable",
+        },
         404
       );
     }
@@ -292,14 +417,18 @@ export async function GET(request: NextRequest) {
     const screenSettings = {
       id: screen.id,
       name: screen.name,
+
       display_mode:
-  screen.display_mode === "single"
-    ? "single"
-    : screen.display_mode === "daily_schedule"
-      ? "daily_schedule"
-      : "slideshow",
+        screen.display_mode === "single"
+          ? "single"
+          : screen.display_mode ===
+              "daily_schedule"
+            ? "daily_schedule"
+            : "slideshow",
+
       slide_duration:
-        typeof screen.slide_duration === "number" &&
+        typeof screen.slide_duration ===
+          "number" &&
         screen.slide_duration >= 1
           ? screen.slide_duration
           : 10,
@@ -324,9 +453,14 @@ export async function GET(request: NextRequest) {
       .eq("id", screen.presentation_id)
       .maybeSingle();
 
-    if (presentationError) throw presentationError;
+    if (presentationError) {
+      throw presentationError;
+    }
 
-    if (!presentation || !presentation.is_active) {
+    if (
+      !presentation ||
+      !presentation.is_active
+    ) {
       return jsonResponse({
         screen: screenSettings,
         presentation: null,
@@ -334,44 +468,32 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Generate a signed URL for the presentation logo.
+    // Reuse cached presentation logo URL.
     let logoUrl: string | null = null;
 
     if (presentation.logo_storage_path) {
-      const {
-        data: logoData,
-        error: logoError,
-      } = await db.storage
-        .from("tv-media")
-        .createSignedUrl(
-          presentation.logo_storage_path,
-          3600
-        );
-
-      if (logoError || !logoData?.signedUrl) {
-        throw (
-          logoError ||
-          new Error(
-            "Unable to access presentation logo"
-          )
-        );
-      }
-
-      logoUrl = logoData.signedUrl;
+      logoUrl = await getCachedMediaUrl(
+        db,
+        presentation.logo_storage_path
+      );
     }
 
-    const { data: slides, error: slidesError } =
-      await db
-        .from("tv_slides")
-        .select(
-          "id, title, media_type, storage_path, roster_event_id, sort_order, duration_seconds"
-        )
-        .eq("presentation_id", presentation.id)
-        .order("sort_order", {
-          ascending: true,
-        });
+    const {
+      data: slides,
+      error: slidesError,
+    } = await db
+      .from("tv_slides")
+      .select(
+        "id, title, media_type, storage_path, roster_event_id, sort_order, duration_seconds"
+      )
+      .eq("presentation_id", presentation.id)
+      .order("sort_order", {
+        ascending: true,
+      });
 
-    if (slidesError) throw slidesError;
+    if (slidesError) {
+      throw slidesError;
+    }
 
     const preparedSlides = await Promise.all(
       (slides ?? []).map(async (slide) => {
@@ -380,32 +502,41 @@ export async function GET(request: NextRequest) {
           title: slide.title,
           media_type: slide.media_type,
           sort_order: slide.sort_order,
+
           duration_seconds:
             slide.duration_seconds ??
             screenSettings.slide_duration,
         };
 
+        // Preserve live roster functionality.
         if (
-          slide.media_type === "roster_teams" ||
-          slide.media_type === "roster_free_agents"
+          slide.media_type ===
+            "roster_teams" ||
+          slide.media_type ===
+            "roster_free_agents"
         ) {
-          if (!isUUID(slide.roster_event_id)) {
+          if (
+            !isUUID(slide.roster_event_id)
+          ) {
             return {
               ...baseSlide,
               media_url: null,
               roster: {
-                event_name: "Event unavailable",
-                rating_method: "dupr_doubles",
+                event_name:
+                  "Event unavailable",
+                rating_method:
+                  "dupr_doubles",
                 entries: [],
               },
             };
           }
 
-          const roster = await loadRosterData(
-            db,
-            slide.roster_event_id,
-            slide.media_type
-          );
+          const roster =
+            await loadRosterData(
+              db,
+              slide.roster_event_id,
+              slide.media_type
+            );
 
           return {
             ...baseSlide,
@@ -420,43 +551,42 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        const { data, error } = await db.storage
-          .from("tv-media")
-          .createSignedUrl(
-            slide.storage_path,
-            60 * 60
+        // Images and videos reuse cached URLs.
+        const mediaUrl =
+          await getCachedMediaUrl(
+            db,
+            slide.storage_path
           );
-
-        if (error || !data?.signedUrl) {
-          throw (
-            error ||
-            new Error(
-              "Unable to access slide media"
-            )
-          );
-        }
 
         return {
           ...baseSlide,
-          media_url: data.signedUrl,
+          media_url: mediaUrl,
         };
       })
     );
 
     return jsonResponse({
       screen: screenSettings,
+
       presentation: {
         id: presentation.id,
         name: presentation.name,
         logo_url: logoUrl,
       },
+
       slides: preparedSlides,
     });
   } catch (error) {
-    console.error("TV player API error:", error);
+    console.error(
+      "TV player API error:",
+      error
+    );
 
     return jsonResponse(
-      { error: "Unable to load TV presentation" },
+      {
+        error:
+          "Unable to load TV presentation",
+      },
       500
     );
   }
