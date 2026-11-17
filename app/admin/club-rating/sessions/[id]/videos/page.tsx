@@ -299,14 +299,14 @@ export default function PBVisionScoresPage() {
                   disabled={saving}
                   className={inputClass}
                 >
-                  <option value="">
-                    Select Player
-                  </option>
-
+                  <option value="" style={{ color: "#111827", backgroundColor: "#ffffff" }}>
+  Select Player
+</option>
                   {players.map((player) => (
                     <option
                       key={player.id}
                       value={player.id}
+                      style={{ color: "#111827", backgroundColor: "#ffffff" }}
                       disabled={scores.some(
                         (s, i) =>
                           i !== index &&
