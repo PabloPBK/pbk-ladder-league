@@ -24,12 +24,13 @@ export default async function ClubRatingPage() {
       status: "Available",
       href: "/admin/club-rating/sessions",
     },
-    {
-      title: "Player Ratings",
-      description:
-        "View player qualification progress, completed games, Club Ratings, and renewal status.",
-      status: "Coming soon",
-    },
+   {
+  title: "Player Ratings",
+  description:
+    "View player qualification progress, completed games, Club Ratings, and renewal status.",
+  status: "Available",
+  href: "/admin/club-rating/players",
+},
     {
       title: "PB Vision Scores",
       description:
