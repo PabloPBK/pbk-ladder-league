@@ -1,36 +1,46 @@
 
 import Link from "next/link";
+
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 export const dynamic = "force-dynamic";
 
+type Feature = {
+  title: string;
+  description: string;
+  status: "Available" | "Coming soon";
+  href?: string;
+};
+
 export default async function ClubRatingPage() {
   await requireStaffUser();
 
-  const features = [
+  const features: Feature[] = [
     {
       title: "Rating Sessions",
       description:
-        "Create sessions, import PodPlay rosters, and manage attendance.",
-      status: "Coming soon",
+        "Create rating sessions, import PodPlay rosters, and manage player attendance.",
+      status: "Available",
+      href: "/admin/club-rating/sessions",
     },
     {
       title: "Player Ratings",
       description:
-        "Review Club Ratings, qualification progress, and renewal deadlines.",
+        "View player qualification progress, completed games, Club Ratings, and renewal status.",
       status: "Coming soon",
     },
     {
       title: "PB Vision Scores",
       description:
-        "Enter individual game ratings and calculate the best six results.",
-      status: "Coming soon",
+        "Record individual PB Vision game ratings for four players per video.",
+      status: "Available",
+      href: "/admin/club-rating/sessions",
     },
     {
       title: "Rating History",
       description:
-        "Review accepted ratings, optional improvement attempts, and historical changes.",
+        "Review official ratings, mandatory renewals, optional improvement attempts, and historical changes.",
       status: "Coming soon",
     },
   ];
@@ -58,26 +68,60 @@ export default async function ClubRatingPage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-lg font-bold text-white">
-                  {feature.title}
-                </h3>
+          {features.map((feature) => {
+            const available =
+              feature.status === "Available";
 
-                <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
-                  {feature.status}
-                </span>
+            const content = (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-lg font-bold text-white">
+                    {feature.title}
+                  </h3>
+
+                  <span
+                    className={
+                      available
+                        ? "rounded-full border border-green-800 bg-green-950 px-3 py-1 text-xs font-medium text-green-300"
+                        : "rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-400"
+                    }
+                  >
+                    {feature.status}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                  {feature.description}
+                </p>
+
+                {available && (
+                  <p className="mt-5 text-sm font-semibold text-blue-400">
+                    Open {feature.title} →
+                  </p>
+                )}
+              </>
+            );
+
+            const className =
+              "block rounded-2xl border border-zinc-800 bg-zinc-900 p-6 transition-colors";
+
+            return feature.href ? (
+              <Link
+                key={feature.title}
+                href={feature.href}
+                className={`${className} hover:border-blue-500/50 hover:bg-zinc-800`}
+              >
+                {content}
+              </Link>
+            ) : (
+              <div
+                key={feature.title}
+                className={className}
+              >
+                {content}
               </div>
-
-              <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-                {feature.description}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
@@ -90,6 +134,7 @@ export default async function ClubRatingPage() {
               <p className="text-3xl font-black text-yellow-400">
                 12
               </p>
+
               <p className="mt-1 text-sm text-zinc-400">
                 Games for initial qualification
               </p>
@@ -99,6 +144,7 @@ export default async function ClubRatingPage() {
               <p className="text-3xl font-black text-yellow-400">
                 6
               </p>
+
               <p className="mt-1 text-sm text-zinc-400">
                 Minimum games per renewal session
               </p>
@@ -108,6 +154,7 @@ export default async function ClubRatingPage() {
               <p className="text-3xl font-black text-yellow-400">
                 3 months
               </p>
+
               <p className="mt-1 text-sm text-zinc-400">
                 Rating reliability period
               </p>
