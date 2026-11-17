@@ -63,14 +63,25 @@ export async function GET(
     await requireStaffUser();
 
     const { id } = await context.params;
-  
-    if (!UUID_REGEX.test(id)) {
+
+    // Temporary diagnostic information is returned
+    // only if session ID validation fails.
+    if (typeof id !== "string" || !UUID_REGEX.test(id)) {
       return NextResponse.json(
-        { error: "Invalid session ID." },
+        {
+          error: "Invalid session ID.",
+          debug: {
+            receivedId: id ?? null,
+            receivedType: typeof id,
+            params: await context.params,
+            validationPattern: UUID_REGEX.source,
+          },
+        },
         { status: 400 }
       );
     }
 
+    // Verify that the session exists.
     const { data: session, error: sessionError } =
       await supabaseAdmin
         .from("club_rating_sessions")
@@ -85,6 +96,7 @@ export async function GET(
       );
     }
 
+    // Load registered players.
     const { data: roster, error: rosterError } =
       await supabaseAdmin
         .from("club_rating_session_players")
@@ -112,29 +124,31 @@ export async function GET(
       throw rosterError;
     }
 
+    // Classify each player individually.
     const players = [];
 
     for (const entry of roster ?? []) {
-      const { data: classification, error } =
-        await supabaseAdmin.rpc(
-          "classify_club_rating_session",
-          {
-            p_player_id: entry.club_rating_player_id,
-            p_session_id: id,
-          }
-        );
+      const {
+        data: classification,
+        error: classificationRpcError,
+      } = await supabaseAdmin.rpc(
+        "classify_club_rating_session",
+        {
+          p_player_id: entry.club_rating_player_id,
+          p_session_id: id,
+        }
+      );
 
-      
-const classificationError = error?.message ?? null;
+      const classificationError =
+        classificationRpcError?.message ?? null;
 
-players.push({
-  ...entry,
-  classification: classificationError
-    ? null
-    : classification,
-  classification_error: classificationError,
-});
-
+      players.push({
+        ...entry,
+        classification: classificationError
+          ? null
+          : classification,
+        classification_error: classificationError,
+      });
     }
 
     return NextResponse.json({
@@ -155,13 +169,15 @@ export async function PATCH(
   context: RouteContext
 ) {
   try {
-    // Identity comes from authenticated session,
-    // never from the browser request body.
+    // Staff identity comes from the authenticated session.
     const user = await requireStaffUser();
 
     const { id: sessionId } = await context.params;
 
-    if (!UUID_REGEX.test(sessionId)) {
+    if (
+      typeof sessionId !== "string" ||
+      !UUID_REGEX.test(sessionId)
+    ) {
       return NextResponse.json(
         { error: "Invalid session ID." },
         { status: 400 }
@@ -196,6 +212,7 @@ export async function PATCH(
     const override = input.override;
     const reason = input.reason;
 
+    // Validate player ID.
     if (
       typeof playerId !== "string" ||
       !UUID_REGEX.test(playerId)
@@ -206,6 +223,7 @@ export async function PATCH(
       );
     }
 
+    // Validate override selection.
     const validOverrides: OverrideType[] = [
       "optional_improvement",
       "mandatory_renewal",
@@ -229,6 +247,7 @@ export async function PATCH(
         ? reason.trim()
         : "";
 
+    // Staff must provide a reason when applying an override.
     if (selectedOverride !== null) {
       if (
         trimmedReason.length < 10 ||
@@ -301,7 +320,7 @@ export async function PATCH(
       throw overrideError;
     }
 
-    // Read the classification after the change.
+    // Read the updated classification.
     const {
       data: classification,
       error: classificationError,
