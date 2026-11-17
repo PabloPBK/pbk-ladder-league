@@ -63,6 +63,11 @@ export async function GET(
     await requireStaffUser();
 
     const { id } = await context.params;
+    console.log("CLUB RATING SESSION DEBUG", {
+  id,
+  type: typeof id,
+  params: await context.params,
+});
 
     if (!UUID_REGEX.test(id)) {
       return NextResponse.json(
