@@ -10,6 +10,15 @@ type Player = {
   attendance_status: string;
 };
 
+type RosterPlayer = {
+  id: string;
+  club_rating_player_id: string;
+  attendance_status: string;
+  club_rating_players: {
+    id: string;
+    full_name: string;
+  } | null;
+};
 type Session = {
   id: string;
   session_name: string | null;
@@ -81,12 +90,21 @@ export default function PBVisionScoresPage() {
 
         setSession(data.session);
 
-        setPlayers(
-          (data.players || []).filter(
-            (p: Player) =>
-              p.attendance_status === "attended"
-          )
-        );
+        const rosterPlayers = (data.players || []) as RosterPlayer[];
+
+setPlayers(
+  rosterPlayers
+    .filter(
+      (p) =>
+        p.attendance_status === "attended" &&
+        p.club_rating_players !== null
+    )
+    .map((p) => ({
+      id: p.club_rating_player_id,
+      full_name: p.club_rating_players!.full_name,
+      attendance_status: p.attendance_status,
+    }))
+);
       } catch (err) {
         setError(
           err instanceof Error
