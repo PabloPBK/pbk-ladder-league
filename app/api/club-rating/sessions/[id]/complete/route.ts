@@ -13,12 +13,19 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+type CompletionResult = {
+  success: boolean;
+  session_id: string;
+  status: string;
+  ratings_published: number;
+  player_notifications_queued: number;
+  staff_notifications_queued: number;
+  players_missing_email: number;
+};
+
 type Game = {
-  id: string;
   club_rating_player_id: string;
   video_id: string | null;
-  rating_after: number | null;
-  game_data: Record<string, unknown> | null;
 };
 
 function errorResponse(
@@ -36,6 +43,7 @@ export async function POST(
   context: RouteContext
 ) {
   try {
+    // Only authenticated staff may complete sessions.
     await requireStaffUser();
 
     const { id } = await context.params;
@@ -44,19 +52,20 @@ export async function POST(
       return errorResponse("Invalid session ID.");
     }
 
-    // 1. Load session
+    // Check session status before calling the RPC.
     const { data: session, error: sessionError } =
       await supabaseAdmin
         .from("club_rating_sessions")
         .select("id, status")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
-    if (sessionError || !session) {
-      return errorResponse(
-        "Session not found.",
-        404
-      );
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    if (!session) {
+      return errorResponse("Session not found.", 404);
     }
 
     if (session.status === "completed") {
@@ -73,38 +82,13 @@ export async function POST(
       );
     }
 
-    // 2. Load session roster
-    const { data: roster, error: rosterError } =
-      await supabaseAdmin
-        .from("club_rating_session_players")
-        .select(
-          "club_rating_player_id, attendance_status"
-        )
-        .eq("session_id", id);
-
-    if (rosterError) {
-      throw rosterError;
-    }
-
-    const attendedPlayers = new Set(
-      (roster ?? [])
-        .filter(
-          (player) =>
-            player.attendance_status === "attended"
-        )
-        .map(
-          (player) =>
-            player.club_rating_player_id
-        )
-    );
-
-    // 3. Load all recorded games
+    // Gather dashboard statistics before completion.
+    // The database function independently validates
+    // the scores and attendance within its transaction.
     const { data: games, error: gamesError } =
       await supabaseAdmin
         .from("club_rating_games")
-        .select(
-          "id, club_rating_player_id, video_id, rating_after, game_data"
-        )
+        .select("club_rating_player_id, video_id")
         .eq("session_id", id);
 
     if (gamesError) {
@@ -113,95 +97,17 @@ export async function POST(
 
     const records = (games ?? []) as Game[];
 
-    if (records.length === 0) {
-      return errorResponse(
-        "Cannot complete a session without PB Vision scores."
-      );
-    }
-
-    // 4. Validate every score
-    for (const game of records) {
-      if (!game.video_id) {
-        return errorResponse(
-          "A game is missing its video ID."
-        );
-      }
-
-      if (
-        game.game_data?.source !== "pb_vision"
-      ) {
-        return errorResponse(
-          "A game has an invalid PB Vision source."
-        );
-      }
-
-      if (
-        game.rating_after === null ||
-        !Number.isFinite(
-          Number(game.rating_after)
-        ) ||
-        Number(game.rating_after) < 0 ||
-        Number(game.rating_after) > 8
-      ) {
-        return errorResponse(
-          "A game contains an invalid PB Vision rating."
-        );
-      }
-
-      if (
-        !attendedPlayers.has(
-          game.club_rating_player_id
-        )
-      ) {
-        return errorResponse(
-          "A scored player is not marked as attended in this session."
-        );
-      }
-    }
-
-    // 5. Group scores by video
-    const videos = new Map<string, Game[]>();
-
-    for (const game of records) {
-      const videoId = game.video_id!;
-
-      const group = videos.get(videoId) ?? [];
-
-      group.push(game);
-
-      videos.set(videoId, group);
-    }
-
-    // 6. Every video must have exactly
-    // four different players
-    for (const [videoId, scores] of videos) {
-      if (scores.length !== 4) {
-        return errorResponse(
-          `Video ${videoId} has ${scores.length} scores. Exactly 4 are required.`
-        );
-      }
-
-      const uniquePlayers = new Set(
-        scores.map(
-          (score) =>
-            score.club_rating_player_id
-        )
-      );
-
-      if (uniquePlayers.size !== 4) {
-        return errorResponse(
-          `Video ${videoId} contains duplicate players.`
-        );
-      }
-    }
-
-    // 7. Count games per player
+    const uniqueVideos = new Set<string>();
     const playerGameCounts = new Map<
       string,
       number
     >();
 
     for (const game of records) {
+      if (game.video_id) {
+        uniqueVideos.add(game.video_id);
+      }
+
       const playerId =
         game.club_rating_player_id;
 
@@ -211,48 +117,121 @@ export async function POST(
       );
     }
 
-    const qualifiedPlayers = Array.from(
-      playerGameCounts.values()
-    ).filter(
-      (count) => count >= 6
-    ).length;
+    const playersWithSixGames =
+      Array.from(
+        playerGameCounts.values()
+      ).filter(
+        (count) => count >= 6
+      ).length;
 
-    // 8. Complete session
-    // Official ratings are NOT updated here.
-    const { data: updated, error: updateError } =
-      await supabaseAdmin
-        .from("club_rating_sessions")
-        .update({
-          status: "completed",
-        })
-        .eq("id", id)
-        .in("status", [
-          "scheduled",
-          "in_progress",
-        ])
-        .select("id, status")
-        .maybeSingle();
+    // Atomic database transaction:
+    // - Validate PB Vision games and attendance
+    // - Complete session
+    // - Publish initial ratings
+    // - Queue player and staff notifications
+    // - Create PodPlay update tasks
+    const { data, error: rpcError } =
+      await supabaseAdmin.rpc(
+        "complete_club_rating_session",
+        {
+          p_session_id: id,
+        }
+      );
 
-    if (updateError) {
-      throw updateError;
-    }
+    if (rpcError) {
+      console.error(
+        "Club Rating completion RPC error:",
+        rpcError
+      );
 
-    if (!updated) {
+      const message =
+        rpcError.message ?? "";
+
+      if (
+        message.includes(
+          "Session cannot be completed"
+        )
+      ) {
+        return errorResponse(
+          "Session status changed. Refresh and try again.",
+          409
+        );
+      }
+
+      if (
+        message.includes("Session not found")
+      ) {
+        return errorResponse(
+          "Session not found.",
+          404
+        );
+      }
+
+      if (
+        message.includes(
+          "No attended players"
+        ) ||
+        message.includes(
+          "Session has no recorded games"
+        ) ||
+        message.includes(
+          "invalid PB Vision scores"
+        ) ||
+        message.includes(
+          "Every video must contain"
+        )
+      ) {
+        return errorResponse(message);
+      }
+
       return errorResponse(
-        "Session status changed. Refresh and try again.",
-        409
+        "Unable to complete session. No changes were saved.",
+        500
       );
     }
 
+    const result = data as CompletionResult | null;
+
+    if (!result?.success) {
+      return errorResponse(
+        "Session completion did not succeed.",
+        500
+      );
+    }
+
+    // Keep the existing dashboard response fields,
+    // and add the new publication/notification results.
     return NextResponse.json({
       success: true,
-      session: updated,
-      videos_recorded: videos.size,
+
+      session: {
+        id: result.session_id,
+        status: result.status,
+      },
+
+      videos_recorded: uniqueVideos.size,
       scores_recorded: records.length,
       players_scored: playerGameCounts.size,
-      players_with_six_games: qualifiedPlayers,
+      players_with_six_games:
+        playersWithSixGames,
+
+      ratings_published:
+        result.ratings_published,
+
+      player_notifications_queued:
+        result.player_notifications_queued,
+
+      staff_notifications_queued:
+        result.staff_notifications_queued,
+
+      players_missing_email:
+        result.players_missing_email,
+
       message:
-        "Session completed successfully. Official Club Rating publication is not yet enabled.",
+        "Session completed successfully. " +
+        `${result.ratings_published} official rating(s) published. ` +
+        `${result.player_notifications_queued} player notification(s) queued. ` +
+        `${result.staff_notifications_queued} staff notification(s) queued.`,
     });
   } catch (error) {
     const message =
