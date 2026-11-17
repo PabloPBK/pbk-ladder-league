@@ -10,6 +10,51 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type OverrideType =
+  | "optional_improvement"
+  | "mandatory_renewal"
+  | null;
+
+function errorResponse(error: unknown, operation: string) {
+  const message =
+    error instanceof Error ? error.message : "";
+
+  if (message === "AUTH_REQUIRED") {
+    return NextResponse.json(
+      { error: "Please sign in." },
+      { status: 401 }
+    );
+  }
+
+  if (message === "STAFF_ACCESS_DENIED") {
+    return NextResponse.json(
+      { error: "Staff access is required." },
+      { status: 403 }
+    );
+  }
+
+  if (message === "STAFF_CHECK_FAILED") {
+    return NextResponse.json(
+      { error: "Unable to verify staff authorization." },
+      { status: 503 }
+    );
+  }
+
+  console.error(`Club Rating ${operation}:`, error);
+
+  return NextResponse.json(
+    { error: `Unable to ${operation}.` },
+    { status: 500 }
+  );
+}
+
+// ----------------------------------------------------
+// GET — Session roster and rating classifications
+// ----------------------------------------------------
+
 export async function GET(
   _request: Request,
   context: RouteContext
@@ -19,11 +64,7 @@ export async function GET(
 
     const { id } = await context.params;
 
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        id
-      )
-    ) {
+    if (!UUID_REGEX.test(id)) {
       return NextResponse.json(
         { error: "Invalid session ID." },
         { status: 400 }
@@ -85,9 +126,7 @@ export async function GET(
 
       players.push({
         ...entry,
-        classification: error
-          ? null
-          : classification,
+        classification: error ? null : classification,
         classification_error: error
           ? error.message
           : null,
@@ -99,28 +138,196 @@ export async function GET(
       players,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "";
+    return errorResponse(error, "load session players");
+  }
+}
 
-    if (message === "AUTH_REQUIRED") {
+// ----------------------------------------------------
+// PATCH — Save or remove staff rating override
+// ----------------------------------------------------
+
+export async function PATCH(
+  request: Request,
+  context: RouteContext
+) {
+  try {
+    // Identity comes from authenticated session,
+    // never from the browser request body.
+    const user = await requireStaffUser();
+
+    const { id: sessionId } = await context.params;
+
+    if (!UUID_REGEX.test(sessionId)) {
       return NextResponse.json(
-        { error: "Please sign in." },
-        { status: 401 }
+        { error: "Invalid session ID." },
+        { status: 400 }
       );
     }
 
-    if (message === "STAFF_ACCESS_DENIED") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
       return NextResponse.json(
-        { error: "Staff access is required." },
-        { status: 403 }
+        { error: "Invalid JSON request body." },
+        { status: 400 }
       );
     }
 
-    console.error("Club Rating roster API:", error);
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid request body." },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json(
-      { error: "Unable to load session players." },
-      { status: 500 }
+    const input = body as Record<string, unknown>;
+
+    const playerId = input.playerId;
+    const override = input.override;
+    const reason = input.reason;
+
+    if (
+      typeof playerId !== "string" ||
+      !UUID_REGEX.test(playerId)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid player ID." },
+        { status: 400 }
+      );
+    }
+
+    const validOverrides: OverrideType[] = [
+      "optional_improvement",
+      "mandatory_renewal",
+      null,
+    ];
+
+    if (
+      override === undefined ||
+      !validOverrides.includes(override as OverrideType)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid rating override." },
+        { status: 400 }
+      );
+    }
+
+    const selectedOverride = override as OverrideType;
+
+    const trimmedReason =
+      typeof reason === "string"
+        ? reason.trim()
+        : "";
+
+    if (selectedOverride !== null) {
+      if (
+        trimmedReason.length < 10 ||
+        trimmedReason.length > 500
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Override reason must contain 10 to 500 characters.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Database function enforces:
+    // - session is editable
+    // - player belongs to session
+    // - initial qualification cannot be overridden
+    // - override type and reason are valid
+    // - session is locked during update
+    const { error: overrideError } =
+      await supabaseAdmin.rpc(
+        "set_club_rating_session_override",
+        {
+          p_session_id: sessionId,
+          p_player_id: playerId,
+          p_override: selectedOverride,
+          p_reason:
+            selectedOverride === null
+              ? null
+              : trimmedReason,
+          p_staff_id: user.id,
+        }
+      );
+
+    if (overrideError) {
+      const message = overrideError.message ?? "";
+
+      if (
+        message.includes("Session not found") ||
+        message.includes("not registered in session")
+      ) {
+        return NextResponse.json(
+          { error: message },
+          { status: 404 }
+        );
+      }
+
+      if (
+        message.includes("cannot be changed") ||
+        message.includes("cannot be overridden")
+      ) {
+        return NextResponse.json(
+          { error: message },
+          { status: 409 }
+        );
+      }
+
+      if (
+        message.includes("Invalid override") ||
+        message.includes("Override reason")
+      ) {
+        return NextResponse.json(
+          { error: message },
+          { status: 400 }
+        );
+      }
+
+      throw overrideError;
+    }
+
+    // Read the classification after the change.
+    const {
+      data: classification,
+      error: classificationError,
+    } = await supabaseAdmin.rpc(
+      "classify_club_rating_session",
+      {
+        p_player_id: playerId,
+        p_session_id: sessionId,
+      }
     );
+
+    if (classificationError) {
+      console.error(
+        "Override saved, but classification refresh failed:",
+        classificationError
+      );
+
+      return NextResponse.json({
+        success: true,
+        classification: null,
+        refreshRequired: true,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      classification,
+      refreshRequired: false,
+    });
+  } catch (error) {
+    return errorResponse(error, "save rating override");
   }
 }
