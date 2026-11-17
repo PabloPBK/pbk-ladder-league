@@ -69,6 +69,15 @@ export async function GET(
   params: await context.params,
 });
 
+return NextResponse.json({
+  debug: true,
+  receivedId: id,
+  receivedType: typeof id,
+  expectedId: "84d1802f-fe9f-4ff6-816f-df3e8e6df5c6",
+  matchesExpected:
+    id === "84d1802f-fe9f-4ff6-816f-df3e8e6df5c6",
+});
+
     if (!UUID_REGEX.test(id)) {
       return NextResponse.json(
         { error: "Invalid session ID." },
