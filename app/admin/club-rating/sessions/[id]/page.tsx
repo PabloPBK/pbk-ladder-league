@@ -1,3 +1,12 @@
+                            className="border-t border-zinc-800"
+                          >
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={player.selected}
+                                disabled={importing}
+                                onChange={(event) =>
+                                  updatePlayer(index, {
                                     selected:
                                       event.target.checked,
                                   })
@@ -117,5 +126,3 @@
         )}
       </div>
     </AppLayout>
-  );
-}
