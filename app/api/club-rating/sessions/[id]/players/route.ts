@@ -138,13 +138,17 @@ return NextResponse.json({
           }
         );
 
-      players.push({
-        ...entry,
-        classification: error ? null : classification,
-        classification_error: error
-          ? error.message
-          : null,
-      });
+      
+const classificationError = error?.message ?? null;
+
+players.push({
+  ...entry,
+  classification: classificationError
+    ? null
+    : classification,
+  classification_error: classificationError,
+});
+
     }
 
     return NextResponse.json({
