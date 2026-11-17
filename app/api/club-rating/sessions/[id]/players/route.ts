@@ -6,38 +6,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-function handleError(error: unknown) {
-  const message =
-    error instanceof Error ? error.message : "";
-
-  if (message === "AUTH_REQUIRED") {
-    return NextResponse.json(
-      { error: "Please sign in." },
-      { status: 401 }
-    );
-  }
-
-  if (message === "STAFF_ACCESS_DENIED") {
-    return NextResponse.json(
-      { error: "Staff access is required." },
-      { status: 403 }
-    );
-  }
-
-  console.error("Club Rating session roster error:", error);
-
-  return NextResponse.json(
-    { error: "Unable to load session players." },
-    { status: 500 }
-  );
-}
 
 export async function GET(
   _request: Request,
@@ -48,7 +19,11 @@ export async function GET(
 
     const { id } = await context.params;
 
-    if (!UUID_PATTERN.test(id)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        id
+      )
+    ) {
       return NextResponse.json(
         { error: "Invalid session ID." },
         { status: 400 }
@@ -58,7 +33,7 @@ export async function GET(
     const { data: session, error: sessionError } =
       await supabaseAdmin
         .from("club_rating_sessions")
-        .select("id, session_name, session_date, status")
+        .select("id, session_date, session_name, status")
         .eq("id", id)
         .single();
 
@@ -73,7 +48,22 @@ export async function GET(
       await supabaseAdmin
         .from("club_rating_session_players")
         .select(
-          "club_rating_player_id, attendance_status"
+          `
+          id,
+          club_rating_player_id,
+          attendance_status,
+          rating_session_override,
+          rating_override_reason,
+          rating_override_by,
+          rating_override_at,
+          club_rating_players (
+            id,
+            full_name,
+            email,
+            club_rating,
+            period_deadline
+          )
+          `
         )
         .eq("session_id", id);
 
@@ -81,51 +71,56 @@ export async function GET(
       throw rosterError;
     }
 
-    const playerIds = (roster ?? []).map(
-      (entry) => entry.club_rating_player_id
-    );
+    const players = [];
 
-    if (playerIds.length === 0) {
-      return NextResponse.json({
-        session,
-        players: [],
+    for (const entry of roster ?? []) {
+      const { data: classification, error } =
+        await supabaseAdmin.rpc(
+          "classify_club_rating_session",
+          {
+            p_player_id: entry.club_rating_player_id,
+            p_session_id: id,
+          }
+        );
+
+      players.push({
+        ...entry,
+        classification: error
+          ? null
+          : classification,
+        classification_error: error
+          ? error.message
+          : null,
       });
     }
-
-    const { data: playerRecords, error: playersError } =
-      await supabaseAdmin
-        .from("club_rating_players")
-        .select("id, full_name")
-        .in("id", playerIds);
-
-    if (playersError) {
-      throw playersError;
-    }
-
-    const names = new Map(
-      (playerRecords ?? []).map((player) => [
-        player.id,
-        player.full_name,
-      ])
-    );
-
-    const players = (roster ?? [])
-      .map((entry) => ({
-        id: entry.club_rating_player_id,
-        full_name:
-          names.get(entry.club_rating_player_id) ??
-          "Unknown Player",
-        attendance_status: entry.attendance_status,
-      }))
-      .sort((a, b) =>
-        a.full_name.localeCompare(b.full_name)
-      );
 
     return NextResponse.json({
       session,
       players,
     });
   } catch (error) {
-    return handleError(error);
+    const message =
+      error instanceof Error ? error.message : "";
+
+    if (message === "AUTH_REQUIRED") {
+      return NextResponse.json(
+        { error: "Please sign in." },
+        { status: 401 }
+      );
+    }
+
+    if (message === "STAFF_ACCESS_DENIED") {
+      return NextResponse.json(
+        { error: "Staff access is required." },
+        { status: 403 }
+      );
+    }
+
+    console.error("Club Rating roster API:", error);
+
+    return NextResponse.json(
+      { error: "Unable to load session players." },
+      { status: 500 }
+    );
   }
 }
