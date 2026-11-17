@@ -64,22 +64,12 @@ export async function GET(
 
     const { id } = await context.params;
 
-    // Temporary diagnostic information is returned
-    // only if session ID validation fails.
     if (typeof id !== "string" || !UUID_REGEX.test(id)) {
-      return NextResponse.json(
-        {
-          error: "Invalid session ID.",
-          debug: {
-            receivedId: id ?? null,
-            receivedType: typeof id,
-            params: await context.params,
-            validationPattern: UUID_REGEX.source,
-          },
-        },
-        { status: 400 }
-      );
-    }
+  return NextResponse.json(
+    { error: "Invalid session ID." },
+    { status: 400 }
+  );
+}
 
     // Verify that the session exists.
     const { data: session, error: sessionError } =
