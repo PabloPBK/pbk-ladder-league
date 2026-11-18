@@ -83,8 +83,62 @@ export async function processClubRatingEmailQueue():
     // the earlier queue snapshot.
     const notification = claimed[0] as Notification;
 
-    try {
-      const messageId = await sendPB101Email({
+// Check the latest email preference before sending.
+// Staff notifications are exempt from player opt-outs.
+const { data: notificationDetails, error: detailsError } =
+  await supabaseAdmin
+    .from("club_rating_notifications")
+    .select(`
+      notification_type,
+      club_rating_player_id,
+      club_rating_players (
+        email_opted_out
+      )
+    `)
+    .eq("id", notification.id)
+    .single();
+
+if (detailsError || !notificationDetails) {
+  throw new Error(
+    detailsError?.message ??
+      "Unable to verify notification preferences."
+  );
+}
+
+const isStaffNotification = [
+  "missing_email",
+  "podplay_update",
+].includes(notificationDetails.notification_type);
+
+if (!isStaffNotification) {
+  const { data: player, error: playerError } =
+    await supabaseAdmin
+      .from("club_rating_players")
+      .select("email_opted_out")
+      .eq(
+        "id",
+        notificationDetails.club_rating_player_id
+      )
+      .single();
+
+  if (playerError || !player || player.email_opted_out) {
+    const { error: cancelError } = await supabaseAdmin
+      .from("club_rating_notifications")
+      .update({ delivery_status: "cancelled" })
+      .eq("id", notification.id)
+      .eq("delivery_status", "sending");
+
+    if (cancelError) {
+      throw new Error(cancelError.message);
+    }
+
+    result.skipped++;
+    continue;
+  }
+}
+
+try {
+  const messageId = await sendPB101Email({
         to: notification.recipient_email,
         subject: notification.subject,
         text: notification.message_body,
