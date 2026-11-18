@@ -71,12 +71,14 @@ export default function ClubRatingPlayersPage() {
     );
   }, [players, search]);
 
-  const qualifiedPlayers = players.filter(
-    (player) => player.club_rating !== null
-  ).length;
+  const playersWithRating = players.filter(
+  (player) => player.club_rating !== null
+).length;
 
-  const provisionalPlayers =
-    players.length - qualifiedPlayers;
+const provisionalPlayers = players.filter(
+  (player) =>
+    player.rating_status?.toLowerCase() === "provisional"
+).length;
 
   const totalGames = players.reduce(
     (sum, player) =>
@@ -152,7 +154,7 @@ export default function ClubRatingPlayersPage() {
           </p>
 
           <p className="mt-2 text-3xl font-bold text-green-400">
-            {qualifiedPlayers}
+           {playersWithRating}
           </p>
         </div>
 
@@ -221,8 +223,8 @@ export default function ClubRatingPlayersPage() {
                   )
                 : 100;
 
-            const hasRating =
-              player.club_rating !== null;
+           const isQualified =
+  player.rating_status?.toLowerCase() === "qualified";
 
             return (
               <div
@@ -245,15 +247,12 @@ export default function ClubRatingPlayersPage() {
 
                   <span
                     className={
-                      hasRating
+                      isQualified
                         ? "rounded-full border border-green-800 bg-green-950 px-3 py-1 text-xs font-medium text-green-300"
                         : "rounded-full border border-yellow-800 bg-yellow-950 px-3 py-1 text-xs font-medium text-yellow-300"
                     }
                   >
-                    {player.rating_status ??
-                      (hasRating
-                        ? "Qualified"
-                        : "Provisional")}
+                    {isQualified ? "Qualified" : "Provisional"}
                   </span>
                 </div>
 
