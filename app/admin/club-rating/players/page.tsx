@@ -276,7 +276,7 @@ const provisionalPlayers = players.filter(
                 >
                   <div
                     className={
-                      hasRating
+                      isQualified
                         ? "h-full rounded-full bg-green-500 transition-all"
                         : "h-full rounded-full bg-blue-500 transition-all"
                     }
