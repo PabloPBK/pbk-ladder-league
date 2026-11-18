@@ -7,7 +7,7 @@ import Link from "next/link";
 type Player = {
   player_id: string;
   full_name: string;
-  club_rating: number | string | null;
+  club_rating: number | null;
   rating_status: string | null;
   games_needed: number | null;
   games_completed: number | null;
@@ -15,377 +15,300 @@ type Player = {
   period_deadline: string | null;
 };
 
-function formatRating(rating: number | string | null) {
-  if (rating === null) return "—";
-
-  const numeric = Number(rating);
-  return Number.isFinite(numeric)
-    ? numeric.toFixed(3)
-    : "—";
-}
-
-function formatDate(date: string | null) {
-  if (!date) return "Not available";
-
-  const parsed = new Date(`${date.slice(0, 10)}T12:00:00`);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "Not available";
-  }
-
-  return parsed.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function isPastDeadline(date: string | null) {
-  if (!date) return false;
+function isPastDeadline(deadline: string | null): boolean {
+  if (!deadline) return false;
 
   const today = new Date();
-  const todayString = [
+  const localToday = [
     today.getFullYear(),
     String(today.getMonth() + 1).padStart(2, "0"),
     String(today.getDate()).padStart(2, "0"),
   ].join("-");
 
-  return date.slice(0, 10) < todayString;
+  return deadline.slice(0, 10) < localToday;
+}
+
+function isQualified(player: Player): boolean {
+  return player.rating_status?.toLowerCase() === "qualified";
+}
+
+function isOverdue(player: Player): boolean {
+  return (
+    isQualified(player) &&
+    (player.games_remaining ?? 0) > 0 &&
+    isPastDeadline(player.period_deadline)
+  );
 }
 
 export default function ClubRatingPlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    let active = true;
-
     async function loadPlayers() {
       try {
-        const response = await fetch(
-          "/api/club-rating/players",
-          { cache: "no-store" }
-        );
-
-        const data = await response.json();
+        const response = await fetch("/api/club-rating/players", {
+          cache: "no-store",
+        });
 
         if (!response.ok) {
-          throw new Error(
-            data.error || "Unable to load player ratings."
-          );
+          throw new Error("Unable to load Club Rating players.");
         }
 
-        if (active) {
-          setPlayers(data.players ?? []);
-        }
+        const result = await response.json();
+        setPlayers(result.players ?? []);
       } catch (err) {
-        if (active) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to load players."
-          );
-        }
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load Club Rating players."
+        );
       } finally {
-        if (active) setLoading(false);
+        setLoading(false);
       }
     }
 
-    loadPlayers();
-
-    return () => {
-      active = false;
-    };
+    void loadPlayers();
   }, []);
 
-  const filteredPlayers = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const stats = useMemo(() => {
+    return {
+      total: players.length,
+      qualified: players.filter(isQualified).length,
+      provisional: players.filter((p) => !isQualified(p)).length,
+      overdue: players.filter(isOverdue).length,
+    };
+  }, [players]);
 
+  const filteredPlayers = useMemo(() => {
     return players.filter((player) =>
-      player.full_name.toLowerCase().includes(query)
+      player.full_name.toLowerCase().includes(search.toLowerCase())
     );
   }, [players, search]);
 
-  const qualifiedPlayers = players.filter(
-    (player) =>
-      player.rating_status?.toLowerCase() === "qualified"
-  ).length;
-
-  const provisionalPlayers = players.filter(
-    (player) =>
-      player.rating_status?.toLowerCase() === "provisional"
-  ).length;
-
-  const overduePlayers = players.filter((player) => {
-    const qualified =
-      player.rating_status?.toLowerCase() === "qualified";
-
-    return (
-      qualified &&
-      (player.games_remaining ?? 0) > 0 &&
-      isPastDeadline(player.period_deadline)
-    );
-  }).length;
-
-  const totalGames = players.reduce(
-    (sum, player) =>
-      sum + (player.games_completed ?? 0),
-    0
-  );
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-6xl p-6 text-zinc-300">
-        Loading Club Rating players...
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 text-white sm:px-6">
-      <div>
-        <Link
-          href="/admin/club-rating"
-          className="text-sm font-medium text-blue-400 hover:text-blue-300"
-        >
-          ← Back to Club Rating
-        </Link>
+    <main className="min-h-screen bg-zinc-950 px-4 py-8 text-white">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <div>
+          <Link
+            href="/admin/club-rating"
+            className="text-sm text-zinc-400 hover:text-white"
+          >
+            ← Club Rating Dashboard
+          </Link>
 
-        <h1 className="mt-5 text-3xl font-bold">
-          Player Ratings
-        </h1>
+          <h1 className="mt-4 text-3xl font-bold">
+            Club Rating Players
+          </h1>
 
-        <p className="mt-2 text-sm text-zinc-400">
-          Monitor official Club Ratings, initial qualification,
-          renewal progress, and deadlines.
-        </p>
-      </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="rounded-xl border border-red-800 bg-red-950/50 p-4 text-red-200"
-        >
-          {error}
-        </div>
-      )}
-
-      <section className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <p className="text-sm text-zinc-400">
-            Total Players
-          </p>
-          <p className="mt-2 text-3xl font-bold">
-            {players.length}
+          <p className="mt-2 text-zinc-400">
+            Official ratings, qualification progress, and renewal deadlines.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <p className="text-sm text-zinc-400">
-            Qualified Players
-          </p>
-          <p className="mt-2 text-3xl font-bold text-green-400">
-            {qualifiedPlayers}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <p className="text-sm text-zinc-400">
-            Provisional Players
-          </p>
-          <p className="mt-2 text-3xl font-bold text-yellow-400">
-            {provisionalPlayers}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <p className="text-sm text-zinc-400">
-            Overdue Renewals
-          </p>
-          <p className="mt-2 text-3xl font-bold text-red-400">
-            {overduePlayers}
-          </p>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold">
-              Player Rating & Renewal Progress
-            </h2>
-
-            <p className="mt-1 text-sm text-zinc-400">
-              {players.length} players · {totalGames} individual
-              game records
-            </p>
+        {error && (
+          <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-red-300">
+            {error}
           </div>
+        )}
 
-          <div className="w-full sm:w-72">
-            <label
-              htmlFor="player-search"
-              className="sr-only"
-            >
-              Search players
-            </label>
-
-            <input
-              id="player-search"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search players..."
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-3">
-          {filteredPlayers.map((player) => {
-            const isQualified =
-              player.rating_status?.toLowerCase() === "qualified";
-
-            const completed = Math.max(
-              0,
-              player.games_completed ?? 0
-            );
-
-            const required = isQualified ? 6 : 12;
-
-            const remaining = Math.max(
-              0,
-              player.games_remaining ??
-                (required - completed)
-            );
-
-            const percentage = Math.min(
-              (completed / required) * 100,
-              100
-            );
-
-            const overdue =
-              isQualified &&
-              remaining > 0 &&
-              isPastDeadline(player.period_deadline);
-
-            return (
-              <div
-                key={player.player_id}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold">
-                      {player.full_name}
-                    </h3>
-
-                    <p className="mt-1 text-xs text-zinc-400">
-                      {isQualified
-                        ? "Official Club Rating"
-                        : "Current Club Rating"}
-                      :{" "}
-                      <span className="font-semibold text-white">
-                        {formatRating(player.club_rating)}
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <span
-                      className={
-                        isQualified
-                          ? "rounded-full border border-green-800 bg-green-950 px-3 py-1 text-xs font-medium text-green-300"
-                          : "rounded-full border border-yellow-800 bg-yellow-950 px-3 py-1 text-xs font-medium text-yellow-300"
-                      }
-                    >
-                      {isQualified ? "Qualified" : "Provisional"}
-                    </span>
-
-                    {overdue && (
-                      <span className="rounded-full border border-red-800 bg-red-950 px-3 py-1 text-xs font-medium text-red-300">
-                        Renewal Overdue
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-medium text-zinc-300">
-                      {isQualified
-                        ? "Renewal Progress"
-                        : "Initial Qualification Progress"}
-                    </span>
-
-                    <span className="text-zinc-400">
-                      {completed} of {required} games ·{" "}
-                      {remaining} remaining
-                    </span>
-                  </div>
-
-                  <div
-                    className="mt-2 h-2.5 overflow-hidden rounded-full bg-zinc-800"
-                    role="progressbar"
-                    aria-label={`${player.full_name} ${
-                      isQualified ? "renewal" : "qualification"
-                    } progress`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(percentage)}
-                  >
-                    <div
-                      className={
-                        isQualified
-                          ? "h-full rounded-full bg-green-500 transition-all"
-                          : "h-full rounded-full bg-blue-500 transition-all"
-                      }
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-
-                  {isQualified && (
-                    <p
-                      className={`mt-3 text-xs ${
-                        overdue
-                          ? "font-medium text-red-300"
-                          : "text-zinc-400"
-                      }`}
-                    >
-                      Renewal Deadline:{" "}
-                      {formatDate(player.period_deadline)}
-                    </p>
-                  )}
-                </div>
+        {loading ? (
+          <p className="text-zinc-400">Loading players...</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+                <p className="text-sm text-zinc-400">
+                  Total Players
+                </p>
+                <p className="mt-2 text-3xl font-bold">
+                  {stats.total}
+                </p>
               </div>
-            );
-          })}
 
-          {filteredPlayers.length === 0 && (
-            <div className="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">
-              {search
-                ? "No players match your search."
-                : "No Club Rating players found."}
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+                <p className="text-sm text-zinc-400">
+                  Qualified
+                </p>
+                <p className="mt-2 text-3xl font-bold text-green-400">
+                  {stats.qualified}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+                <p className="text-sm text-zinc-400">
+                  Provisional
+                </p>
+                <p className="mt-2 text-3xl font-bold text-yellow-400">
+                  {stats.provisional}
+                </p>
+              </div>
+
+              <Link
+                href="/admin/club-rating/overdue"
+                className="block rounded-2xl border border-red-900 bg-zinc-900 p-5 transition hover:border-red-500 hover:bg-zinc-800"
+              >
+                <p className="text-sm text-zinc-400">
+                  Overdue Renewals
+                </p>
+
+                <p className="mt-2 text-3xl font-bold text-red-400">
+                  {stats.overdue}
+                </p>
+
+                <p className="mt-2 text-xs text-red-300">
+                  View overdue players →
+                </p>
+              </Link>
             </div>
-          )}
-        </div>
-      </section>
 
-      <div className="rounded-xl border border-blue-900/50 bg-blue-950/20 p-5">
-        <h3 className="font-semibold text-blue-300">
-          Club Rating Program Rules
-        </h3>
+            <div className="space-y-4">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <h2 className="text-xl font-semibold">
+                  Player Directory
+                </h2>
 
-        <p className="mt-2 text-sm leading-6 text-zinc-300">
-          New players qualify after completing two qualifying
-          PB Vision sessions with six rated games each.
-          Qualified players maintain their official Club Rating
-          and complete renewal sessions during each three-month
-          rating period. Renewal progress and deadlines are
-          tracked separately from initial qualification.
-        </p>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search players..."
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500 sm:max-w-xs"
+                />
+              </div>
+
+              {filteredPlayers.length === 0 ? (
+                <div className="rounded-xl border border-zinc-800 p-6 text-zinc-400">
+                  No players found.
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {filteredPlayers.map((player) => {
+                    const qualified = isQualified(player);
+                    const overdue = isOverdue(player);
+                    const required = qualified ? 6 : 12;
+                    const remaining = Math.max(
+                      0,
+                      player.games_remaining ?? required
+                    );
+                    const completed = Math.max(
+                      0,
+                      Math.min(required, required - remaining)
+                    );
+
+                    return (
+                      <div
+                        key={player.player_id}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-lg font-semibold">
+                            {player.full_name}
+                          </h3>
+
+                          <span
+                            className={
+                              overdue
+                                ? "rounded-full bg-red-950 px-3 py-1 text-xs text-red-300"
+                                : qualified
+                                ? "rounded-full bg-green-950 px-3 py-1 text-xs text-green-300"
+                                : "rounded-full bg-yellow-950 px-3 py-1 text-xs text-yellow-300"
+                            }
+                          >
+                            {overdue
+                              ? "Overdue"
+                              : qualified
+                              ? "Qualified"
+                              : "Provisional"}
+                          </span>
+                        </div>
+
+                        <div className="mt-5">
+                          <p className="text-xs text-zinc-400">
+                            Official Club Rating
+                          </p>
+                          <p className="mt-1 text-2xl font-bold">
+                            {player.club_rating != null
+                              ? Number(player.club_rating).toFixed(3)
+                              : "Not Yet Rated"}
+                          </p>
+                        </div>
+
+                        <div className="mt-5">
+                          <div className="flex justify-between gap-2 text-sm">
+                            <span className="text-zinc-400">
+                              {qualified
+                                ? "Renewal Progress"
+                                : "Initial Qualification Progress"}
+                            </span>
+
+                            <span>
+                              {completed} of {required} games
+                            </span>
+                          </div>
+
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
+                            <div
+                              className={
+                                overdue
+                                  ? "h-full rounded-full bg-red-500"
+                                  : qualified
+                                  ? "h-full rounded-full bg-green-500"
+                                  : "h-full rounded-full bg-yellow-500"
+                              }
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  (completed / required) * 100
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {qualified && (
+                          <p
+                            className={`mt-4 text-sm ${
+                              overdue
+                                ? "text-red-400"
+                                : "text-zinc-400"
+                            }`}
+                          >
+                            Renewal Deadline:{" "}
+                            {player.period_deadline
+                              ? player.period_deadline.slice(0, 10)
+                              : "Not Set"}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+              <h2 className="text-lg font-semibold">
+                Club Rating Program Rules
+              </h2>
+
+              <p className="mt-3 text-sm text-zinc-400">
+                New players must complete 12 qualifying games across
+                two PB Vision sessions. Qualified players must complete
+                six renewal games every three months.
+              </p>
+
+              <p className="mt-2 text-sm text-zinc-400">
+                Overdue players retain their historical Club Rating.
+                PodPlay removal and restoration are managed separately
+                by staff.
+              </p>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </main>
   );
 }
