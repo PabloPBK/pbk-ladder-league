@@ -118,6 +118,21 @@ export default function ClubRatingPlayersPage() {
           <p className="text-zinc-400">Loading players...</p>
         ) : (
           <>
+            <div className="flex flex-wrap gap-3">
+  <Link
+    href="/admin/club-rating/overdue"
+    className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
+  >
+    Manage Overdue Renewals
+  </Link>
+
+  <Link
+    href="/admin/club-rating/restorations"
+    className="rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
+  >
+    Manage PodPlay Restorations
+  </Link>
+</div>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
                 <p className="text-sm text-zinc-400">
