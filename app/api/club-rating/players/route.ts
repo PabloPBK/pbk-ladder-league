@@ -29,9 +29,37 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({
-      players: data ?? [],
-    });
+    const { data: deadlines, error: deadlineError } =
+      await supabaseAdmin
+        .from("club_rating_players")
+        .select("id, period_deadline");
+
+    if (deadlineError) {
+      console.error(
+        "Club Rating renewal deadline query failed:",
+        deadlineError
+      );
+
+      return NextResponse.json(
+        { error: "Unable to load renewal deadlines." },
+        { status: 500 }
+      );
+    }
+
+    const deadlineMap = new Map(
+      (deadlines ?? []).map((player) => [
+        player.id,
+        player.period_deadline,
+      ])
+    );
+
+    const players = (data ?? []).map((player) => ({
+      ...player,
+      period_deadline:
+        deadlineMap.get(player.player_id) ?? null,
+    }));
+
+    return NextResponse.json({ players });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "";
