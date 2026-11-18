@@ -4,8 +4,6 @@ import { sendPB101Email } from "./pb101-gmail";
 
 const MAX_PER_RUN = 10;
 
-// Safety switch: no Club Rating emails will be sent
-// until this is explicitly enabled.
 const SENDING_ENABLED =
   process.env.CLUB_RATING_AUTOMATION_ENABLED === "true";
 
@@ -22,7 +20,14 @@ type Notification = {
   recipient_email: string;
   subject: string;
   message_body: string;
+  notification_type: string;
+  club_rating_player_id: string | null;
 };
+
+const STAFF_NOTIFICATION_TYPES = new Set([
+  "missing_email",
+  "podplay_update",
+]);
 
 export async function processClubRatingEmailQueue():
   Promise<WorkerResult> {
@@ -40,9 +45,7 @@ export async function processClubRatingEmailQueue():
 
   const { data: pending, error } = await supabaseAdmin
     .from("club_rating_notifications")
-    .select(
-      "id, recipient_email, subject, message_body"
-    )
+    .select("id")
     .eq("delivery_status", "pending")
     .order("created_at", { ascending: true })
     .limit(MAX_PER_RUN);
@@ -53,10 +56,9 @@ export async function processClubRatingEmailQueue():
     );
   }
 
-  for (const item of (pending ?? []) as Notification[]) {
+  for (const item of pending ?? []) {
     result.checked++;
 
-    // Atomically claim this notification.
     const { data: claimed, error: claimError } =
       await supabaseAdmin.rpc(
         "claim_club_rating_notification",
@@ -79,66 +81,96 @@ export async function processClubRatingEmailQueue():
       continue;
     }
 
-    // Use the claimed database record, rather than
-    // the earlier queue snapshot.
     const notification = claimed[0] as Notification;
 
-// Check the latest email preference before sending.
-// Staff notifications are exempt from player opt-outs.
-const { data: notificationDetails, error: detailsError } =
-  await supabaseAdmin
-    .from("club_rating_notifications")
-    .select(`
-      notification_type,
-      club_rating_player_id,
-      club_rating_players (
-        email_opted_out
-      )
-    `)
-    .eq("id", notification.id)
-    .single();
+    try {
+      // Reload the claimed record to verify its current
+      // notification type, player ID, and delivery status.
+      const { data: details, error: detailsError } =
+        await supabaseAdmin
+          .from("club_rating_notifications")
+          .select(
+            "notification_type, club_rating_player_id, delivery_status"
+          )
+          .eq("id", notification.id)
+          .single();
 
-if (detailsError || !notificationDetails) {
-  throw new Error(
-    detailsError?.message ??
-      "Unable to verify notification preferences."
-  );
-}
+      if (detailsError || !details) {
+        throw new Error(
+          detailsError?.message ??
+            "Unable to verify notification."
+        );
+      }
 
-const isStaffNotification = [
-  "missing_email",
-  "podplay_update",
-].includes(notificationDetails.notification_type);
+      if (details.delivery_status !== "sending") {
+        result.skipped++;
+        continue;
+      }
 
-if (!isStaffNotification) {
-  const { data: player, error: playerError } =
-    await supabaseAdmin
-      .from("club_rating_players")
-      .select("email_opted_out")
-      .eq(
-        "id",
-        notificationDetails.club_rating_player_id
-      )
-      .single();
+      const isStaffNotification =
+        STAFF_NOTIFICATION_TYPES.has(
+          details.notification_type
+        );
 
-  if (playerError || !player || player.email_opted_out) {
-    const { error: cancelError } = await supabaseAdmin
-      .from("club_rating_notifications")
-      .update({ delivery_status: "cancelled" })
-      .eq("id", notification.id)
-      .eq("delivery_status", "sending");
+      if (!isStaffNotification) {
+        // Fail closed if the player cannot be identified.
+        if (!details.club_rating_player_id) {
+          throw new Error(
+            "Player notification has no player ID."
+          );
+        }
 
-    if (cancelError) {
-      throw new Error(cancelError.message);
-    }
+        const { data: player, error: playerError } =
+          await supabaseAdmin
+            .from("club_rating_players")
+            .select("email_opted_out, email")
+            .eq("id", details.club_rating_player_id)
+            .single();
 
-    result.skipped++;
-    continue;
-  }
-}
+        if (playerError || !player) {
+          throw new Error(
+            playerError?.message ??
+              "Unable to verify player email preferences."
+          );
+        }
 
-try {
-  const messageId = await sendPB101Email({
+        // Do not send to opted-out players.
+        // Also prevent delivery to a stale email address.
+        const emailMatches =
+          typeof player.email === "string" &&
+          player.email.trim().toLowerCase() ===
+            notification.recipient_email
+              .trim()
+              .toLowerCase();
+
+        if (player.email_opted_out || !emailMatches) {
+          const { data: cancelled, error: cancelError } =
+            await supabaseAdmin
+              .from("club_rating_notifications")
+              .update({
+                delivery_status: "cancelled",
+                last_error: player.email_opted_out
+                  ? "Player opted out of email notifications."
+                  : "Player email address changed.",
+              })
+              .eq("id", notification.id)
+              .eq("delivery_status", "sending")
+              .select("id")
+              .maybeSingle();
+
+          if (cancelError || !cancelled) {
+            throw new Error(
+              cancelError?.message ??
+                "Unable to cancel notification."
+            );
+          }
+
+          result.skipped++;
+          continue;
+        }
+      }
+
+      const messageId = await sendPB101Email({
         to: notification.recipient_email,
         subject: notification.subject,
         text: notification.message_body,
@@ -174,8 +206,6 @@ try {
       );
 
       // Do not automatically retry uncertain deliveries.
-      // Gmail may have accepted the message even if a
-      // subsequent database update failed.
       const { error: failureError } =
         await supabaseAdmin
           .from("club_rating_notifications")
