@@ -48,34 +48,57 @@ function daysOverdue(deadline: string): number {
   return Math.max(0, Math.round((today - start) / 86400000));
 }
 
+function requalificationDate(deadline: string): string {
+  const [year, month, day] = deadline
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+
+  const targetMonth = month - 1 + 3;
+  const targetYear = year + Math.floor(targetMonth / 12);
+  const normalizedMonth = ((targetMonth % 12) + 12) % 12;
+
+  const lastDay = new Date(
+    Date.UTC(targetYear, normalizedMonth + 1, 0)
+  ).getUTCDate();
+
+  const targetDay = Math.min(day, lastDay);
+
+  return [
+    targetYear,
+    String(normalizedMonth + 1).padStart(2, "0"),
+    String(targetDay).padStart(2, "0"),
+  ].join("-");
+}
+
+function isRequalificationEligible(player: Player): boolean {
+  return (
+    isOverdue(player) &&
+    !!player.period_deadline &&
+    todayLocal() >= requalificationDate(player.period_deadline)
+  );
+}
+
 function getTaskState(tasks: PodPlayTask[]) {
-  const sorted = [...tasks].sort((a, b) =>
-    (b.completed_at ?? b.created_at).localeCompare(
-      a.completed_at ?? a.created_at
-    )
+  const completed = tasks
+    .filter((task) => task.status === "completed")
+    .sort((a, b) =>
+      (b.completed_at ?? "").localeCompare(a.completed_at ?? "")
+    );
+
+  const removalPending = tasks.find(
+    (task) =>
+      task.action_type === "rating_removal" &&
+      task.status === "pending"
   );
 
-  const removalPending = sorted.find(
-    (t) => t.action_type === "rating_removal" && t.status === "pending"
+  const restorationPending = tasks.find(
+    (task) =>
+      task.action_type === "rating_restoration" &&
+      task.status === "pending"
   );
 
-  const restorationPending = sorted.find(
-    (t) => t.action_type === "rating_restoration" && t.status === "pending"
-  );
-
-  const lastRemoval = sorted.find(
-    (t) => t.action_type === "rating_removal" && t.status === "completed"
-  );
-
-  const lastRestoration = sorted.find(
-    (t) => t.action_type === "rating_restoration" && t.status === "completed"
-  );
-
-  const removed =
-    !!lastRemoval &&
-    (!lastRestoration ||
-      (lastRemoval.completed_at ?? "") >
-        (lastRestoration.completed_at ?? ""));
+  const removed = completed[0]?.action_type === "rating_removal";
 
   return {
     removalPending,
@@ -100,7 +123,9 @@ export default function ClubRatingOverduePage() {
     ]);
 
     if (!playersResponse.ok || !tasksResponse.ok) {
-      throw new Error("Unable to load overdue players or PodPlay tasks.");
+      throw new Error(
+        "Unable to load overdue players or PodPlay tasks."
+      );
     }
 
     const playersResult = await playersResponse.json();
@@ -134,30 +159,34 @@ export default function ClubRatingOverduePage() {
     };
   }, [loadData]);
 
-  const overduePlayers = useMemo(() => {
-    return players.filter(isOverdue);
-  }, [players]);
+  const overduePlayers = useMemo(
+    () => players.filter(isOverdue),
+    [players]
+  );
 
   const visiblePlayers = useMemo(() => {
     return overduePlayers
       .filter((player) =>
-        player.full_name.toLowerCase().includes(search.toLowerCase())
+        player.full_name
+          .toLowerCase()
+          .includes(search.toLowerCase())
       )
       .sort((a, b) =>
-        (a.period_deadline ?? "").localeCompare(b.period_deadline ?? "")
+        (a.period_deadline ?? "").localeCompare(
+          b.period_deadline ?? ""
+        )
       );
   }, [overduePlayers, search]);
 
-  const reviewCount = overduePlayers.filter(
-    (player) =>
-      !!player.period_deadline &&
-      daysOverdue(player.period_deadline) >= 90
-  ).length;
+  const eligiblePlayers = overduePlayers.filter(
+    isRequalificationEligible
+  );
 
   const removedCount = overduePlayers.filter((player) => {
     const playerTasks = tasks.filter(
       (task) => task.club_rating_player_id === player.player_id
     );
+
     return getTaskState(playerTasks).removed;
   }).length;
 
@@ -166,35 +195,42 @@ export default function ClubRatingOverduePage() {
     action: "rating_removal" | "confirm_removal",
     taskId?: string
   ) {
+    if (action === "confirm_removal") {
+      const confirmed = window.confirm(
+        "Confirm that you have manually removed this player's rating from PodPlay?"
+      );
+
+      if (!confirmed) return;
+    }
+
     setBusyPlayer(playerId);
     setError(null);
     setMessage(null);
 
     try {
-      if (action === "confirm_removal") {
-        if (
-          !window.confirm(
-            "Confirm that you have manually removed this player's rating from PodPlay?"
-          )
-        ) {
-          return;
+      const response = await fetch(
+        "/api/club-rating/podplay-tasks",
+        {
+          method:
+            action === "confirm_removal" ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            action === "confirm_removal"
+              ? { task_id: taskId }
+              : {
+                  player_id: playerId,
+                  action_type: "rating_removal",
+                }
+          ),
         }
-      }
-
-      const response = await fetch("/api/club-rating/podplay-tasks", {
-        method: action === "confirm_removal" ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          action === "confirm_removal"
-            ? { task_id: taskId }
-            : { player_id: playerId, action_type: "rating_removal" }
-        ),
-      });
+      );
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Unable to save PodPlay action.");
+        throw new Error(
+          result.error ?? "Unable to save PodPlay action."
+        );
       }
 
       await loadData();
@@ -213,6 +249,64 @@ export default function ClubRatingOverduePage() {
     }
   }
 
+  async function startRequalification(player: Player) {
+    if (!isRequalificationEligible(player)) return;
+
+    const confirmed = window.confirm(
+      `Require 12-game requalification for ${player.full_name}?\n\n` +
+        "This will:\n" +
+        "• Change their status to Requalification Required.\n" +
+        "• Require two NEW qualifying sessions with six PB Vision games each.\n" +
+        "• Preserve their previous Club Rating and history.\n" +
+        "• Remove them from the Overdue Renewals list.\n\n" +
+        "Their PodPlay rating must already be removed.\n\n" +
+        "This action cannot be undone from this page.\n\n" +
+        "Continue?"
+    );
+
+    if (!confirmed) return;
+
+    setBusyPlayer(player.player_id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        "/api/club-rating/requalification",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            player_id: player.player_id,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ?? "Unable to start requalification."
+        );
+      }
+
+      await loadData();
+
+      setMessage(
+        `${player.full_name} now requires 12 new PB Vision games ` +
+          "across two qualifying sessions. Previous rating preserved."
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to start requalification."
+      );
+    } finally {
+      setBusyPlayer(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-zinc-950 px-4 py-8 text-white">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -224,11 +318,14 @@ export default function ClubRatingOverduePage() {
             ← Back to Club Rating Players
           </Link>
 
-          <h1 className="mt-4 text-3xl font-bold">Overdue Renewals</h1>
+          <h1 className="mt-4 text-3xl font-bold">
+            Overdue Renewals
+          </h1>
 
           <p className="mt-2 text-zinc-400">
-            Manage manual PodPlay rating removals for players who have
-            missed their three-month renewal deadline.
+            Manage PodPlay rating removals and manual
+            requalification for players who missed their
+            renewal deadlines.
           </p>
         </div>
 
@@ -246,26 +343,32 @@ export default function ClubRatingOverduePage() {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-red-900 bg-zinc-900 p-5">
-            <p className="text-sm text-zinc-400">Total Overdue</p>
+            <p className="text-sm text-zinc-400">
+              Total Overdue
+            </p>
             <p className="mt-2 text-3xl font-bold text-red-400">
               {loading ? "—" : overduePlayers.length}
             </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-            <p className="text-sm text-zinc-400">Removed from PodPlay</p>
+            <p className="text-sm text-zinc-400">
+              Removed from PodPlay
+            </p>
             <p className="mt-2 text-3xl font-bold text-blue-400">
               {loading ? "—" : removedCount}
             </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-            <p className="text-sm text-zinc-400">90+ Days Overdue</p>
+            <p className="text-sm text-zinc-400">
+              Requalification Eligible
+            </p>
             <p className="mt-2 text-3xl font-bold text-yellow-400">
-              {loading ? "—" : reviewCount}
+              {loading ? "—" : eligiblePlayers.length}
             </p>
             <p className="mt-1 text-xs text-zinc-500">
-              Eligible for manual requalification review
+              Three months beyond renewal deadline
             </p>
           </div>
         </div>
@@ -279,7 +382,9 @@ export default function ClubRatingOverduePage() {
         />
 
         {loading ? (
-          <p className="text-zinc-400">Loading overdue players...</p>
+          <p className="text-zinc-400">
+            Loading overdue players...
+          </p>
         ) : visiblePlayers.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
             No overdue players found.
@@ -293,7 +398,10 @@ export default function ClubRatingOverduePage() {
               );
 
               const state = getTaskState(playerTasks);
-              const overdueDays = daysOverdue(player.period_deadline!);
+              const overdueDays = daysOverdue(
+                player.period_deadline!
+              );
+              const eligible = isRequalificationEligible(player);
               const busy = busyPlayer === player.player_id;
 
               return (
@@ -301,7 +409,7 @@ export default function ClubRatingOverduePage() {
                   key={player.player_id}
                   className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
                 >
-                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div>
                       <h2 className="text-lg font-semibold">
                         {player.full_name}
@@ -322,7 +430,8 @@ export default function ClubRatingOverduePage() {
                       </p>
 
                       <p className="mt-1 text-sm text-zinc-400">
-                        Games Remaining: {player.games_remaining ?? 6}
+                        Games Remaining:{" "}
+                        {player.games_remaining ?? 6}
                       </p>
                     </div>
 
@@ -331,7 +440,7 @@ export default function ClubRatingOverduePage() {
                         {overdueDays} days overdue
                       </span>
 
-                      {overdueDays >= 90 && (
+                      {eligible && (
                         <span className="rounded-full bg-yellow-950 px-3 py-1 text-xs text-yellow-300">
                           Requalification review eligible
                         </span>
@@ -354,19 +463,48 @@ export default function ClubRatingOverduePage() {
                           }
                           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
                         >
-                          {busy ? "Saving..." : "Confirm PodPlay Removal"}
+                          {busy
+                            ? "Saving..."
+                            : "Confirm PodPlay Removal"}
                         </button>
                       ) : (
                         <button
                           type="button"
                           disabled={busy}
                           onClick={() =>
-                            performAction(player.player_id, "rating_removal")
+                            performAction(
+                              player.player_id,
+                              "rating_removal"
+                            )
                           }
                           className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold hover:bg-red-600 disabled:opacity-50"
                         >
-                          {busy ? "Saving..." : "Request PodPlay Removal"}
+                          {busy
+                            ? "Saving..."
+                            : "Request PodPlay Removal"}
                         </button>
+                      )}
+
+                      {eligible && state.removed && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            startRequalification(player)
+                          }
+                          className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          {busy
+                            ? "Processing..."
+                            : "Require 12-Game Requalification"}
+                        </button>
+                      )}
+
+                      {eligible && !state.removed && (
+                        <p className="max-w-xs text-right text-xs text-zinc-500">
+                          Confirm PodPlay removal before
+                          starting requalification.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -377,9 +515,11 @@ export default function ClubRatingOverduePage() {
         )}
 
         <p className="text-xs text-zinc-500">
-          PodPlay changes are manual. Confirm removal only after
-          completing the change in PodPlay. Official Club Ratings
-          remain preserved in Supabase.
+          PodPlay changes are manual. Confirm removal only
+          after completing the change in PodPlay. Requalification
+          requires two new qualifying sessions of six PB Vision
+          games each. Previous ratings and historical records
+          are preserved.
         </p>
       </div>
     </main>
