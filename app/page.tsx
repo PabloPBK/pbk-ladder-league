@@ -106,7 +106,7 @@ const departments: Department[] = [
 export default function Home() {
   return (
     <AppLayout
-      title="PBK Operations"
+      title="PBK Northwest"
       description="Your central hub for Pickleball Kingdom daily operations."
     >
       <div className="space-y-8">
