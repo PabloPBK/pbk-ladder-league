@@ -258,11 +258,12 @@ export default function ClubRatingSessionsPage() {
 
                 <tbody>
                   {sessions.map((session) => {
-                    const canImport = [
-                      "scheduled",
-                      "in_progress",
-                    ].includes(session.status);
-
+                   const sessionActionLabel =
+  session.status === "scheduled"
+    ? "Import Roster"
+    : session.status === "in_progress"
+      ? "Manage Session"
+      : "View Session";
                     return (
                       <tr
                         key={session.id}
@@ -286,20 +287,14 @@ export default function ClubRatingSessionsPage() {
                           </span>
                         </td>
 
-                        <td className="px-5 py-4">
-                          {canImport ? (
-                            <Link
-                              href={`/admin/club-rating/sessions/${session.id}`}
-                              className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500"
-                            >
-                              Import Roster
-                            </Link>
-                          ) : (
-                            <span className="text-sm text-zinc-500">
-                              Import unavailable
-                            </span>
-                          )}
-                        </td>
+                       <td className="px-5 py-4">
+  <Link
+    href={`/admin/club-rating/sessions/${session.id}`}
+    className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500"
+  >
+    {sessionActionLabel}
+  </Link>
+</td>
                       </tr>
                     );
                   })}
