@@ -6,167 +6,398 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type ActionType = "rating_removal" | "rating_restoration";
+
+type PlayerProgress = {
+  player_id: string;
+  rating_status: string | null;
+  club_rating: number | null;
+  games_remaining: number | null;
+};
+
+type PlayerRecord = {
+  id: string;
+  period_deadline: string | null;
+};
+
+type PodPlayTask = {
+  id: string;
+  club_rating_player_id: string;
+  action_type: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+};
+
+const ACTIONS: ActionType[] = [
+  "rating_removal",
+  "rating_restoration",
+];
+
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function errorResponse(message: string, status: number) {
+function responseError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function isResetEligible(deadline: string | null): boolean {
-  if (!deadline) return false;
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
-  const parts = deadline.slice(0, 10).split("-").map(Number);
-  if (parts.length !== 3 || parts.some(Number.isNaN)) {
-    return false;
+function overdue(
+  progress: PlayerProgress,
+  player: PlayerRecord
+): boolean {
+  return (
+    progress.rating_status?.toLowerCase() === "qualified" &&
+    (progress.games_remaining ?? 0) > 0 &&
+    !!player.period_deadline &&
+    player.period_deadline.slice(0, 10) < todayUTC()
+  );
+}
+
+async function getPlayerState(playerId: string) {
+  const [playerResult, progressResult] = await Promise.all([
+    supabaseAdmin
+      .from("club_rating_players")
+      .select("id, period_deadline")
+      .eq("id", playerId)
+      .maybeSingle(),
+
+    supabaseAdmin
+      .from("club_rating_player_progress")
+      .select(
+        "player_id, rating_status, club_rating, games_remaining"
+      )
+      .eq("player_id", playerId)
+      .maybeSingle(),
+  ]);
+
+  if (playerResult.error) throw playerResult.error;
+  if (progressResult.error) throw progressResult.error;
+
+  if (!playerResult.data || !progressResult.data) {
+    return null;
   }
 
-  const [year, month, day] = parts;
+  return {
+    player: playerResult.data as PlayerRecord,
+    progress: progressResult.data as PlayerProgress,
+  };
+}
 
-  // Match PostgreSQL's calendar-month threshold.
-  const targetMonth = month - 1 + 3;
-  const targetYear = year + Math.floor(targetMonth / 12);
-  const normalizedMonth = ((targetMonth % 12) + 12) % 12;
-
-  const lastDay = new Date(
-    Date.UTC(targetYear, normalizedMonth + 1, 0)
-  ).getUTCDate();
-
-  const threshold = new Date(
-    Date.UTC(
-      targetYear,
-      normalizedMonth,
-      Math.min(day, lastDay)
+async function getActionHistory(playerId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("club_rating_podplay_updates")
+    .select(
+      "id, club_rating_player_id, action_type, status, created_at, completed_at"
     )
+    .eq("club_rating_player_id", playerId)
+    .in("action_type", ACTIONS)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []) as PodPlayTask[];
+}
+
+function latestCompleted(
+  tasks: PodPlayTask[],
+  action: ActionType
+) {
+  return tasks
+    .filter(
+      (task) =>
+        task.action_type === action &&
+        task.status === "completed"
+    )
+    .sort((a, b) =>
+      (b.completed_at ?? "").localeCompare(
+        a.completed_at ?? ""
+      )
+    )[0];
+}
+
+function hasPending(
+  tasks: PodPlayTask[],
+  action: ActionType
+) {
+  return tasks.some(
+    (task) =>
+      task.action_type === action &&
+      task.status === "pending"
+  );
+}
+
+function ratingCurrentlyRemoved(tasks: PodPlayTask[]) {
+  const removal = latestCompleted(tasks, "rating_removal");
+  const restoration = latestCompleted(
+    tasks,
+    "rating_restoration"
   );
 
-  return Date.now() >= threshold.getTime();
+  return (
+    !!removal &&
+    (!restoration ||
+      (removal.completed_at ?? "") >
+        (restoration.completed_at ?? ""))
+  );
+}
+
+function handleError(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "";
+
+  if (message === "AUTH_REQUIRED") {
+    return responseError("Please sign in.", 401);
+  }
+
+  if (message === "STAFF_ACCESS_DENIED") {
+    return responseError("Staff access is required.", 403);
+  }
+
+  console.error("PodPlay task API error:", error);
+
+  return responseError(
+    "Unable to process PodPlay tasks.",
+    500
+  );
+}
+
+export async function GET() {
+  try {
+    await requireStaffUser();
+
+    const { data, error } = await supabaseAdmin
+      .from("club_rating_podplay_updates")
+      .select(
+        "id, club_rating_player_id, action_type, status, rating, created_at, completed_at, completed_by, staff_notes"
+      )
+      .in("action_type", ACTIONS)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      tasks: data ?? [],
+    });
+  } catch (error) {
+    return handleError(error);
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const staffUser = await requireStaffUser();
+    await requireStaffUser();
 
-    let body: { player_id?: unknown };
-
-    try {
-      body = await request.json();
-    } catch {
-      return errorResponse("Invalid request body.", 400);
-    }
-
-    const playerId = body?.player_id;
+    const body = await request.json();
+    const playerId = body.player_id;
+    const actionType = body.action_type as ActionType;
 
     if (
       typeof playerId !== "string" ||
-      !UUID.test(playerId)
+      !UUID.test(playerId) ||
+      !ACTIONS.includes(actionType)
     ) {
-      return errorResponse("Invalid player ID.", 400);
+      return responseError(
+        "Invalid player or action.",
+        400
+      );
     }
 
-    const { data: player, error: playerError } =
-      await supabaseAdmin
-        .from("club_rating_players")
-        .select(
-          "id, full_name, rating_status, period_deadline, club_rating"
-        )
-        .eq("id", playerId)
-        .maybeSingle();
+    const state = await getPlayerState(playerId);
 
-    if (playerError) throw playerError;
-
-    if (!player) {
-      return errorResponse("Player not found.", 404);
+    if (!state) {
+      return responseError("Player not found.", 404);
     }
 
-    if (player.rating_status !== "qualified") {
-      return errorResponse(
-        "Only qualified players can be reset.",
+    const tasks = await getActionHistory(playerId);
+
+    if (hasPending(tasks, actionType)) {
+      return responseError(
+        "This action is already pending.",
         409
       );
     }
 
-    if (!isResetEligible(player.period_deadline)) {
-      return errorResponse(
-        "The player has not reached the requalification threshold.",
-        409
-      );
+    const removed = ratingCurrentlyRemoved(tasks);
+
+    if (actionType === "rating_removal") {
+      if (!overdue(state.progress, state.player)) {
+        return responseError(
+          "Player is not currently overdue.",
+          409
+        );
+      }
+
+      if (removed) {
+        return responseError(
+          "The PodPlay rating is already marked as removed.",
+          409
+        );
+      }
     }
 
-    // Require confirmed removal from PodPlay.
-    const { data: tasks, error: tasksError } =
+    if (actionType === "rating_restoration") {
+      if (!removed) {
+        return responseError(
+          "A confirmed PodPlay removal is required first.",
+          409
+        );
+      }
+
+      if (
+        state.progress.rating_status?.toLowerCase() !==
+          "qualified" ||
+        state.progress.club_rating == null ||
+        overdue(state.progress, state.player)
+      ) {
+        return responseError(
+          "The player must complete renewal before restoration.",
+          409
+        );
+      }
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("club_rating_podplay_updates")
+      .insert({
+        club_rating_player_id: playerId,
+        action_type: actionType,
+        status: "pending",
+        rating:
+          actionType === "rating_restoration"
+            ? state.progress.club_rating
+            : null,
+        session_id: null,
+        staff_notes:
+          actionType === "rating_removal"
+            ? "Manual removal from PodPlay requested."
+            : "Manual restoration to PodPlay requested.",
+      })
+      .select("id, action_type, status")
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(
+      { task: data },
+      { status: 201 }
+    );
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const staffUser = await requireStaffUser();
+
+    const body = await request.json();
+    const taskId = body.task_id;
+
+    if (
+      typeof taskId !== "string" ||
+      !UUID.test(taskId)
+    ) {
+      return responseError("Invalid task ID.", 400);
+    }
+
+    const { data: task, error: taskError } =
       await supabaseAdmin
         .from("club_rating_podplay_updates")
         .select(
-          "action_type, status, completed_at"
+          "id, club_rating_player_id, action_type, status"
         )
-        .eq("club_rating_player_id", playerId)
-        .in("action_type", [
-          "rating_removal",
-          "rating_restoration",
-        ])
-        .eq("status", "completed")
-        .order("completed_at", { ascending: false });
+        .eq("id", taskId)
+        .maybeSingle();
 
-    if (tasksError) throw tasksError;
+    if (taskError) throw taskError;
 
-    const latestAction = tasks?.[0]?.action_type;
-
-    if (latestAction !== "rating_removal") {
-      return errorResponse(
-        "Confirm the player's PodPlay rating removal before resetting qualification.",
-        409
+    if (
+      !task ||
+      task.status !== "pending" ||
+      !ACTIONS.includes(task.action_type as ActionType)
+    ) {
+      return responseError(
+        "Pending task not found.",
+        404
       );
     }
 
-    // Execute the secured database function.
-    // The database rechecks status and eligibility.
-    const { error: resetError } = await supabaseAdmin.rpc(
-      "start_club_rating_requalification",
-      {
-        p_player_id: playerId,
-        p_staff_user_id: staffUser.id,
+    const state = await getPlayerState(
+      task.club_rating_player_id
+    );
+
+    if (!state) {
+      return responseError("Player not found.", 404);
+    }
+
+    const history = await getActionHistory(
+      task.club_rating_player_id
+    );
+
+    if (task.action_type === "rating_removal") {
+      if (!overdue(state.progress, state.player)) {
+        return responseError(
+          "Player is no longer overdue. Review this task.",
+          409
+        );
       }
-    );
 
-    if (resetError) {
-      console.error("Requalification reset failed:", resetError);
+      if (ratingCurrentlyRemoved(history)) {
+        return responseError(
+          "Rating is already marked as removed.",
+          409
+        );
+      }
+    }
 
-      return errorResponse(
-        "Unable to start requalification. The player may no longer be eligible.",
+    if (task.action_type === "rating_restoration") {
+      if (
+        !ratingCurrentlyRemoved(history) ||
+        overdue(state.progress, state.player) ||
+        state.progress.rating_status?.toLowerCase() !==
+          "qualified" ||
+        state.progress.club_rating == null
+      ) {
+        return responseError(
+          "Player is not eligible for restoration.",
+          409
+        );
+      }
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("club_rating_podplay_updates")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        completed_by: staffUser.id,
+        rating:
+          task.action_type === "rating_restoration"
+            ? state.progress.club_rating
+            : null,
+      })
+      .eq("id", taskId)
+      .eq("status", "pending")
+      .select(
+        "id, action_type, status, completed_at, completed_by"
+      )
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return responseError(
+        "Task was already completed.",
         409
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      player_id: playerId,
-      player_name: player.full_name,
-      rating_status: "requalification_required",
-      games_needed: 12,
-      message:
-        "Requalification started. The player must complete two new qualifying sessions of six PB Vision games each.",
-    });
+    return NextResponse.json({ task: data });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "";
-
-    if (message === "AUTH_REQUIRED") {
-      return errorResponse("Please sign in.", 401);
-    }
-
-    if (message === "STAFF_ACCESS_DENIED") {
-      return errorResponse(
-        "Staff access is required.",
-        403
-      );
-    }
-
-    console.error("Requalification API error:", error);
-
-    return errorResponse(
-      "Unable to process requalification.",
-      500
-    );
+    return handleError(error);
   }
 }
