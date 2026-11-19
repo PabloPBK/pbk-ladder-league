@@ -23,7 +23,13 @@ const groups: NavGroup[] = [
     id: "general",
     label: "General",
     icon: "🏠",
-    links: [{ href: "/", label: "Home", icon: "🏠" }],
+    links: [
+      {
+        href: "/",
+        label: "Operations Hub",
+        icon: "🏠",
+      },
+    ],
   },
   {
     id: "league",
@@ -102,6 +108,40 @@ const groups: NavGroup[] = [
         href: "/admin/player-directory",
         label: "Player Directory",
         icon: "📋",
+      },
+    ],
+  },
+  {
+    id: "club-rating",
+    label: "Club Rating",
+    icon: "📊",
+    links: [
+      {
+        href: "/admin/club-rating/players",
+        label: "Player Ratings",
+        icon: "⭐",
+      },
+      {
+        href: "/admin/club-rating/overdue",
+        label: "Overdue Players",
+        icon: "⏰",
+      },
+      {
+        href: "/admin/club-rating/restorations",
+        label: "PodPlay Restorations",
+        icon: "🔄",
+      },
+    ],
+  },
+  {
+    id: "administration",
+    label: "Administration",
+    icon: "⚙️",
+    links: [
+      {
+        href: "/admin",
+        label: "Admin Dashboard",
+        icon: "🛠️",
       },
     ],
   },
@@ -192,7 +232,7 @@ export function Navigation() {
 
                 return (
                   <Link
-                    key={link.href}
+                    key={`${group.id}-${link.href}`}
                     href={link.href}
                     aria-current={active ? "page" : undefined}
                     onClick={() => setMobileOpen(false)}
