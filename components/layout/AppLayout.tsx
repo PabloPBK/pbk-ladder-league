@@ -55,7 +55,7 @@ export function AppLayout({
               </p>
 
               <h1 className="mt-2 text-xl font-black leading-tight text-yellow-400 transition group-hover:text-yellow-300">
-                PBK Operations
+                PBK Northwest
               </h1>
             </Link>
 
