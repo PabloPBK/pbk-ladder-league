@@ -26,6 +26,12 @@ type Session = {
   status: string;
 };
 
+type RecordedVideo = {
+  videoId: string;
+  gameNumber: number;
+  scores: { playerId: string; rating: number }[];
+};
+
 type Score = {
   playerId: string;
   rating: string;
@@ -65,10 +71,92 @@ export default function PBVisionScoresPage() {
     useState<Score[]>(emptyScores);
 
   const [videoId, setVideoId] = useState("");
+  const [videos, setVideos] = useState<RecordedVideo[]>([]);
+  const [videosLoading, setVideosLoading] = useState(true);
+  const [editingVideo, setEditingVideo] = useState<string | null>(null);
+  const [editScores, setEditScores] = useState<Score[]>([]);
+  const [reason, setReason] = useState("");
+  const [correcting, setCorrecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  async function loadVideos() {
+    setVideosLoading(true);
+    try {
+      const response = await fetch(
+        `/api/club-rating/sessions/${sessionId}/videos`,
+        { cache: "no-store" }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load recorded videos.");
+      }
+      setVideos(data.videos ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load videos.");
+    } finally {
+      setVideosLoading(false);
+    }
+  }
+
+  function beginEdit(video: RecordedVideo) {
+    setEditingVideo(video.videoId);
+    setEditScores(video.scores.map((score) => ({
+      playerId: score.playerId,
+      rating: String(score.rating),
+    })));
+    setReason("");
+    setError("");
+    setSuccess("");
+  }
+
+  async function saveCorrection() {
+    if (!editingVideo || correcting) return;
+    if (reason.trim().length < 10 || reason.trim().length > 500) {
+      setError("Correction reason must be 10 to 500 characters.");
+      return;
+    }
+    if (editScores.some((score) =>
+      score.rating.trim() === "" ||
+      !Number.isFinite(Number(score.rating)) ||
+      Number(score.rating) < 0 || Number(score.rating) > 8
+    )) {
+      setError("Enter a valid rating between 0 and 8 for every player.");
+      return;
+    }
+    setCorrecting(true);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await fetch("/api/club-rating/videos/correct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          videoId: editingVideo,
+          reason: reason.trim(),
+          scores: editScores.map((score) => ({
+            playerId: score.playerId,
+            rating: Number(score.rating),
+          })),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to correct video.");
+      }
+      setEditingVideo(null);
+      setReason("");
+      setSuccess(`${data.result?.scoresChanged ?? 0} score(s) corrected successfully.`);
+      await loadVideos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to correct video.");
+    } finally {
+      setCorrecting(false);
+    }
+  }
 
   useEffect(() => {
     setVideoId(newVideoId());
@@ -118,6 +206,7 @@ setPlayers(
 
     if (sessionId) {
       loadRoster();
+      void loadVideos();
     }
   }, [sessionId]);
 
@@ -209,6 +298,7 @@ setPlayers(
 
       setScores(emptyScores());
       setVideoId(newVideoId());
+      await loadVideos();
     } catch (err) {
       setError(
         err instanceof Error
@@ -420,6 +510,95 @@ setPlayers(
           </p>
         </div>
       </div>
+
+      <section className="mt-8 overflow-hidden rounded-2xl border border-gray-700 bg-[#18181b]">
+        <div className="border-b border-gray-700 px-6 py-5">
+          <h2 className="text-xl font-semibold">Recorded Videos</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            Review recorded games and correct individual ratings.
+          </p>
+        </div>
+        <div className="space-y-4 p-6">
+          {videosLoading && <p className="text-gray-400">Loading videos...</p>}
+          {!videosLoading && videos.length === 0 && (
+            <p className="text-gray-400">No videos recorded yet.</p>
+          )}
+          {videos.map((video) => (
+            <div key={video.videoId} className="rounded-xl border border-gray-700 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">Game {video.gameNumber}</h3>
+                  <p className="break-all text-xs text-gray-500">{video.videoId}</p>
+                </div>
+                {session && ["scheduled", "in_progress"].includes(session.status) &&
+                  editingVideo !== video.videoId && (
+                    <button type="button" onClick={() => beginEdit(video)}
+                      disabled={correcting}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">
+                      Edit Scores
+                    </button>
+                  )}
+              </div>
+              {editingVideo === video.videoId ? (
+                <div className="space-y-4">
+                  {editScores.map((score, index) => (
+                    <div key={score.playerId} className="grid gap-3 sm:grid-cols-2 sm:items-center">
+                      <span className="text-gray-200">
+                        {players.find((p) => p.id === score.playerId)?.full_name ?? score.playerId}
+                      </span>
+                      <input aria-label={`Correct rating for player ${index + 1}`}
+                        type="number" min="0" max="8" step="0.001"
+                        value={score.rating} disabled={correcting}
+                        onChange={(event) => setEditScores((current) => current.map((item, i) =>
+                          i === index ? { ...item, rating: event.target.value } : item
+                        ))}
+                        className={inputClass} />
+                    </div>
+                  ))}
+                  <label className={labelClass} htmlFor="correction-reason">
+                    Correction reason (10–500 characters)
+                  </label>
+                  <textarea id="correction-reason" value={reason} maxLength={500}
+                    onChange={(event) => setReason(event.target.value)}
+                    disabled={correcting} rows={3} className={inputClass}
+                    placeholder="Explain what was entered incorrectly" />
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={saveCorrection} disabled={correcting}
+                      className="rounded-lg bg-blue-600 px-4 py-2 font-semibold hover:bg-blue-500 disabled:opacity-50">
+                      {correcting ? "Saving correction..." : "Save Correction"}
+                    </button>
+                    <button type="button" disabled={correcting}
+                      onClick={() => { setEditingVideo(null); setError(""); }}
+                      className="rounded-lg border border-gray-600 px-4 py-2 hover:bg-gray-800">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {video.scores.map((score) => (
+                    <div key={score.playerId} className="flex justify-between gap-3 rounded-lg bg-gray-900 px-3 py-2 text-sm">
+                      <span>{players.find((p) => p.id === score.playerId)?.full_name ?? score.playerId}</span>
+                      <span className="font-semibold tabular-nums">{score.rating.toFixed(3)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {session?.status === "completed" && (
+            <p className="text-sm text-amber-400">
+              Completed sessions are read-only until the closed-session correction workflow is implemented.
+            </p>
+          )}
+        </div>
+      </section>
+      {(error || success) && (
+        <div className="mt-4" role="status">
+          {error && <p className="text-red-300">{error}</p>}
+          {success && <p className="text-green-300">{success}</p>}
+        </div>
+      )}
     </div>
   );
 }
