@@ -1,174 +1,179 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
-
+import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { PBKButton } from "@/components/ui/PBKButton";
 
-type DashboardResponse = {
-  league: string | null;
-  season: string | null;
-  event: {
-    id: string;
-    name: string;
-    date: string;
-    status: string;
-    currentRound: number;
-    session: number;
-  } | null;
-  summary: {
-    checkedIn: number;
-    courts: number;
-  };
+type Department = {
+  title: string;
+  description: string;
+  icon: string;
+  href: string;
+  color: string;
+  links: { label: string; href: string }[];
 };
 
+const departments: Department[] = [
+  {
+    title: "League Management",
+    description: "Manage league nights, players, scores, and standings.",
+    icon: "🏆",
+    href: "/admin",
+    color: "border-yellow-500/40",
+    links: [
+      { label: "Manage League", href: "/admin" },
+      { label: "Scores", href: "/walking" },
+      { label: "Standings", href: "/display" },
+    ],
+  },
+  {
+    title: "Facility Operations",
+    description: "Manage court scheduling, TV screens, and facility tools.",
+    icon: "📅",
+    href: "/admin/facility-schedule",
+    color: "border-blue-500/40",
+    links: [
+      {
+        label: "Daily Schedule",
+        href: "/admin/facility-schedule",
+      },
+      {
+        label: "TV Manager",
+        href: "/admin/tv-manager",
+      },
+      {
+        label: "Wristband Colors",
+        href: "/admin/facility-schedule/colors",
+      },
+    ],
+  },
+  {
+    title: "PB101+ Guest Journey",
+    description: "Manage beginner guests, attendance, and membership follow-ups.",
+    icon: "🎓",
+    href: "/admin/pb101",
+    color: "border-green-500/40",
+    links: [
+      { label: "Guest Dashboard", href: "/admin/pb101" },
+    ],
+  },
+  {
+    title: "Player Management",
+    description: "Manage player profiles and the player directory.",
+    icon: "👥",
+    href: "/admin/player-directory",
+    color: "border-purple-500/40",
+    links: [
+      {
+        label: "Player Directory",
+        href: "/admin/player-directory",
+      },
+    ],
+  },
+  {
+    title: "Club Rating",
+    description: "Manage official ratings, renewals, requalification, and PodPlay.",
+    icon: "📊",
+    href: "/admin/club-rating/players",
+    color: "border-orange-500/40",
+    links: [
+      {
+        label: "Player Ratings",
+        href: "/admin/club-rating/players",
+      },
+      {
+        label: "Overdue Players",
+        href: "/admin/club-rating/overdue",
+      },
+      {
+        label: "PodPlay Restorations",
+        href: "/admin/club-rating/restorations",
+      },
+    ],
+  },
+  {
+    title: "Administration",
+    description: "Additional staff tools and system administration.",
+    icon: "⚙️",
+    href: "/admin",
+    color: "border-zinc-600",
+    links: [
+      { label: "Admin Dashboard", href: "/admin" },
+    ],
+  },
+];
+
 export default function Home() {
-  const [data, setData] = useState<DashboardResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadDashboard() {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
-        const response = await fetch("/api/dashboard", {
-          cache: "no-store",
-          headers: { Accept: "application/json" },
-        });
-        const result = (await response.json()) as
-          | DashboardResponse
-          | { error?: string };
-
-        if (!response.ok) {
-          throw new Error(
-            "error" in result
-              ? result.error ?? "Unable to load dashboard."
-              : "Unable to load dashboard.",
-          );
-        }
-        if (!cancelled) setData(result as DashboardResponse);
-      } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(
-            error instanceof Error ? error.message : "Unable to load dashboard.",
-          );
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    void loadDashboard();
-    return () => { cancelled = true; };
-  }, []);
-
   return (
     <AppLayout
-      title="Pickleball Kingdom Operations"
-      description="League Management • Daily Scheduling • TV Displays"
+      title="PBK Operations"
+      description="Your central hub for Pickleball Kingdom daily operations."
     >
       <div className="space-y-8">
-        {isLoading && (
-          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-6 text-center text-blue-300">
-            Loading dashboard...
-          </div>
-        )}
+        <section className="rounded-2xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 to-transparent p-6 sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-yellow-400">
+            PICKLEBALL KINGDOM
+          </p>
 
-        {errorMessage && (
-          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-5 text-red-300">
-            {errorMessage}
-          </div>
-        )}
+          <h2 className="mt-3 text-3xl font-black text-white sm:text-4xl">
+            Operations Hub
+          </h2>
 
-        {!isLoading && !errorMessage && data?.event && (
-          <>
-            <section className="rounded-2xl border border-green-500/40 bg-green-500/10 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-green-300">
-                Active League Night
-              </p>
-              <h2 className="mt-2 text-3xl font-bold text-white">
-                {data.event.name}
-              </h2>
-              <p className="mt-2 text-zinc-300">
-                {data.league ?? "League"} · {data.season ?? "Season"} · Session {data.event.session}
-              </p>
-            </section>
+          <p className="mt-3 max-w-2xl text-zinc-400">
+            Select a department below to access the tools you
+            need for daily operations.
+          </p>
+        </section>
 
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <DashboardCard
-                title="Status"
-                value={data.event.status.toUpperCase()}
-                valueClassName="text-green-400"
-              />
-              <DashboardCard title="Current Round" value={String(data.event.currentRound)} />
-              <DashboardCard title="Players" value={String(data.summary.checkedIn)} />
-              <DashboardCard title="Courts" value={String(data.summary.courts)} />
-            </section>
-          </>
-        )}
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {departments.map((department) => (
+            <div
+              key={department.title}
+              className={`flex flex-col rounded-2xl border ${department.color} bg-zinc-900/70 p-6 transition hover:bg-zinc-900`}
+            >
+              <Link
+                href={department.href}
+                className="group flex-1"
+              >
+                <div className="text-4xl">
+                  {department.icon}
+                </div>
 
-        {!isLoading && !errorMessage && !data?.event && (
-          <section className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-              No Active League Night
-            </p>
-            <h2 className="mt-2 text-3xl font-bold text-white">Ready to start</h2>
-            <p className="mt-2 max-w-2xl text-zinc-300">
-              Select the league and season, start the session, import the PodPlay roster, and check players in.
-            </p>
-            <div className="mt-6 max-w-sm">
-              <PBKButton href="/setup" primary>Start League Night</PBKButton>
+                <h3 className="mt-5 text-xl font-bold text-white group-hover:text-yellow-400">
+                  {department.title}
+                </h3>
+
+                <p className="mt-3 min-h-12 text-sm leading-relaxed text-zinc-400">
+                  {department.description}
+                </p>
+
+                <span className="mt-4 inline-block text-sm font-semibold text-yellow-400">
+                  Open Department →
+                </span>
+              </Link>
+
+              <div className="mt-6 border-t border-zinc-700 pt-4">
+                <div className="flex flex-wrap gap-2">
+                  {department.links.map((link) => (
+                    <Link
+                      key={`${department.title}-${link.href}`}
+                      href={link.href}
+                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-yellow-500 hover:text-yellow-400"
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </div>
-          </section>
-        )}
-
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-xl font-black text-yellow-400">🏆 League Management</h2>
-            <p className="mt-1 text-sm text-zinc-400">Run league sessions, enter scores, and review standings.</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <PBKButton href="/admin" primary>Manage League</PBKButton>
-            <PBKButton href="/admin/players">Manage Players</PBKButton>
-            <PBKButton href="/walking">Score Management</PBKButton>
-            <PBKButton href="/tv">Today's Standings</PBKButton>
-            <PBKButton href="/display">Season Standings</PBKButton>
-            <PBKButton href="/history">League History</PBKButton>
-          </div>
+          ))}
         </section>
 
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-xl font-black text-yellow-400">📅 Facility Operations</h2>
-            <p className="mt-1 text-sm text-zinc-400">Manage the daily court schedule and facility TV screens.</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <PBKButton href="/admin/facility-schedule">Daily Schedule Manager</PBKButton>
-            <PBKButton href="/admin/tv-manager">TV Display Manager</PBKButton>
-            <PBKButton href="/admin/facility-schedule/colors">Wristband Color Manager</PBKButton>
-          </div>
-        </section>
+        <p className="text-center text-xs text-zinc-500">
+          PBK Operations • Additional departments and tools
+          will be added as the system grows.
+        </p>
       </div>
     </AppLayout>
-  );
-}
-
-function DashboardCard({
-  title,
-  value,
-  valueClassName = "text-white",
-}: {
-  title: string;
-  value: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
-      <p className={`mt-2 text-3xl font-black ${valueClassName}`}>{value}</p>
-    </div>
   );
 }
