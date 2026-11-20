@@ -23,8 +23,6 @@ type CorrectVideoRequest = {
 
 export async function POST(request: Request) {
   try {
-    // Verify staff access and obtain the actual
-    // authenticated employee's user ID.
     const user = await requireStaffUser();
 
     let body: CorrectVideoRequest;
@@ -90,11 +88,7 @@ export async function POST(request: Request) {
       }
 
       seenPlayers.add(playerId);
-
-      scores.push({
-        playerId,
-        rating: score.rating,
-      });
+      scores.push({ playerId, rating: score.rating });
     }
 
     if (
@@ -108,8 +102,39 @@ export async function POST(request: Request) {
       );
     }
 
+    // Determine whether this is an open or completed session.
+    const { data: session, error: sessionError } =
+      await supabaseAdmin
+        .from("club_rating_sessions")
+        .select("status")
+        .eq("id", body.sessionId)
+        .single();
+
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: "Rating session not found." },
+        { status: 404 }
+      );
+    }
+
+    let functionName: string;
+
+    if (session.status === "completed") {
+      functionName = "correct_club_rating_video_completed";
+    } else if (
+      session.status === "scheduled" ||
+      session.status === "in_progress"
+    ) {
+      functionName = "correct_club_rating_video_open";
+    } else {
+      return NextResponse.json(
+        { error: "Scores cannot be corrected in this session." },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabaseAdmin.rpc(
-      "correct_club_rating_video_open",
+      functionName,
       {
         p_session_id: body.sessionId,
         p_video_id: body.videoId,
@@ -120,12 +145,13 @@ export async function POST(request: Request) {
     );
 
     if (error) {
-      console.error("PV Vision correction error:", error);
+      console.error("PB Vision correction error:", error);
 
       return NextResponse.json(
         {
           error:
-            "Unable to correct this video. Verify that the session is open and the four players match the original recording.",
+            error.message ||
+            "Unable to correct PB Vision scores.",
         },
         { status: 400 }
       );
@@ -153,7 +179,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.error("PV Vision correction API failed:", error);
+    console.error("PB Vision correction API failed:", error);
 
     return NextResponse.json(
       { error: "Unable to process the score correction." },
