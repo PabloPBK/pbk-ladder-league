@@ -770,6 +770,13 @@ export default function ClubRatingRosterPage({
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <Link
+                  href={`/admin/club-rating/sessions/${id}/videos#recorded-videos`}
+                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-500"
+                >
+                  Edit Scores
+                </Link>
+
+                <Link
                   href={`/admin/club-rating/sessions/${id}/videos`}
                   className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
                 >
@@ -798,7 +805,8 @@ export default function ClubRatingRosterPage({
               {session.status === "completed" && (
                 <p className="mt-3 text-sm text-green-300">
                   This session is completed and
-                  read-only.
+                  read-only. Existing PB Vision scores
+                  can still be corrected using Edit Scores.
                 </p>
               )}
             </section>
