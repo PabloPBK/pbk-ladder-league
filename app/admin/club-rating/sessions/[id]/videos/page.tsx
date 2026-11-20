@@ -511,7 +511,7 @@ setPlayers(
         </div>
       </div>
 
-      <section className="mt-8 overflow-hidden rounded-2xl border border-gray-700 bg-[#18181b]">
+      <section id="recorded-videos" className="mt-8 scroll-mt-6 overflow-hidden rounded-2xl border border-gray-700 bg-[#18181b]">
         <div className="border-b border-gray-700 px-6 py-5">
           <h2 className="text-xl font-semibold">Recorded Videos</h2>
           <p className="mt-1 text-sm text-gray-400">
@@ -530,7 +530,7 @@ setPlayers(
                   <h3 className="font-semibold">Game {video.gameNumber}</h3>
                   <p className="break-all text-xs text-gray-500">{video.videoId}</p>
                 </div>
-                {session && ["scheduled", "in_progress"].includes(session.status) &&
+                {session && ["scheduled", "in_progress", "completed"].includes(session.status) &&
                   editingVideo !== video.videoId && (
                     <button type="button" onClick={() => beginEdit(video)}
                       disabled={correcting}
@@ -588,7 +588,7 @@ setPlayers(
           ))}
           {session?.status === "completed" && (
             <p className="text-sm text-amber-400">
-              Completed sessions are read-only until the closed-session correction workflow is implemented.
+              This session is completed. You can correct existing scores, but cannot add new videos.
             </p>
           )}
         </div>
