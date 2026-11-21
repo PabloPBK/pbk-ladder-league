@@ -6,7 +6,14 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ActionType = "rating_removal" | "rating_restoration";
+type ActionType =
+  | "rating_removal"
+  | "rating_restoration"
+  | "rating_update";
+
+type ManualActionType =
+  | "rating_removal"
+  | "rating_restoration";
 
 type PlayerProgress = {
   player_id: string;
@@ -29,9 +36,15 @@ type PodPlayTask = {
   completed_at: string | null;
 };
 
+const MANUAL_ACTIONS: ManualActionType[] = [
+  "rating_removal",
+  "rating_restoration",
+];
+
 const ACTIONS: ActionType[] = [
   "rating_removal",
   "rating_restoration",
+  "rating_update",
 ];
 
 const UUID =
@@ -94,7 +107,7 @@ async function getActionHistory(playerId: string) {
       "id, club_rating_player_id, action_type, status, created_at, completed_at"
     )
     .eq("club_rating_player_id", playerId)
-    .in("action_type", ACTIONS)
+    .in("action_type", MANUAL_ACTIONS)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -104,7 +117,7 @@ async function getActionHistory(playerId: string) {
 
 function latestCompleted(
   tasks: PodPlayTask[],
-  action: ActionType
+  action: ManualActionType
 ) {
   return tasks
     .filter(
@@ -121,7 +134,7 @@ function latestCompleted(
 
 function hasPending(
   tasks: PodPlayTask[],
-  action: ActionType
+  action: ManualActionType
 ) {
   return tasks.some(
     (task) =>
@@ -165,6 +178,7 @@ function handleError(error: unknown) {
   );
 }
 
+// GET: Return removal, restoration, and rating-update tasks.
 export async function GET() {
   try {
     await requireStaffUser();
@@ -187,18 +201,20 @@ export async function GET() {
   }
 }
 
+// POST: Only manual removal/restoration requests.
+// Rating-update tasks are created by the rating system.
 export async function POST(request: NextRequest) {
   try {
     await requireStaffUser();
 
     const body = await request.json();
     const playerId = body.player_id;
-    const actionType = body.action_type as ActionType;
+    const actionType = body.action_type as ManualActionType;
 
     if (
       typeof playerId !== "string" ||
       !UUID.test(playerId) ||
-      !ACTIONS.includes(actionType)
+      !MANUAL_ACTIONS.includes(actionType)
     ) {
       return responseError(
         "Invalid player or action.",
@@ -290,6 +306,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH: Confirm that staff completed the task in PodPlay.
 export async function PATCH(request: NextRequest) {
   try {
     const staffUser = await requireStaffUser();
@@ -308,7 +325,7 @@ export async function PATCH(request: NextRequest) {
       await supabaseAdmin
         .from("club_rating_podplay_updates")
         .select(
-          "id, club_rating_player_id, action_type, status"
+          "id, club_rating_player_id, action_type, status, rating"
         )
         .eq("id", taskId)
         .maybeSingle();
@@ -326,6 +343,48 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // Rating updates already contain the rating calculated
+    // by the Club Rating system. Do not recalculate it here.
+    if (task.action_type === "rating_update") {
+      if (
+        task.rating == null ||
+        !Number.isFinite(Number(task.rating))
+      ) {
+        return responseError(
+          "This rating update has no valid rating.",
+          409
+        );
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("club_rating_podplay_updates")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          completed_by: staffUser.id,
+        })
+        .eq("id", taskId)
+        .eq("status", "pending")
+        .eq("action_type", "rating_update")
+        .eq("rating", task.rating)
+        .select(
+          "id, action_type, status, rating, completed_at, completed_by"
+        )
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        return responseError(
+          "Task was changed or already completed. Refresh and review.",
+          409
+        );
+      }
+
+      return NextResponse.json({ task: data });
+    }
+
+    // Existing removal/restoration workflow.
     const state = await getPlayerState(
       task.club_rating_player_id
     );
