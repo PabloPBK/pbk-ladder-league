@@ -119,20 +119,28 @@ export default function ClubRatingPlayersPage() {
         ) : (
           <>
             <div className="flex flex-wrap gap-3">
-  <Link
-    href="/admin/club-rating/overdue"
-    className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
-  >
-    Manage Overdue Renewals
-  </Link>
+              <Link
+                href="/admin/club-rating/overdue"
+                className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
+              >
+                Manage Overdue Renewals
+              </Link>
 
-  <Link
-    href="/admin/club-rating/restorations"
-    className="rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
-  >
-    Manage PodPlay Restorations
-  </Link>
-</div>
+              <Link
+                href="/admin/club-rating/restorations"
+                className="rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
+              >
+                Manage PodPlay Restorations
+              </Link>
+
+              <Link
+                href="/admin/club-rating/podplay-updates"
+                className="rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-600"
+              >
+                Manage PodPlay Rating Updates
+              </Link>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
                 <p className="text-sm text-zinc-400">
