@@ -45,7 +45,7 @@ type PlayerData = {
   screen: {
     id: string;
     name: string;
-    display_mode?: "single" | "slideshow" | "daily_schedule" | null;
+    display_mode?: "single" | "slideshow" | "daily_schedule" | "dupr_season" | "dupr_daily" | null;
     slide_duration?: number | null;
   };
   presentation: {
@@ -353,6 +353,8 @@ const isPublicDisplay = Boolean(publicShortCode);
     displayMode === "slideshow" && slides.length > 1;
 
   const isDailySchedule = displayMode === "daily_schedule";
+  const isSeasonStandings = displayMode === "dupr_season";
+  const isDailyStandings = displayMode === "dupr_daily";
 
   const advanceSlide = useCallback(() => {
     const data = playerRef.current;
@@ -633,7 +635,13 @@ const isPublicDisplay = Boolean(publicShortCode);
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-black text-white">
-      {player && isDailySchedule ? (
+      {player && (isSeasonStandings || isDailyStandings) ? (
+        <iframe
+          src={isSeasonStandings ? "/display" : "/tv"}
+          title={isSeasonStandings ? "DUPR Season Standings" : "Daily DUPR Standings"}
+          className="h-full w-full border-0"
+        />
+      ) : player && isDailySchedule ? (
         <iframe
           src="/schedule"
           title="Daily Operations Schedule"
