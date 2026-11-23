@@ -145,7 +145,7 @@ export default function TVScreensPage() {
             ? {
                 ...screen,
                 presentation_id: selectedId,
-                display_mode: isSchedule ? "daily_schedule" : "slideshow",
+                display_mode: specialMode ?? "slideshow",
               }
             : screen
         )
