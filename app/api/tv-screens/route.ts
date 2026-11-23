@@ -104,13 +104,13 @@ export async function PATCH(request: NextRequest) {
 
     const screenId = body?.screen_id;
     const presentationId = body?.presentation_id;
-    const scheduleMode = body?.display_mode === "daily_schedule";
+    const specialMode = ["daily_schedule", "dupr_season", "dupr_daily"].includes(body?.display_mode) ? body.display_mode : null;
 
     if (
       !isUUID(screenId) ||
       !(presentationId === null || isUUID(presentationId)) ||
-      (body?.display_mode !== undefined && !["daily_schedule", "slideshow"].includes(body.display_mode)) ||
-      (scheduleMode && presentationId !== null)
+      (body?.display_mode !== undefined && !["daily_schedule", "dupr_season", "dupr_daily", "slideshow"].includes(body.display_mode)) ||
+      (specialMode && presentationId !== null)
     ) {
       return NextResponse.json(
         { error: "Invalid TV assignment details" },
@@ -145,7 +145,7 @@ export async function PATCH(request: NextRequest) {
       .from("tv_screens")
       .update({
         presentation_id: presentationId,
-        display_mode: scheduleMode ? "daily_schedule" : (body?.display_mode === "slideshow" ? "slideshow" : undefined),
+        display_mode: specialMode ?? (body?.display_mode === "slideshow" ? "slideshow" : undefined),
         updated_at: new Date().toISOString(),
       })
       .eq("id", screenId)
