@@ -131,7 +131,10 @@ export default function LobbySchedulePage() {
 
     loadSchedule();
 
-    const refresh = window.setInterval(loadSchedule, 30000);
+    // Keep the local clock and event transitions responsive without polling Supabase every 30 seconds.
+    // Check for staff-published schedule changes every 5 minutes; daily rollover is
+    // handled by the schedule API on the first request after midnight.
+    const refresh = window.setInterval(loadSchedule, 5 * 60 * 1000);
 
     return () => {
       active = false;
