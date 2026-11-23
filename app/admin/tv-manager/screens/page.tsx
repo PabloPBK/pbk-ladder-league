@@ -77,7 +77,7 @@ export default function TVScreensPage() {
 
       for (const screen of loadedScreens) {
         initialAssignments[screen.id] =
-          screen.presentation_id ?? "";
+          screen.display_mode === "daily_schedule" ? "__daily_schedule__" : (screen.presentation_id ?? "");
       }
 
       setScreens([...loadedScreens].sort((a, b) => {
@@ -106,7 +106,9 @@ export default function TVScreensPage() {
   async function saveAssignment(screenId: string) {
     if (savingId !== null) return;
 
-    const selectedId = assignments[screenId] || null;
+    const selection = assignments[screenId] || "";
+    const isSchedule = selection === "__daily_schedule__";
+    const selectedId = isSchedule ? null : (selection || null);
 
     setSavingId(screenId);
     setError("");
@@ -125,6 +127,7 @@ export default function TVScreensPage() {
         body: JSON.stringify({
           screen_id: screenId,
           presentation_id: selectedId,
+          display_mode: isSchedule ? "daily_schedule" : "slideshow",
         }),
       });
 
@@ -142,6 +145,7 @@ export default function TVScreensPage() {
             ? {
                 ...screen,
                 presentation_id: selectedId,
+                display_mode: isSchedule ? "daily_schedule" : "slideshow",
               }
             : screen
         )
@@ -340,7 +344,7 @@ export default function TVScreensPage() {
 
                 const hasChanges =
                   selectedId !==
-                  (screen.presentation_id ?? "");
+                  (screen.display_mode === "daily_schedule" ? "__daily_schedule__" : (screen.presentation_id ?? ""));
 
                 const currentPresentation =
                   presentations.find(
@@ -425,6 +429,8 @@ export default function TVScreensPage() {
                           No presentation assigned
                         </option>
 
+                        <option value="__daily_schedule__">Daily Operations Schedule</option>
+
                         {screen.presentation_id &&
                           !currentPresentation && (
                             <option
@@ -485,10 +491,10 @@ export default function TVScreensPage() {
                       <p className="mt-3 text-xs text-zinc-400">
                         Currently assigned:{" "}
                         <span className="text-white">
-                          {currentPresentation?.name ||
+                          {screen.display_mode === "daily_schedule" ? "Daily Operations Schedule" : (currentPresentation?.name ||
                             (screen.presentation_id
                               ? "Unknown presentation"
-                              : "None")}
+                              : "None"))}
                         </span>
                       </p>
                     </div>
