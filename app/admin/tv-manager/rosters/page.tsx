@@ -186,6 +186,35 @@ export default function LiveRostersPage() {
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editType, setEditType] = useState<"partnered" | "individual">("partnered");
+  const [editRating, setEditRating] = useState<RatingMethod>("dupr_doubles");
+  const [savingEdit, setSavingEdit] = useState(false);
+  function beginEditEvent(event: RosterEvent) {
+    setEditName(event.name);
+    setEditDate(event.event_date ?? "");
+    setEditType(event.event_type);
+    setEditRating(event.rating_method);
+    setEditingEvent(true);
+  }
+  async function saveEventEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedEventId || !editName.trim() || savingEdit) return;
+    setSavingEdit(true);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await fetch("/api/roster-events", {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:selectedEventId,name:editName.trim(),event_date:editDate || null,event_type:editType,rating_method:editRating})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to update event");
+      setEvents(current => current.map(item => item.id === selectedEventId ? result.event : item));
+      setEditingEvent(false);
+      setSuccess("Event details updated. Existing players, teams and logo are preserved.");
+    } catch (error) { setError(error instanceof Error ? error.message : "Unable to update event"); }
+    finally { setSavingEdit(false); }
+  }
   async function uploadEventLogo(file: File) {
     if (!selectedEventId) return;
     setUploadingLogo(true);
@@ -837,6 +866,7 @@ async function deletePlayer(player: RosterPlayer) {
                   key={event.id}
                   onClick={() => {
                     setSelectedEventId(event.id);
+                    setEditingEvent(false);
                     setError("");
                     setSuccess("");
                   }}
@@ -874,6 +904,19 @@ async function deletePlayer(player: RosterPlayer) {
 
         {selectedEvent && (
           <>
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-xl font-bold text-yellow-400">Event Details — {selectedEvent.name}</h2>
+                <button type="button" onClick={() => editingEvent ? setEditingEvent(false) : beginEditEvent(selectedEvent)} className="rounded-lg bg-yellow-400 px-4 py-2 font-bold text-black">{editingEvent ? "Cancel" : "Edit Event"}</button>
+              </div>
+              {editingEvent && <form onSubmit={saveEventEdit} className="mt-4 space-y-4">
+                <label className="block text-sm font-semibold">Event Name<input className={fieldClass} value={editName} maxLength={120} required onChange={e => setEditName(e.target.value)} /></label>
+                <label className="block text-sm font-semibold">Event Date<input type="date" className={fieldClass} value={editDate} onChange={e => setEditDate(e.target.value)} /></label>
+                <label className="block text-sm font-semibold">Event Type<select className={fieldClass} value={editType} onChange={e => setEditType(e.target.value as "partnered" | "individual")}><option value="partnered">Partnered Teams</option><option value="individual">Individual Players</option></select></label>
+                <label className="block text-sm font-semibold">Rating Method<select className={fieldClass} value={editRating} onChange={e => setEditRating(e.target.value as RatingMethod)}>{methods.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
+                <button type="submit" disabled={savingEdit || !editName.trim()} className="rounded-lg bg-yellow-400 px-5 py-3 font-bold text-black disabled:opacity-50">{savingEdit ? "Saving..." : "Save Changes"}</button>
+              </form>}
+            </section>
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
               <h2 className="text-xl font-bold text-yellow-400">
                 Event Ranking Settings
