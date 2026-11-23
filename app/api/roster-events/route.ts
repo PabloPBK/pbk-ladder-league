@@ -20,7 +20,7 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const eventFields =
-  "id, name, event_date, event_type, rating_method, created_at";
+  "id, name, event_date, event_type, rating_method, logo_storage_path, created_at";
 
 function getTVDatabase() {
   const url = process.env.TV_SUPABASE_URL;
