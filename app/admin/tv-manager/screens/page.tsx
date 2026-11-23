@@ -77,7 +77,7 @@ export default function TVScreensPage() {
 
       for (const screen of loadedScreens) {
         initialAssignments[screen.id] =
-          screen.display_mode === "daily_schedule" ? "__daily_schedule__" : (screen.presentation_id ?? "");
+          ["daily_schedule", "dupr_season", "dupr_daily"].includes(screen.display_mode ?? "") ? `__${screen.display_mode}__` : (screen.presentation_id ?? "");
       }
 
       setScreens([...loadedScreens].sort((a, b) => {
@@ -107,8 +107,8 @@ export default function TVScreensPage() {
     if (savingId !== null) return;
 
     const selection = assignments[screenId] || "";
-    const isSchedule = selection === "__daily_schedule__";
-    const selectedId = isSchedule ? null : (selection || null);
+    const specialMode = ["daily_schedule", "dupr_season", "dupr_daily"].find(mode => selection === `__${mode}__`) ?? null;
+    const selectedId = specialMode ? null : (selection || null);
 
     setSavingId(screenId);
     setError("");
@@ -127,7 +127,7 @@ export default function TVScreensPage() {
         body: JSON.stringify({
           screen_id: screenId,
           presentation_id: selectedId,
-          display_mode: isSchedule ? "daily_schedule" : "slideshow",
+          display_mode: specialMode ?? "slideshow",
         }),
       });
 
@@ -430,6 +430,8 @@ export default function TVScreensPage() {
                         </option>
 
                         <option value="__daily_schedule__">Daily Operations Schedule</option>
+                        <option value="__dupr_season__">DUPR Season Standings</option>
+                        <option value="__dupr_daily__">Daily DUPR Standings</option>
 
                         {screen.presentation_id &&
                           !currentPresentation && (
@@ -491,7 +493,7 @@ export default function TVScreensPage() {
                       <p className="mt-3 text-xs text-zinc-400">
                         Currently assigned:{" "}
                         <span className="text-white">
-                          {screen.display_mode === "daily_schedule" ? "Daily Operations Schedule" : (currentPresentation?.name ||
+                          {screen.display_mode === "daily_schedule" ? "Daily Operations Schedule" : screen.display_mode === "dupr_season" ? "DUPR Season Standings" : screen.display_mode === "dupr_daily" ? "Daily DUPR Standings" : (currentPresentation?.name ||
                             (screen.presentation_id
                               ? "Unknown presentation"
                               : "None"))}
