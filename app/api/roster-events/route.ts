@@ -216,24 +216,37 @@ export async function PATCH(request: Request) {
       Array.isArray(body) ||
       typeof body.id !== "string" ||
       !uuidPattern.test(body.id) ||
-      !isRatingMethod(body.rating_method)
+      !(body.name === undefined || (typeof body.name === "string" && !!body.name.trim() && body.name.trim().length <= 120)) ||
+      !(body.event_date === undefined || body.event_date === null || typeof body.event_date === "string") ||
+      !(body.event_type === undefined || ["partnered", "individual"].includes(body.event_type)) ||
+      !(body.rating_method === undefined || isRatingMethod(body.rating_method))
     ) {
       return NextResponse.json(
         {
           error:
-            "Valid event ID and rating method are required",
+            "Invalid event update details",
         },
         { status: 400 }
       );
     }
 
+    let eventDate: string | null | undefined;
+    try {
+      eventDate = body.event_date === undefined ? undefined : validateEventDate(body.event_date);
+    } catch {
+      return NextResponse.json({ error: "Invalid event date" }, { status: 400 });
+    }
+    const updates: Record<string, string | null> = {};
+    if (body.name !== undefined) updates.name = body.name.trim();
+    if (eventDate !== undefined) updates.event_date = eventDate;
+    if (body.event_type !== undefined) updates.event_type = body.event_type;
+    if (body.rating_method !== undefined) updates.rating_method = body.rating_method;
+    if (!Object.keys(updates).length) return NextResponse.json({error:"No changes provided"},{status:400});
     const db = getTVDatabase();
 
     const { data, error } = await db
       .from("roster_events")
-      .update({
-        rating_method: body.rating_method,
-      })
+      .update(updates)
       .eq("id", body.id)
       .select(eventFields)
       .maybeSingle();
