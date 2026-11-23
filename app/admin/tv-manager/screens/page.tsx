@@ -13,6 +13,7 @@ type TVScreen = {
   assigned_content: unknown;
   is_active: boolean;
   presentation_id: string | null;
+  short_code: string | null;
 };
 
 type Presentation = {
@@ -77,7 +78,11 @@ export default function TVScreensPage() {
           screen.presentation_id ?? "";
       }
 
-      setScreens(loadedScreens);
+      setScreens([...loadedScreens].sort((a, b) => {
+        const aNumber = Number(a.name.match(/^TV (\d+)$/)?.[1] ?? Infinity);
+        const bNumber = Number(b.name.match(/^TV (\d+)$/)?.[1] ?? Infinity);
+        return aNumber - bNumber || a.name.localeCompare(b.name);
+      }));
       setPresentations(loadedPresentations);
       setAssignments(initialAssignments);
       setMessages({});
@@ -258,7 +263,7 @@ export default function TVScreensPage() {
               </h2>
 
               <p className="mt-2 text-sm text-zinc-400">
-                Assign presentations to individual TVs.
+                TVs are listed in numerical order, with direct display links. Assign presentations to individual TVs.
                 Multiple TVs can play the same presentation.
               </p>
             </div>
@@ -459,6 +464,17 @@ export default function TVScreensPage() {
                       </p>
                     </div>
 
+                    {screen.short_code && (
+                      <a
+                        href={`/${encodeURIComponent(screen.short_code)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-5 block w-full rounded-lg border border-yellow-400 px-4 py-3 text-center text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black"
+                      >
+                        Open /{screen.short_code} ↗
+                      </a>
+                    )}
+
                     <button
                       type="button"
                       onClick={() =>
@@ -468,7 +484,7 @@ export default function TVScreensPage() {
                         launchingId !== null ||
                         !screen.is_active
                       }
-                      className="mt-5 block w-full rounded-lg border border-yellow-400 px-4 py-3 text-center text-sm font-bold text-yellow-400 transition hover:bg-yellow-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-3 block w-full rounded-lg border border-zinc-700 px-4 py-3 text-center text-sm font-bold text-zinc-300 transition hover:border-yellow-400 hover:text-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isLaunching
                         ? "Launching TV..."
