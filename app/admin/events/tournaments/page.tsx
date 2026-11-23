@@ -17,6 +17,22 @@ export default function TournamentManagementPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  async function changePublish(t: Tournament) {
+    if (busyId) return;
+    const publish = t.status !== "published";
+    if (publish && !window.confirm(`Publish ${t.name} to the ZZ2 Vercel tournament page? The PBK websites are not connected yet.`)) return;
+    setBusyId(t.id); setNotice(""); setError("");
+    try {
+      const response = await fetch(`/api/tournaments/${t.id}/publish`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({publish}) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to change publication status.");
+      setTournaments(previous => previous.map(row => row.id === t.id ? {...row, status: result.tournament.status} : row));
+      setNotice(`${t.name} ${publish ? "published to the ZZ2 Vercel preview" : "unpublished"}.`);
+    } catch (reason) {setError(reason instanceof Error ? reason.message : "Unable to change publication status.");}
+    finally {setBusyId(null);}
+  }
   useEffect(() => {
     let active = true;
     fetch("/api/tournaments", { cache: "no-store" })
@@ -52,6 +68,7 @@ export default function TournamentManagementPage() {
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">Create tournaments, manage multiple facilities, and publish events to ZZ2 Pickleball and PBK Northwest.</p>
           <Link href="/admin/events/tournaments/new" className="mt-5 inline-flex rounded-xl bg-yellow-400 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-yellow-300">+ Create Tournament</Link>
         </section>
+        {notice && <p role="status" className="rounded-xl border border-green-500/40 p-4 text-green-300">{notice}</p>}
         {error && <p role="alert" className="rounded-xl border border-red-500/40 p-4 text-red-300">{error}</p>}
         <section className="grid gap-4 sm:grid-cols-4">
           {[
@@ -78,6 +95,7 @@ export default function TournamentManagementPage() {
                     <span className="rounded-full border border-zinc-600 px-3 py-1 text-xs font-semibold uppercase text-zinc-300">{t.status}</span>
                   </div>
                   <p className="mt-2 text-sm text-zinc-400">{t.tournament_facilities?.name ?? "Facility not assigned"} · {t.start_date}{t.end_date !== t.start_date ? " – " + t.end_date : ""}</p>
+                  <div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={!!busyId} onClick={() => changePublish(t)} className="rounded-lg bg-yellow-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-50">{busyId === t.id ? "Saving…" : t.status === "published" ? "Unpublish" : "Publish to ZZ2 Preview"}</button>{t.status === "published" && <Link href={`/zz2/tournaments/${t.id}`} target="_blank" className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-white">View Public Page</Link>}</div>
                 </div>
               ))}</div>}
           </section>
