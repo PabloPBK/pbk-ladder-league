@@ -68,7 +68,7 @@ export async function GET() {
         db
           .from("tv_screens")
           .select(
-            "id, name, location, display_mode, slide_duration, assigned_content, is_active, presentation_id"
+            "id, name, location, display_mode, slide_duration, assigned_content, is_active, presentation_id, short_code"
           )
           .order("created_at", { ascending: true }),
 
