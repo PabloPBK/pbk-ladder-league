@@ -45,6 +45,7 @@ type PlayerData = {
   screen: {
     id: string;
     name: string;
+    revision?: string | null;
     display_mode?: "single" | "slideshow" | "daily_schedule" | "dupr_season" | "dupr_daily" | null;
     slide_duration?: number | null;
   };
@@ -512,6 +513,7 @@ const isPublicDisplay = Boolean(publicShortCode);
         }
 
         playerRef.current = nextPlayer;
+        lastRevision = nextPlayer.screen.revision ?? lastRevision;
         setPlayer(nextPlayer);
         setError("");
       } catch (err) {
@@ -562,7 +564,7 @@ const isPublicDisplay = Boolean(publicShortCode);
           await loadPlayer();
         }
       } catch { /* Daily fallback still refreshes the presentation. */ }
-    }, 5 * 60 * 1000);
+    }, 30 * 1000);
 
     const dailyRefresh = window.setInterval(() => {
       void loadPlayer();
