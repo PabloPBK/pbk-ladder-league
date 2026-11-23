@@ -395,7 +395,7 @@ const isPublicDisplay = Boolean(publicShortCode);
     setCurrentIndex(next);
   }, []);
 
-  // Refresh presentation and roster data every 30 seconds.
+  // Refresh presentation and roster data every 2 minutes to limit Supabase requests.
   useEffect(() => {
     let cancelled = false;
     let inFlight = false;
@@ -531,7 +531,7 @@ const isPublicDisplay = Boolean(publicShortCode);
 
     const interval = window.setInterval(() => {
       void loadPlayer();
-    }, 30000);
+    }, 120000);
 
     return () => {
       cancelled = true;
