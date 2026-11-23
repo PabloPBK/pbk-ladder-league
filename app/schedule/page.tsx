@@ -103,6 +103,8 @@ export default function LobbySchedulePage() {
 
   useEffect(() => {
     let active = true;
+    let revision: string | null = null;
+    let scheduleDate: string | null = null;
 
     async function loadSchedule() {
       try {
@@ -118,6 +120,8 @@ export default function LobbySchedulePage() {
 
         if (active) {
           setSchedule(result.schedule_data);
+          revision = result.updated_at ?? null;
+          scheduleDate = result.schedule_data?.schedule_date ?? null;
           setError("");
         }
       } catch {
@@ -131,10 +135,20 @@ export default function LobbySchedulePage() {
 
     loadSchedule();
 
-    // Keep the local clock and event transitions responsive without polling Supabase every 30 seconds.
-    // Check for staff-published schedule changes every 5 minutes; daily rollover is
-    // handled by the schedule API on the first request after midnight.
-    const refresh = window.setInterval(loadSchedule, 5 * 60 * 1000);
+    // Poll only the small revision field, not the full schedule payload.
+    // A changed revision or a new Lynnwood calendar day loads the full schedule.
+    const checkRevision = async () => {
+      try {
+        const response = await fetch("/api/facility-schedule?revision_only=1", {cache:"no-store"});
+        if (!response.ok) return;
+        const result = await response.json();
+        if (!active) return;
+        if (result.revision !== revision || result.date !== scheduleDate) {
+          await loadSchedule();
+        }
+      } catch { /* Keep the last displayed schedule on network errors. */ }
+    };
+    const refresh = window.setInterval(checkRevision, 5 * 60 * 1000);
 
     return () => {
       active = false;
