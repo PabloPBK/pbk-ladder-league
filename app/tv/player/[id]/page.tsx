@@ -395,7 +395,8 @@ const isPublicDisplay = Boolean(publicShortCode);
     setCurrentIndex(next);
   }, []);
 
-  // Refresh presentation and roster data every 2 minutes to limit Supabase requests.
+  // Static displays refresh every 23 hours (before 24-hour signed media URLs expire).
+  // Live roster displays refresh every 2 minutes. Slide rotation is entirely local.
   useEffect(() => {
     let cancelled = false;
     let inFlight = false;
@@ -530,12 +531,23 @@ const isPublicDisplay = Boolean(publicShortCode);
     void loadPlayer();
 
     const interval = window.setInterval(() => {
-      void loadPlayer();
+      const current = playerRef.current;
+      const hasLiveRoster = current?.slides.some(
+        (slide) => slide.media_type === "roster_teams" ||
+          slide.media_type === "roster_free_agents"
+      );
+      // Retry failed initial loads; otherwise skip routine static queries.
+      if (!current || hasLiveRoster) void loadPlayer();
     }, 120000);
+
+    const dailyRefresh = window.setInterval(() => {
+      void loadPlayer();
+    }, 23 * 60 * 60 * 1000);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.clearInterval(dailyRefresh);
     };
 }, [screenId, token, publicShortCode, isPublicDisplay]);
   // Advance images and roster pages using saved durations.
