@@ -208,7 +208,8 @@ function LiveRosterDisplay({
             {columns.map((column, columnIndex) => (
               <div
                 key={columnIndex}
-                className="flex min-w-0 flex-col gap-[1vh]"
+                className="grid min-h-0 min-w-0 gap-[1.2vh]"
+                style={{ gridTemplateRows: `repeat(${column.length}, minmax(0, 1fr))` }}
               >
                 {column.map((entry) => {
                   if (isTeams) {
@@ -217,7 +218,7 @@ function LiveRosterDisplay({
                     return (
                       <div
                         key={team.id}
-                        className="flex h-[clamp(66px,8vh,98px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
+                        className="flex h-full min-h-0 min-w-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
                       >
                         <div className="flex h-[clamp(42px,4.5vw,70px)] w-[clamp(42px,4.5vw,70px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(20px,2vw,38px)] font-black text-black">
                           {team.rank}
@@ -225,7 +226,7 @@ function LiveRosterDisplay({
 
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-3">
-                            <p className="min-w-0 flex-1 truncate text-[clamp(15px,1.5vw,29px)] font-bold leading-tight">
+                            <p className="min-w-0 flex-1 truncate text-[clamp(17px,1.7vw,32px)] font-bold leading-tight">
                               {team.player1}
                             </p>
 
@@ -250,7 +251,7 @@ function LiveRosterDisplay({
                         </div>
 
                         <div className="shrink-0 border-l border-zinc-700 pl-[1vw] text-right">
-                          <p className="text-[clamp(21px,2.2vw,42px)] font-black leading-tight text-yellow-400">
+                          <p className="text-[clamp(24px,2.4vw,46px)] font-black leading-tight text-yellow-400">
                             {formatRating(
                               team.combined_rating
                             )}
@@ -269,7 +270,7 @@ function LiveRosterDisplay({
                   return (
                     <div
                       key={agent.id}
-                      className="flex h-[clamp(64px,7.8vh,94px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
+                      className="flex h-full min-h-0 min-w-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
                     >
                       <div className="flex h-[clamp(40px,4vw,65px)] w-[clamp(40px,4vw,65px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(19px,1.9vw,36px)] font-black text-black">
                         {agent.rank}
