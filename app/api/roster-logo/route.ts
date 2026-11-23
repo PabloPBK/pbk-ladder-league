@@ -11,8 +11,17 @@ export async function POST(request: NextRequest) {
   await requireStaffUser();
   const form = await request.formData();
   const eventId = form.get("event_id"), file = form.get("file");
-  if (!validId(eventId) || !(file instanceof File) || !["image/png","image/jpeg","image/webp"].includes(file.type) || !file.size || file.size > 4*1024*1024)
-    return NextResponse.json({error:"Select a PNG, JPG or WebP logo smaller than 4 MB."},{status:400});
+  if (!validId(eventId))
+    return NextResponse.json({error:"Select an event before uploading a logo."},{status:400});
+  if (!(file instanceof File))
+    return NextResponse.json({error:"No logo file was received. Please select an image again."},{status:400});
+  const allowedTypes = ["image/png","image/jpeg","image/webp"];
+  if (!allowedTypes.includes(file.type))
+    return NextResponse.json({error:"Unsupported logo format. Please use PNG, JPG, or WebP."},{status:400});
+  if (file.size === 0)
+    return NextResponse.json({error:"The selected logo file is empty."},{status:400});
+  if (file.size >= 4*1024*1024)
+    return NextResponse.json({error:"Logo must be smaller than 4 MB."},{status:400});
   const client=db();
   const {data:event,error:lookupError}=await client.from("roster_events").select("id,logo_storage_path").eq("id",eventId).maybeSingle();
   if(lookupError) throw lookupError;
