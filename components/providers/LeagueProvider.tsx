@@ -1,11 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -17,6 +19,7 @@ import {
   getPlayers,
   type DatabasePlayerRecord,
 } from "@/lib/data/players";
+import type { AppliedRow } from "@/lib/data/playerImport";
 import { generateNextRound } from "@/lib/ladder/generateNextRound";
 import type { GeneratedCourt } from "@/types/court";
 import type { Player } from "@/types/player";
@@ -71,6 +74,7 @@ type LeagueContextValue = {
 
   advanceToNextRound: () => void;
   reloadPlayers: () => Promise<void>;
+  prepareCheckIn: (rows: AppliedRow[], replaceSelection: boolean) => void;
   resetLeague: () => void;
 };
 
@@ -89,6 +93,7 @@ function createRuntimePlayer(
     id: runtimeId,
     name: databasePlayer.name,
     dupr: Number(databasePlayer.dupr),
+    savedDupr: Number(databasePlayer.dupr),
     duprId: databasePlayer.dupr_id ?? null,
     checkedIn: false,
     wins: 0,
@@ -104,6 +109,7 @@ function resetPlayerForNewEvent(
 ): Player {
   return {
     ...player,
+    dupr: player.savedDupr ?? player.dupr,
     checkedIn: false,
     wins: 0,
     losses: 0,
@@ -155,9 +161,12 @@ function createPairing(
   return selectedPairing;
 }
 
+const leagueStaffPages = new Set(["/admin", "/admin/players", "/admin/scores", "/setup", "/walking"]);
+
 export function LeagueProvider({
   children,
 }: LeagueProviderProps) {
+  const needsPlayers = leagueStaffPages.has(usePathname());
   const [players, setPlayers] = useState<Player[]>([]);
 
   const [playerDatabaseIds, setPlayerDatabaseIds] =
@@ -184,54 +193,94 @@ export function LeagueProvider({
   const [activeEvent, setActiveEvent] =
     useState<LeagueEventRecord | null>(null);
 
+  // Court components use numeric IDs within a browser session. Allocate them
+  // from UUIDs so a refresh or rating change cannot move a selection to a different player.
+  const runtimeIds = useRef(new Map<string, number>());
+  const playerLoadVersion = useRef(0);
+
+  const toRuntimePlayers = useCallback((records: DatabasePlayerRecord[]) => {
+    const newIds: PlayerDatabaseIds = {};
+    const mapped = records.map((record) => {
+      let runtimeId = runtimeIds.current.get(record.id);
+      if (runtimeId === undefined) {
+        runtimeId = runtimeIds.current.size + 1;
+        runtimeIds.current.set(record.id, runtimeId);
+        newIds[runtimeId] = record.id;
+      }
+      return createRuntimePlayer(record, runtimeId);
+    });
+    if (Object.keys(newIds).length > 0) {
+      setPlayerDatabaseIds((current) => ({ ...current, ...newIds }));
+    }
+    return mapped;
+  }, []);
+
   const reloadPlayers = useCallback(async () => {
+    const version = ++playerLoadVersion.current;
     try {
       setIsLoadingPlayers(true);
       setPlayerLoadError("");
+      const records = await getPlayers();
+      if (version !== playerLoadVersion.current) return;
 
-      const databasePlayers = await getPlayers();
-
-      const runtimePlayers = databasePlayers.map(
-        (databasePlayer, index) =>
-          createRuntimePlayer(
-            databasePlayer,
-            index + 1,
-          ),
-      );
-
-      const databaseIds =
-        databasePlayers.reduce<PlayerDatabaseIds>(
-          (idMap, databasePlayer, index) => {
-            idMap[index + 1] = databasePlayer.id;
-            return idMap;
-          },
-          {},
-        );
-
-      setPlayers(runtimePlayers);
-      setPlayerDatabaseIds(databaseIds);
+      const refreshed = toRuntimePlayers(records);
+      const byId = new Map(refreshed.map((player) => [player.id, player]));
+      setPlayers((current) => {
+        const checkedIn = current.flatMap((player) => {
+          const latest = byId.get(player.id);
+          return player.checkedIn && latest
+            ? [{ ...latest, checkedIn: true, dupr: player.dupr }]
+            : [];
+        });
+        const checkedIds = new Set(checkedIn.map((player) => player.id));
+        return [...checkedIn, ...refreshed.filter((player) => !checkedIds.has(player.id))];
+      });
     } catch (error) {
-      console.error(
-        "Unable to load players:",
-        error,
-      );
-
-      setPlayers([]);
-      setPlayerDatabaseIds({});
-
-      setPlayerLoadError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load players.",
-      );
+      if (version !== playerLoadVersion.current) return;
+      setPlayerLoadError(error instanceof Error ? error.message : "Unable to load players.");
     } finally {
-      setIsLoadingPlayers(false);
+      if (version === playerLoadVersion.current) setIsLoadingPlayers(false);
     }
-  }, []);
+  }, [toRuntimePlayers]);
+
+  const prepareCheckIn = useCallback((rows: AppliedRow[], replaceSelection: boolean) => {
+    const resolved = rows.flatMap(({ player, rating }) => player ? [{ player, rating }] : []);
+    if (resolved.length === 0) return;
+    const refreshed = toRuntimePlayers(resolved.map(({ player }) => player));
+    const selected = refreshed.map((player, index) => ({
+      ...player,
+      checkedIn: true,
+      dupr: resolved[index].rating ?? player.dupr,
+    }));
+    const selectedById = new Map(selected.map((player) => [player.id, player]));
+
+    setPlayers((current) => {
+      if (replaceSelection) {
+        return [
+          ...selected,
+          ...current.filter((player) => !selectedById.has(player.id))
+            .map((player) => player.checkedIn ? { ...player, checkedIn: false, dupr: player.savedDupr ?? player.dupr } : player),
+        ];
+      }
+
+      const checkedIn = current.filter((player) => player.checkedIn);
+      const checkedIds = new Set(checkedIn.map((player) => player.id));
+      return [
+        ...checkedIn.map((player) => selectedById.get(player.id) ?? player),
+        ...selected.filter((player) => !checkedIds.has(player.id)),
+        ...current.filter((player) => !player.checkedIn && !selectedById.has(player.id)),
+      ];
+    });
+  }, [toRuntimePlayers]);
 
   useEffect(() => {
-    void reloadPlayers();
-  }, [reloadPlayers]);
+    if (!needsPlayers) return;
+    let canceled = false;
+    queueMicrotask(() => {
+      if (!canceled) void reloadPlayers();
+    });
+    return () => { canceled = true; };
+  }, [needsPlayers, reloadPlayers]);
 
   const setCourts = useCallback(
     (newCourts: GeneratedCourt[]) => {
@@ -448,6 +497,7 @@ export function LeagueProvider({
       saveCourtResult,
       advanceToNextRound,
       reloadPlayers,
+      prepareCheckIn,
       resetLeague,
     }),
     [
@@ -465,6 +515,7 @@ export function LeagueProvider({
       saveCourtResult,
       advanceToNextRound,
       reloadPlayers,
+      prepareCheckIn,
       resetLeague,
     ],
   );

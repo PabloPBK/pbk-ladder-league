@@ -48,6 +48,7 @@ function getLocalDateValue() {
 function resetPlayerForSetup(player: Player): Player {
   return {
     ...player,
+    dupr: player.savedDupr ?? player.dupr,
     checkedIn: false,
     wins: 0,
     losses: 0,

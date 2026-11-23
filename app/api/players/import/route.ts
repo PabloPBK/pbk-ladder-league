@@ -1,212 +1,53 @@
 import { NextResponse } from "next/server";
 
+import { readImportRequest } from "@/lib/server/player-import-request";
+import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-type ImportPlayerInput = {
-  name?: string;
-  dupr?: number | null;
-};
-
-type ImportPlayersRequest = {
-  players?: ImportPlayerInput[];
-  updateExisting?: boolean;
-};
-
-type ExistingPlayer = {
-  id: string;
-  name: string;
-  dupr: number | string;
-};
-
-function normalizeName(value: string) {
-  return value
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("en-US");
-}
-
 export async function POST(request: Request) {
+  let staff;
   try {
-    const body =
-      (await request.json()) as ImportPlayersRequest;
-
-    const submittedPlayers = body.players ?? [];
-    const updateExisting =
-      body.updateExisting ?? true;
-
-    if (!Array.isArray(submittedPlayers)) {
-      return NextResponse.json(
-        { error: "A players list is required." },
-        { status: 400 },
-      );
-    }
-
-    if (submittedPlayers.length === 0) {
-      return NextResponse.json(
-        { error: "Select at least one player to import." },
-        { status: 400 },
-      );
-    }
-
-    if (submittedPlayers.length > 500) {
-      return NextResponse.json(
-        {
-          error:
-            "A maximum of 500 players can be imported at one time.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const uniquePlayers = new Map<
-      string,
-      { name: string; dupr: number | null }
-    >();
-
-    for (const player of submittedPlayers) {
-      const name = player.name
-        ?.trim()
-        .replace(/\s+/g, " ");
-      const dupr = player.dupr === null || player.dupr === undefined ? null : Number(player.dupr);
-
-      if (!name) {
-        return NextResponse.json(
-          { error: "Every imported player needs a name." },
-          { status: 400 },
-        );
-      }
-
-      if (
-        dupr !== null && (!Number.isFinite(dupr) ||
-        dupr < 0 ||
-        dupr > 8)
-      ) {
-        return NextResponse.json(
-          {
-            error: `${name} needs a rating between 0 and 8 (0 means unrated).`,
-          },
-          { status: 400 },
-        );
-      }
-
-      uniquePlayers.set(normalizeName(name), {
-        name,
-        dupr,
-      });
-    }
-
-    const { data: existingData, error: existingError } =
-      await supabaseAdmin
-        .from("players")
-        .select("id, name, dupr");
-
-    if (existingError) {
-      throw existingError;
-    }
-
-    const existingPlayers =
-      (existingData ?? []) as ExistingPlayer[];
-
-    const existingByName = new Map(
-      existingPlayers.map((player) => [
-        normalizeName(player.name),
-        player,
-      ]),
-    );
-
-    const playersToCreate: {
-      name: string;
-      dupr: number;
-    }[] = [];
-
-    const playersToUpdate: {
-      id: string;
-      name: string;
-      dupr: number | null;
-    }[] = [];
-
-    let skipped = 0;
-
-    uniquePlayers.forEach((player, key) => {
-      const existing = existingByName.get(key);
-
-      if (!existing) {
-        playersToCreate.push({ ...player, dupr: player.dupr ?? 0 });
-        return;
-      }
-
-      if (!updateExisting) {
-        skipped += 1;
-        return;
-      }
-
-      playersToUpdate.push({
-        id: existing.id,
-        name: player.name,
-        dupr: player.dupr,
-      });
-    });
-
-    let created: ExistingPlayer[] = [];
-
-    if (playersToCreate.length > 0) {
-      const { data, error } = await supabaseAdmin
-        .from("players")
-        .insert(playersToCreate)
-        .select("id, name, dupr");
-
-      if (error) {
-        throw error;
-      }
-
-      created = (data ?? []) as ExistingPlayer[];
-    }
-
-    const updated = await Promise.all(
-      playersToUpdate.map(async (player) => {
-        const { data, error } = await supabaseAdmin
-          .from("players")
-          .update({
-            name: player.name,
-            ...(player.dupr === null ? {} : { dupr: player.dupr }),
-          })
-          .eq("id", player.id)
-          .select("id, name, dupr")
-          .single();
-
-        if (error) {
-          throw error;
-        }
-
-        return data as ExistingPlayer;
-      }),
-    );
-
-    return NextResponse.json(
-      {
-        created: created.length,
-        updated: updated.length,
-        skipped,
-        players: [...created, ...updated].map(
-          (player) => ({
-            ...player,
-            dupr: Number(player.dupr),
-          }),
-        ),
-      },
-      { status: 200 },
-    );
+    staff = await requireStaffUser();
   } catch (error) {
-    console.error("Unable to import players:", error);
+    const reason = error instanceof Error ? error.message : "";
+    if (reason === "AUTH_REQUIRED") {
+      return NextResponse.json({ error: "Sign in as staff to import players." }, { status: 401 });
+    }
+    if (reason === "STAFF_ACCESS_DENIED") {
+      return NextResponse.json({ error: "Only staff can import players." }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Unable to verify staff access." }, { status: 500 });
+  }
 
+  let input;
+  try {
+    input = readImportRequest(await request.json());
+  } catch (error) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to import players.",
-      },
-      { status: 500 },
+      { error: error instanceof Error ? error.message : "Invalid roster request." },
+      { status: 400 },
     );
   }
+
+  const { data, error } = await supabaseAdmin.rpc("prepare_player_import", {
+    p_rows: input.rows,
+    p_actor: staff.id,
+    p_request_id: input.mode === "commit" ? input.requestId : null,
+  });
+
+  if (error) {
+    if (error.code === "P0001") {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "An identifier is already assigned. Review the roster again." },
+        { status: 409 },
+      );
+    }
+    console.error("Player import failed", { code: error.code });
+    return NextResponse.json({ error: "Unable to prepare the roster." }, { status: 500 });
+  }
+
+  return NextResponse.json({ rows: data }, { headers: { "Cache-Control": "no-store" } });
 }

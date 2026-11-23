@@ -2,6 +2,7 @@ export type Player = {
   id: number;
   name: string;
   dupr: number;
+  savedDupr?: number;
   duprId?: string | null;
   checkedIn: boolean;
 

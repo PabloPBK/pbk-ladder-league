@@ -8,121 +8,44 @@ import {
   type DragEvent,
 } from "react";
 
+import { PlayerImportReview } from "@/components/admin/PlayerImportReview";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { getPodPlayImportFields, parsePodPlayCsv, type ParsedCsvRow } from "@/lib/data/podplayRoster";
 import { useLeague } from "../../../components/providers/LeagueProvider";
-import { importPlayers } from "@/lib/data/playerImport";
+import {
+  importPlayers,
+  PlayerImportError,
+  rosterSelectionError,
+  type ImportDecision,
+  type ImportRow,
+  type PreviewRow,
+} from "@/lib/data/playerImport";
 
 type ImportedRosterRow = {
   rowId: number;
   name: string;
   email: string;
+  duprId: string;
   phone: string;
   invitationStatus: string;
   waitlistEnrollmentTime: string;
   duprText: string;
+  matchedRating?: number;
   selected: boolean;
 };
 
-type ParsedCsvRow = Record<string, string>;
-
 const FULL_NAME = "Full Name";
-const EMAIL = "Email";
 const PHONE = "Phone Number";
 const INVITATION_STATUS = "Invitation Status";
 const WAITLIST_TIME = "Waitlist Enrollment Time";
-const DOUBLES_RATING = "Ratings Doubles";
-const RATING_HEADERS = ["Ratings Doubles", "DUPR Doubles", "DUPR Doubles Rating", "Doubles Rating", "DUPR Rating", "DUPR", "Doubles DUPR"];
-function getRosterRating(row: ParsedCsvRow): string {
-  const normalized = new Map(Object.entries(row).map(([key, value]) => [key.trim().toLowerCase(), value]));
-  for (const header of RATING_HEADERS) {
-    const value = normalized.get(header.toLowerCase());
-    if (value !== undefined) return /^(not rated|unrated|n\/a|-)$/i.test(value.trim()) ? "" : value.trim();
-  }
-  return "";
-}
 
-function normalizeName(value: string) {
-  return value
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("en-US");
-}
-
-function parseCsv(text: string): ParsedCsvRow[] {
-  const cleanedText = text.replace(/^\uFEFF/, "");
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let insideQuotes = false;
-
-  for (let index = 0; index < cleanedText.length; index += 1) {
-    const character = cleanedText[index];
-    const nextCharacter = cleanedText[index + 1];
-
-    if (character === '"') {
-      if (insideQuotes && nextCharacter === '"') {
-        cell += '"';
-        index += 1;
-      } else {
-        insideQuotes = !insideQuotes;
-      }
-      continue;
-    }
-
-    if (character === "," && !insideQuotes) {
-      row.push(cell);
-      cell = "";
-      continue;
-    }
-
-    if (
-      (character === "\n" || character === "\r") &&
-      !insideQuotes
-    ) {
-      if (
-        character === "\r" &&
-        nextCharacter === "\n"
-      ) {
-        index += 1;
-      }
-
-      row.push(cell);
-      cell = "";
-
-      if (row.some((value) => value.trim())) {
-        rows.push(row);
-      }
-
-      row = [];
-      continue;
-    }
-
-    cell += character;
-  }
-
-  row.push(cell);
-
-  if (row.some((value) => value.trim())) {
-    rows.push(row);
-  }
-
-  const [headers, ...dataRows] = rows;
-
-  if (!headers) {
-    return [];
-  }
-
-  return dataRows.map((values) =>
-    headers.reduce<ParsedCsvRow>(
-      (record, header, columnIndex) => {
-        record[header.trim()] =
-          values[columnIndex]?.trim() ?? "";
-        return record;
-      },
-      {},
-    ),
-  );
-}
+type ReviewSession = {
+  kind: "roster" | "walk-in";
+  rows: ImportRow[];
+  previews: PreviewRow[];
+  decisions: Record<number, ImportDecision>;
+  requestId: string;
+};
 
 function isWaitlisted(row: ParsedCsvRow) {
   const status =
@@ -142,10 +65,17 @@ function parseDupr(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 8 ? parsed : null;
 }
 
+function printRating(row: ImportedRosterRow) {
+  const rating = row.duprText.trim() ? parseDupr(row.duprText) : row.matchedRating;
+  return rating === undefined ? "Saved rating" : rating ? rating.toFixed(2) : "Unrated";
+}
+
 export default function AdminPlayersPage() {
   const {
     players,
-    setPlayers,
+    prepareCheckIn,
+    isLoadingPlayers,
+    playerLoadError,
     reloadPlayers,
     playerDatabaseIds,
   } = useLeague();
@@ -160,8 +90,6 @@ export default function AdminPlayersPage() {
   >("all");
   const [isDraggingFile, setIsDraggingFile] =
     useState(false);
-  const [updateExisting, setUpdateExisting] =
-    useState(true);
   const [isImporting, setIsImporting] =
     useState(false);
   const [errorMessage, setErrorMessage] =
@@ -173,8 +101,12 @@ export default function AdminPlayersPage() {
     useState("");
   const [walkInDupr, setWalkInDupr] =
     useState("");
-  const [isAddingWalkIn, setIsAddingWalkIn] =
-    useState(false);
+  const [walkInEmail, setWalkInEmail] = useState("");
+  const [walkInDuprId, setWalkInDuprId] = useState("");
+  const [review, setReview] = useState<ReviewSession | null>(null);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewCanRefresh, setReviewCanRefresh] = useState(false);
+  const [reviewRetryOnly, setReviewRetryOnly] = useState(false);
   const [duprIdDrafts, setDuprIdDrafts] = useState<Record<number, string>>({});
   const [savingDuprPlayerId, setSavingDuprPlayerId] = useState<number | null>(null);
 
@@ -247,12 +179,13 @@ export default function AdminPlayersPage() {
   }, [rosterRows, searchText, statusFilter]);
 
   async function processRosterFile(file: File) {
+    if (isImporting) return;
     try {
       setErrorMessage("");
       setSuccessMessage("");
 
       const text = await file.text();
-      const parsedRows = parseCsv(text);
+      const parsedRows = parsePodPlayCsv(text);
 
       if (parsedRows.length === 0) {
         throw new Error(
@@ -280,13 +213,11 @@ export default function AdminPlayersPage() {
           return {
             rowId: index + 1,
             name,
-            email: row[EMAIL] ?? "",
+            ...getPodPlayImportFields(row),
             phone: row[PHONE] ?? "",
             invitationStatus: status,
             waitlistEnrollmentTime:
               row[WAITLIST_TIME] ?? "",
-            duprText:
-              getRosterRating(row),
             selected:
               Boolean(name) &&
               status.toUpperCase() === "ACCEPTED" &&
@@ -304,7 +235,7 @@ export default function AdminPlayersPage() {
       });
 
       if (mappedRows.every((row) => row.duprText === "")) {
-        setErrorMessage("No DUPR doubles ratings were found in this CSV. Existing database ratings will be preserved; enter ratings manually or upload a CSV with a DUPR doubles rating column.");
+        setErrorMessage("No DUPR doubles ratings were found in this CSV. Check-in will use saved ratings unless you enter a rating for tonight.");
       }
       setFileName(file.name);
       setRosterRows(mappedRows);
@@ -350,6 +281,7 @@ export default function AdminPlayersPage() {
   }
 
   function selectConfirmedPlayers() {
+    if (isImporting) return;
     setRosterRows((currentRows) =>
       currentRows.map((row) => {
         const waitlisted =
@@ -367,6 +299,7 @@ export default function AdminPlayersPage() {
   }
 
   function clearPlayerSelection() {
+    if (isImporting) return;
     setRosterRows((currentRows) =>
       currentRows.map((row) => ({
         ...row,
@@ -379,6 +312,7 @@ export default function AdminPlayersPage() {
     rowId: number,
     changes: Partial<ImportedRosterRow>,
   ) {
+    if (isImporting) return;
     setRosterRows((currentRows) =>
       currentRows.map((row) =>
         row.rowId === rowId
@@ -389,6 +323,7 @@ export default function AdminPlayersPage() {
   }
 
   function moveRosterPlayer(rowId: number, direction: "up" | "down") {
+    if (isImporting) return;
     setRosterRows((currentRows) => {
       const currentIndex = currentRows.findIndex((row) => row.rowId === rowId);
       if (currentIndex < 0 || !currentRows[currentIndex]?.selected) return currentRows;
@@ -407,69 +342,92 @@ export default function AdminPlayersPage() {
     });
   }
 
-  async function handleImportSelected() {
-    if (
-      selectedRows.length === 0 ||
-      selectedInvalidCount > 0 ||
-      isImporting
-    ) {
-      return;
+  async function openReview(kind: ReviewSession["kind"], rows: ImportRow[]) {
+    setIsImporting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setReviewError("");
+    setReviewCanRefresh(false);
+    setReviewRetryOnly(false);
+    try {
+      const previews = await importPlayers({ mode: "preview", rows });
+      const decisions: Record<number, ImportDecision> = {};
+      for (const preview of previews) {
+        if (preview.status === "match" && preview.player) {
+          decisions[preview.rowId] = { action: "match", playerId: preview.player.id };
+        }
+      }
+      setReview({ kind, rows, previews, decisions, requestId: crypto.randomUUID() });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to review the selected players.";
+      if (review) {
+        setReviewError(message);
+        setReviewCanRefresh(true);
+      } else {
+        setErrorMessage(message);
+      }
+    } finally {
+      setIsImporting(false);
     }
+  }
+
+  function handleImportSelected() {
+    if (!selectedRows.length || selectedInvalidCount > 0 || isImporting) return;
+    void openReview("roster", selectedRows.map((row) => ({
+      rowId: row.rowId,
+      name: row.name,
+      email: row.email || null,
+      duprId: row.duprId || null,
+      rating: row.duprText.trim() ? Number(row.duprText) : null,
+    })));
+  }
+
+  function choosePlayer(rowId: number, decision: ImportDecision) {
+    setReview((current) => current && {
+      ...current,
+      decisions: { ...current.decisions, [rowId]: decision },
+    });
+  }
+
+  async function applyReview() {
+    if (!review || isImporting || rosterSelectionError(review.rows, review.decisions)) return;
+    const rows = review.rows.map((row) => ({ ...row, decision: review.decisions[row.rowId] }));
+    if (rows.some((row) => !row.decision)) return;
 
     try {
       setIsImporting(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-
-      const selectedNames = new Set(
-        selectedRows.map((row) =>
-          normalizeName(row.name),
-        ),
-      );
-
-      const result = await importPlayers({
-        players: selectedRows.map((row) => ({
-          name: row.name,
-          dupr: row.duprText.trim() === "" ? null : Number(row.duprText),
-        })),
-        updateExisting,
-      });
-
-      await reloadPlayers();
-
-      const selectedOrder = new Map(
-        selectedRows.map((row, index) => [normalizeName(row.name), index]),
-      );
-
-      window.setTimeout(() => {
-        setPlayers((currentPlayers) =>
-          currentPlayers
-            .map((player) => ({
-              ...player,
-              checkedIn: selectedNames.has(normalizeName(player.name)),
-            }))
-            .sort((a, b) => {
-              const orderA = selectedOrder.get(normalizeName(a.name));
-              const orderB = selectedOrder.get(normalizeName(b.name));
-              if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
-              if (orderA !== undefined) return -1;
-              if (orderB !== undefined) return 1;
-              return b.dupr - a.dupr || a.name.localeCompare(b.name);
-            }),
-        );
-      }, 0);
-
-      setSuccessMessage(
-        `${selectedRows.length} playing player${
-          selectedRows.length === 1 ? "" : "s"
-        } prepared. ${result.created} new, ${result.updated} updated, ${result.skipped} skipped.`,
-      );
+      setReviewError("");
+      setReviewCanRefresh(false);
+      const applied = await importPlayers({ mode: "commit", rows, requestId: review.requestId });
+      prepareCheckIn(applied, review.kind === "roster");
+      const checkedIn = applied.filter((row) => row.status !== "skipped").length;
+      const created = applied.filter((row) => row.status === "created").length;
+      const skipped = applied.length - checkedIn;
+      setSuccessMessage(`${checkedIn} checked in · ${created} new · ${skipped} skipped.`);
+      if (review.kind === "walk-in" && checkedIn) {
+        setWalkInName("");
+        setWalkInDupr("");
+        setWalkInEmail("");
+        setWalkInDuprId("");
+      }
+      if (review.kind === "roster") {
+        const byRow = new Map(applied.map((row) => [row.rowId, row]));
+        setRosterRows((current) => current.map((row) => {
+          const result = byRow.get(row.rowId);
+          if (!result) return row;
+          return {
+            ...row,
+            selected: result.status !== "skipped" && row.selected,
+            matchedRating: result.player ? Number(result.player.dupr) : undefined,
+          };
+        }));
+      }
+      setReview(null);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to import the selected players.",
-      );
+      const knownRejection = error instanceof PlayerImportError && error.status >= 400 && error.status < 500;
+      setReviewCanRefresh(knownRejection && error.status === 409);
+      setReviewRetryOnly(!knownRejection);
+      setReviewError(knownRejection ? error.message : "The roster may have been applied. Retry this same review to confirm.");
     } finally {
       setIsImporting(false);
     }
@@ -502,61 +460,30 @@ export default function AdminPlayersPage() {
     }
   }
 
-  async function handleAddWalkIn() {
-    const name = walkInName
-      .trim()
-      .replace(/\s+/g, " ");
-    const dupr = Number(walkInDupr);
-
+  function handleAddWalkIn() {
+    const name = walkInName.trim();
+    const rating = walkInDupr.trim() ? parseDupr(walkInDupr) : null;
     if (!name) {
       setErrorMessage("Enter the walk-in's name.");
       return;
     }
-
-    if (!Number.isFinite(dupr) || dupr < 0 || dupr > 8) {
-      setErrorMessage("Enter a rating from 0 to 8. Use 0 for an unrated walk-in.");
+    if (walkInDupr.trim() && rating === null) {
+      setErrorMessage("Enter a rating from 0 to 8, or leave it blank to use the saved rating.");
       return;
     }
-
-    try {
-      setIsAddingWalkIn(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-
-      await importPlayers({
-        players: [{ name, dupr }],
-        updateExisting: true,
-      });
-
-      await reloadPlayers();
-
-      window.setTimeout(() => {
-        setPlayers((currentPlayers) =>
-          currentPlayers.map((player) => ({
-            ...player,
-            checkedIn:
-              player.checkedIn ||
-              normalizeName(player.name) ===
-                normalizeName(name),
-          })),
-        );
-      }, 0);
-
-      setWalkInName("");
-      setWalkInDupr("");
-      setSuccessMessage(
-        `${name} was added and checked in.`,
-      );
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to add the walk-in.",
-      );
-    } finally {
-      setIsAddingWalkIn(false);
-    }
+    void openReview("walk-in", [{
+      rowId: 1,
+      name,
+      email: walkInEmail.trim() || null,
+      duprId: walkInDuprId.trim() || null,
+      rating,
+    }]);
   }
+
+  const reviewPlayers = players.flatMap((player) => {
+    const id = playerDatabaseIds[player.id];
+    return id ? [{ id, name: player.name, dupr: player.savedDupr ?? player.dupr, dupr_id: player.duprId ?? null }] : [];
+  });
 
   return (
     <AppLayout
@@ -564,6 +491,23 @@ export default function AdminPlayersPage() {
       description="Import the weekly PodPlay roster, select who is playing tonight, and add walk-ins."
     >
       <div className="mx-auto max-w-7xl space-y-6">
+        {review && (
+          <PlayerImportReview
+            rows={review.rows}
+            previews={review.previews}
+            decisions={review.decisions}
+            players={reviewPlayers}
+            busy={isImporting}
+            error={reviewError}
+            selectionError={rosterSelectionError(review.rows, review.decisions)}
+            canRefresh={reviewCanRefresh}
+            retryOnly={reviewRetryOnly}
+            onDecision={choosePlayer}
+            onClose={() => setReview(null)}
+            onRefresh={() => void openReview(review.kind, review.rows)}
+            onConfirm={() => void applyReview()}
+          />
+        )}
         <div className="flex flex-wrap gap-3">
           <Link
             href="/admin"
@@ -573,9 +517,14 @@ export default function AdminPlayersPage() {
           </Link>
         </div>
 
-        {errorMessage && (
+        {(errorMessage || playerLoadError) && (
           <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-300">
-            {errorMessage}
+            {errorMessage || playerLoadError}
+            {playerLoadError && (
+              <button type="button" onClick={() => void reloadPlayers()} className="ml-3 font-semibold underline">
+                Retry loading players
+              </button>
+            )}
           </div>
         )}
 
@@ -625,6 +574,7 @@ export default function AdminPlayersPage() {
           >
             <input
               type="file"
+              disabled={isImporting}
               accept=".csv,.txt,text/csv,text/plain"
               onChange={(event) =>
                 void handleFileChange(event)
@@ -690,19 +640,7 @@ export default function AdminPlayersPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <label className="flex items-center gap-2 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    checked={updateExisting}
-                    onChange={(event) =>
-                      setUpdateExisting(
-                        event.target.checked,
-                      )
-                    }
-                    className="h-4 w-4"
-                  />
-                  Update existing DUPR
-                </label>
+                <p className="text-sm text-zinc-400">Rating edits apply to tonight’s check-in.</p>
 
                 <button
                   type="button"
@@ -718,7 +656,7 @@ export default function AdminPlayersPage() {
                   disabled={
                     selectedRows.length === 0 ||
                     selectedInvalidCount > 0 ||
-                    isImporting
+                    isImporting || isLoadingPlayers || Boolean(playerLoadError)
                   }
                   onClick={() =>
                     void handleImportSelected()
@@ -726,8 +664,8 @@ export default function AdminPlayersPage() {
                   className="min-h-11 rounded-xl bg-blue-600 px-5 font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
                 >
                   {isImporting
-                    ? "Importing..."
-                    : `Import ${selectedRows.length} Selected`}
+                    ? "Loading review…"
+                    : `Review ${selectedRows.length} Selected`}
                 </button>
                 </div>
               </div>
@@ -936,7 +874,7 @@ export default function AdminPlayersPage() {
                       {courtPlayers.map((player) => (
                         <li key={player.rowId}>
                           <strong>{player.name}</strong>
-                          <span>{(parseDupr(player.duprText) ?? 0) > 0 ? Number(player.duprText).toFixed(2) : "Unrated"}</span>
+                          <span>{printRating(player)}</span>
                         </li>
                       ))}
                     </ol>
@@ -953,18 +891,36 @@ export default function AdminPlayersPage() {
           </h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            Existing players are updated; new players are created and checked in.
+            Find a returning player or confirm a new profile. Add an email or DUPR ID when available.
           </p>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
             <input
               type="text"
               value={walkInName}
               onChange={(event) =>
                 setWalkInName(event.target.value)
               }
+              aria-label="Walk-in name"
               placeholder="Player name"
               className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-blue-500"
+            />
+
+            <input
+              type="email"
+              aria-label="Walk-in email"
+              placeholder="Email (optional)"
+              value={walkInEmail}
+              onChange={(event) => setWalkInEmail(event.target.value)}
+              className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-950 px-4"
+            />
+            <input
+              type="text"
+              aria-label="Walk-in DUPR ID"
+              placeholder="DUPR ID (optional)"
+              value={walkInDuprId}
+              onChange={(event) => setWalkInDuprId(event.target.value)}
+              className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-950 px-4"
             />
 
             <input
@@ -976,21 +932,20 @@ export default function AdminPlayersPage() {
               onChange={(event) =>
                 setWalkInDupr(event.target.value)
               }
-              placeholder="DUPR (0 if unrated)"
+              aria-label="Walk-in rating for tonight"
+              placeholder="Rating for tonight (optional)"
               className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-blue-500"
             />
 
             <button
               type="button"
-              disabled={isAddingWalkIn}
+              disabled={isImporting || isLoadingPlayers || Boolean(playerLoadError)}
               onClick={() =>
                 void handleAddWalkIn()
               }
               className="min-h-12 rounded-xl bg-green-600 px-6 font-bold text-white transition hover:bg-green-500 disabled:bg-zinc-700"
             >
-              {isAddingWalkIn
-                ? "Adding..."
-                : "Add & Check In"}
+              Review Walk-In
             </button>
           </div>
         </section>
@@ -1001,18 +956,19 @@ export default function AdminPlayersPage() {
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             {players.map((player) => {
               const draft = duprIdDrafts[player.id] ?? player.duprId ?? "";
+              const savedRating = player.savedDupr ?? player.dupr;
               return (
                 <div key={player.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-bold text-white">{player.name}</p>
-                      <p className="text-xs text-zinc-500">Rating {player.dupr > 0 ? player.dupr.toFixed(2) : "Unrated"}</p>
+                      <p className="text-xs text-zinc-500">Rating {savedRating > 0 ? savedRating.toFixed(2) : "Unrated"}</p>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${draft ? "bg-green-500/15 text-green-300" : "bg-yellow-500/15 text-yellow-300"}`}>{draft ? "ID saved" : "Missing ID"}</span>
                   </div>
                   <div className="mt-3 flex gap-2">
                     <input value={draft} onChange={(event) => setDuprIdDrafts((current) => ({ ...current, [player.id]: event.target.value }))} placeholder="DUPR ID" className="min-h-10 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-white" />
-                    <button type="button" disabled={savingDuprPlayerId === player.id} onClick={() => void saveDuprId(player.id)} className="rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:bg-zinc-700">{savingDuprPlayerId === player.id ? "Saving..." : "Save"}</button>
+                    <button type="button" disabled={isImporting || isLoadingPlayers || savingDuprPlayerId === player.id} onClick={() => void saveDuprId(player.id)} className="rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:bg-zinc-700">{savingDuprPlayerId === player.id ? "Saving..." : "Save"}</button>
                   </div>
                 </div>
               );

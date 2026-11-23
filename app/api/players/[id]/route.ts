@@ -337,9 +337,10 @@ export async function PATCH(
       .select("id, name, dupr, dupr_id")
       .maybeSingle();
 
-    if (error) {
-      throw error;
+    if (error?.code === "23505") {
+      return NextResponse.json({ error: "This DUPR ID is already assigned to another player." }, { status: 409 });
     }
+    if (error) throw error;
 
     if (!data) {
       return NextResponse.json(

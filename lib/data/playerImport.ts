@@ -1,64 +1,83 @@
 import type { DatabasePlayerRecord } from "@/lib/data/players";
 
-export type PlayerImportInput = {
+export type ImportRow = {
+  rowId: number;
   name: string;
-  dupr: number | null;
+  email: string | null;
+  duprId: string | null;
+  rating: number | null;
 };
 
-type ImportPlayersResponse = {
-  created?: number;
-  updated?: number;
-  skipped?: number;
-  players?: DatabasePlayerRecord[];
-  error?: string;
+export type ImportDecision =
+  | { action: "match" | "link" | "check-in"; playerId: string }
+  | { action: "new" | "skip" };
+
+export type CommitRow = ImportRow & { decision: ImportDecision };
+
+export type PreviewRow = {
+  rowId: number;
+  status: "match" | "review" | "conflict";
+  reason: string;
+  player: DatabasePlayerRecord | null;
+  savesEmail: boolean;
 };
 
-export async function importPlayers({
-  players,
-  updateExisting = true,
-}: {
-  players: PlayerImportInput[];
-  updateExisting?: boolean;
-}) {
-  const response = await fetch(
-    "/api/players/import",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        players,
-        updateExisting,
-      }),
-    },
-  );
+export type AppliedRow = {
+  rowId: number;
+  status: "matched" | "linked" | "created" | "skipped";
+  player: DatabasePlayerRecord | null;
+  rating: number | null;
+};
 
-  const responseText = await response.text();
+export type ImportRequest =
+  | { mode: "preview"; rows: ImportRow[] }
+  | { mode: "commit"; rows: CommitRow[]; requestId: string };
 
-  let result: ImportPlayersResponse;
+export class PlayerImportError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+  }
+}
 
+export async function importPlayers(request: { mode: "preview"; rows: ImportRow[] }): Promise<PreviewRow[]>;
+export async function importPlayers(request: { mode: "commit"; rows: CommitRow[]; requestId: string }): Promise<AppliedRow[]>;
+export async function importPlayers(request: ImportRequest): Promise<PreviewRow[] | AppliedRow[]> {
+  const response = await fetch("/api/players/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  let result: { rows?: PreviewRow[] | AppliedRow[]; error?: string };
   try {
-    result = JSON.parse(
-      responseText,
-    ) as ImportPlayersResponse;
+    result = await response.json();
   } catch {
-    throw new Error(
-      `The player-import API did not return valid JSON. HTTP ${response.status}.`,
-    );
+    throw new PlayerImportError("The roster server did not respond. Retry this review.", response.status);
   }
-
-  if (!response.ok) {
-    throw new Error(
-      result.error ?? "Unable to import players.",
-    );
+  if (!response.ok || !result.rows) {
+    throw new PlayerImportError(result.error ?? "Unable to prepare the roster.", response.status);
   }
+  return result.rows;
+}
 
-  return {
-    created: result.created ?? 0,
-    updated: result.updated ?? 0,
-    skipped: result.skipped ?? 0,
-    players: result.players ?? [],
-  };
+export function rosterSelectionError(rows: ImportRow[], decisions: Record<number, ImportDecision>): string {
+  const emails = new Set<string>();
+  const duprIds = new Set<string>();
+  const playerIds = new Set<string>();
+
+  for (const row of rows) {
+    const decision = decisions[row.rowId];
+    if (!decision || decision.action === "skip") continue;
+
+    const usesIdentifiers = decision.action !== "check-in";
+    const email = usesIdentifiers ? row.email?.trim().toLowerCase() : null;
+    const duprId = usesIdentifiers ? row.duprId?.trim().toUpperCase() : null;
+    const playerId = "playerId" in decision ? decision.playerId : null;
+    if ((email && emails.has(email)) || (duprId && duprIds.has(duprId)) || (playerId && playerIds.has(playerId))) {
+      return `Row ${row.rowId} repeats an identifier or player. Skip the extra row or choose a verified player for check-in only.`;
+    }
+    if (email) emails.add(email);
+    if (duprId) duprIds.add(duprId);
+    if (playerId) playerIds.add(playerId);
+  }
+  return "";
 }
