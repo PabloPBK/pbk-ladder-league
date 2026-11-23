@@ -568,6 +568,14 @@ export async function GET(
       })
     );
 
+    const rosterEventId = (slides ?? []).find(slide => (slide.media_type === "roster_teams" || slide.media_type === "roster_free_agents") && slide.roster_event_id)?.roster_event_id;
+    if (rosterEventId) {
+      const {data:rosterEvent,error:rosterEventError} = await db.from("roster_events").select("logo_storage_path").eq("id",rosterEventId).maybeSingle();
+      if (rosterEventError) throw rosterEventError;
+      if (rosterEvent?.logo_storage_path) logoUrl = await getCachedMediaUrl(db,rosterEvent.logo_storage_path);
+      else logoUrl = null;
+    }
+
     return jsonResponse({
       screen: screenSettings,
 
