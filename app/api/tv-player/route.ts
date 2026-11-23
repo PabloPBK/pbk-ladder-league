@@ -424,6 +424,8 @@ export async function GET(
           : screen.display_mode ===
               "daily_schedule"
             ? "daily_schedule"
+            : screen.display_mode === "dupr_season" ? "dupr_season"
+            : screen.display_mode === "dupr_daily" ? "dupr_daily"
             : "slideshow",
 
       slide_duration:
