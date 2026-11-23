@@ -49,6 +49,7 @@ export default function CreateTournamentPage() {
     useState("PodPlay");
   const [registrationUrl, setRegistrationUrl] = useState("");
 
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [savedTournamentId, setSavedTournamentId] = useState("");
@@ -197,7 +198,28 @@ export default function CreateTournamentPage() {
         );
       }
 
-      setSavedTournamentId(result.tournament.id);
+      const newId: string = result.tournament.id;
+      setSavedTournamentId(newId);
+      if (logoFile) {
+        try {
+          const form = new FormData();
+          form.append("file", logoFile);
+          const logoResponse = await fetch(`/api/tournaments/${newId}/logo`, {
+            method: "POST",
+            body: form,
+          });
+          const logoResult = await logoResponse.json();
+          if (!logoResponse.ok) {
+            throw new Error(logoResult.error || "Unable to upload logo.");
+          }
+        } catch (logoError) {
+          setSaveError(
+            "Tournament saved as a draft, but its logo could not be uploaded: " +
+              (logoError instanceof Error ? logoError.message : "Unknown error") +
+              ". You can upload the logo from Edit Tournament."
+          );
+        }
+      }
     } catch (error) {
       setSaveError(
         error instanceof Error
@@ -265,6 +287,13 @@ export default function CreateTournamentPage() {
               Tournament ID: {savedTournamentId}
             </p>
 
+            {saveError && <p role="alert" className="text-sm text-amber-300">{saveError}</p>}
+            <Link
+              href={`/admin/events/tournaments/${savedTournamentId}/edit`}
+              className="inline-flex rounded-xl border border-yellow-400 px-5 py-3 text-sm font-bold text-yellow-400 hover:bg-zinc-800"
+            >
+              Edit Tournament
+            </Link>
             <Link
               href="/admin/events/tournaments"
               className="inline-flex rounded-xl bg-yellow-400 px-5 py-3 text-sm font-bold text-zinc-950 hover:bg-yellow-300"
@@ -579,6 +608,28 @@ export default function CreateTournamentPage() {
                     placeholder="Tournament format, divisions, and important information..."
                   />
                 </div>
+              </section>
+
+              <section className="space-y-4 rounded-xl border border-zinc-700 bg-zinc-900/70 p-5">
+                <h3 className="text-lg font-bold text-white">Tournament Logo</h3>
+                <p className="text-sm text-zinc-400">Optional. Upload a PNG, JPG, or WebP image up to 4 MB. It will be saved with your new tournament.</p>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className={inputClass}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    if (file && (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size === 0 || file.size > 4194304)) {
+                      setSaveError("Please choose a PNG, JPG, or WebP logo under 4 MB.");
+                      setLogoFile(null);
+                      event.target.value = "";
+                      return;
+                    }
+                    setSaveError("");
+                    setLogoFile(file);
+                  }}
+                />
+                {logoFile && <p className="text-sm text-yellow-400">Selected: {logoFile.name}</p>}
               </section>
 
               <section className="space-y-4 rounded-xl border border-zinc-700 bg-zinc-900/70 p-5">
