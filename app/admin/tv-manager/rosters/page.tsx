@@ -14,6 +14,7 @@ type RosterEvent = {
   event_date: string | null;
   event_type: "partnered" | "individual";
   rating_method: RatingMethod;
+  logo_storage_path: string | null;
   created_at: string;
 };
 
@@ -184,6 +185,26 @@ export default function LiveRostersPage() {
   const [success, setSuccess] = useState("");
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  async function uploadEventLogo(file: File) {
+    if (!selectedEventId) return;
+    setUploadingLogo(true);
+    setError("");
+    setSuccess("");
+    try {
+      const form = new FormData();
+      form.append("event_id", selectedEventId);
+      form.append("file", file);
+      const response = await fetch("/api/roster-logo", {method:"POST",body:form});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to upload logo");
+      setEvents(current => current.map(event => event.id === selectedEventId ? {...event,logo_storage_path:result.logo_storage_path} : event));
+      setSuccess("Event logo saved. Refresh the assigned TV to see it.");
+    } catch(error) {
+      setError(error instanceof Error ? error.message : "Unable to upload logo");
+    } finally {setUploadingLogo(false);}
+  }
+
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
