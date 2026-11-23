@@ -38,6 +38,8 @@ export default function TVScreensPage() {
     null
   );
   const [error, setError] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState("");
 
   const [messages, setMessages] = useState<
     Record<string, string>
@@ -162,6 +164,23 @@ export default function TVScreensPage() {
     }
   }
 
+  async function publishUpdates(screenId: string | null) {
+    setPublishing(true);
+    setPublishMessage("");
+    try {
+      const response = await fetch("/api/tv-refresh", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({screen_id:screenId}),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to publish updates");
+      setPublishMessage(`Updates published to ${result.updated} TV(s). Screens will refresh within 5 minutes.`);
+    } catch (err) {
+      setPublishMessage(err instanceof Error ? err.message : "Publish failed");
+    } finally { setPublishing(false); }
+  }
+
   async function launchTV(screenId: string) {
     if (launchingId !== null) return;
 
@@ -270,6 +289,14 @@ export default function TVScreensPage() {
 
             <button
               type="button"
+              onClick={() => void publishUpdates(null)}
+              disabled={publishing}
+              className="rounded-lg border border-yellow-400 px-4 py-2 font-bold text-yellow-400 disabled:opacity-50"
+            >
+              {publishing ? "Publishing..." : "Publish Updates to All TVs"}
+            </button>
+            <button
+              type="button"
               onClick={() => void loadScreens()}
               disabled={
                 loading ||
@@ -281,6 +308,8 @@ export default function TVScreensPage() {
               {loading ? "Loading..." : "Refresh Screens"}
             </button>
           </div>
+
+          {publishMessage && <p role="status" className="mt-4 text-sm text-yellow-400">{publishMessage}</p>}
 
           {loading && (
             <p className="mt-6 text-zinc-400">
@@ -463,6 +492,8 @@ export default function TVScreensPage() {
                         </span>
                       </p>
                     </div>
+
+                    <button type="button" onClick={() => void publishUpdates(screen.id)} disabled={publishing} className="mt-4 w-full rounded-lg bg-yellow-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">Refresh This TV</button>
 
                     {screen.short_code && (
                       <a
