@@ -144,3 +144,24 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function GET() {
+  try {
+    await requireStaffUser();
+    const { data, error } = await supabaseAdmin
+      .from("tournaments")
+      .select("id, name, status, start_date, end_date, facility_id, tournament_facilities(name, city, state)")
+      .order("start_date", { ascending: true });
+    if (error) {
+      console.error("Tournament listing failed:", error);
+      return NextResponse.json({ error: "Unable to load tournaments." }, { status: 500 });
+    }
+    return NextResponse.json({ tournaments: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "AUTH_REQUIRED") return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });
+    if (message === "STAFF_ACCESS_DENIED") return NextResponse.json({ error: "Staff access is required." }, { status: 403 });
+    console.error("Tournament listing error:", error);
+    return NextResponse.json({ error: "Unable to load tournaments." }, { status: 500 });
+  }
+}
