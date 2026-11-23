@@ -50,7 +50,7 @@ type PreviewData = {
   slides: Slide[];
 };
 
-const ROSTER_PAGE_SIZE = 12;
+const ROSTER_PAGE_SIZE = 8;
 
 function getDuration(value: number | null | undefined) {
   if (
@@ -217,7 +217,7 @@ function LiveRosterDisplay({
                     return (
                       <div
                         key={team.id}
-                        className="flex h-[clamp(72px,9.2vh,110px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
+                        className="flex h-[clamp(66px,8vh,98px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
                       >
                         <div className="flex h-[clamp(42px,4.5vw,70px)] w-[clamp(42px,4.5vw,70px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(20px,2vw,38px)] font-black text-black">
                           {team.rank}
@@ -269,7 +269,7 @@ function LiveRosterDisplay({
                   return (
                     <div
                       key={agent.id}
-                      className="flex h-[clamp(68px,8.5vh,100px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
+                      className="flex h-[clamp(64px,7.8vh,94px)] min-w-0 shrink-0 items-center gap-[1.2vw] rounded-xl border border-zinc-800 bg-zinc-900 px-[1.2vw]"
                     >
                       <div className="flex h-[clamp(40px,4vw,65px)] w-[clamp(40px,4vw,65px)] shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-[clamp(19px,1.9vw,36px)] font-black text-black">
                         {agent.rank}
