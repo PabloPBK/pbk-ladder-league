@@ -716,18 +716,6 @@ async function deletePlayer(player: RosterPlayer) {
           </p>
         </section>
 
-        {selectedEvent && (
-          <section className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
-            <h3 className="text-lg font-bold text-white">{selectedEvent.name} — Event Logo</h3>
-            <p className="mt-2 text-sm text-zinc-400">Each ladder has its own logo. PNG, JPG or WebP, maximum 4 MB.</p>
-            <label className="mt-4 inline-block cursor-pointer rounded-lg bg-yellow-400 px-5 py-3 font-bold text-black">
-              {uploadingLogo ? "Uploading..." : selectedEvent.logo_storage_path ? "Replace Event Logo" : "Upload Event Logo"}
-              <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={uploadingLogo} onChange={event => {const file=event.target.files?.[0]; if(file) void uploadEventLogo(file);event.target.value="";}} />
-            </label>
-            {selectedEvent.logo_storage_path && <p className="mt-2 text-sm text-green-400">Custom logo assigned to this event</p>}
-          </section>
-        )}
-
         {error && (
           <p role="alert" className="rounded-lg border border-red-800 bg-red-950 p-4 text-red-200">
             {error}
@@ -921,6 +909,16 @@ async function deletePlayer(player: RosterPlayer) {
               {savingMethod && (
                 <p className="mt-2 text-sm text-zinc-400">Saving...</p>
               )}
+            </section>
+
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-xl font-bold text-yellow-400">Event Logo — {selectedEvent.name}</h2>
+              <p className="mt-2 text-sm text-zinc-400">Choose a unique logo for this ladder. It will appear on the TV roster. PNG, JPG or WebP, maximum 4 MB.</p>
+              <label className="mt-4 inline-block cursor-pointer rounded-lg bg-yellow-400 px-5 py-3 font-bold text-black">
+                {uploadingLogo ? "Uploading..." : selectedEvent.logo_storage_path ? "Replace Event Logo" : "Upload Event Logo"}
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={uploadingLogo} onChange={event => {const file=event.target.files?.[0]; if(file) void uploadEventLogo(file);event.target.value="";}} />
+              </label>
+              {selectedEvent.logo_storage_path && <p className="mt-2 text-sm text-green-400">Custom logo saved for {selectedEvent.name}</p>}
             </section>
 
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
