@@ -400,6 +400,7 @@ const isPublicDisplay = Boolean(publicShortCode);
   useEffect(() => {
     let cancelled = false;
     let inFlight = false;
+    let lastRevision: string | null = null;
 
     playerRef.current = null;
     indexRef.current = 0;
@@ -540,6 +541,27 @@ const isPublicDisplay = Boolean(publicShortCode);
       if (!current || hasLiveRoster) void loadPlayer();
     }, 120000);
 
+    // Check a single timestamp instead of reloading slides and media.
+    const revisionCheck = window.setInterval(async () => {
+      if (cancelled || inFlight) return;
+      const current = playerRef.current;
+      if (!current) return;
+      if (current.slides.some(slide => slide.media_type === "roster_teams" || slide.media_type === "roster_free_agents")) return;
+      try {
+        const query = publicShortCode
+          ? new URLSearchParams({short_code: publicShortCode})
+          : new URLSearchParams({screen_id: screenId, token});
+        const response = await fetch(`/api/tv-refresh?${query.toString()}`, {cache:"no-store"});
+        if (!response.ok) return;
+        const result = await response.json();
+        if (lastRevision === null) { lastRevision = result.revision; return; }
+        if (lastRevision !== result.revision) {
+          lastRevision = result.revision;
+          await loadPlayer();
+        }
+      } catch { /* Daily fallback still refreshes the presentation. */ }
+    }, 5 * 60 * 1000);
+
     const dailyRefresh = window.setInterval(() => {
       void loadPlayer();
     }, 23 * 60 * 60 * 1000);
@@ -548,6 +570,7 @@ const isPublicDisplay = Boolean(publicShortCode);
       cancelled = true;
       window.clearInterval(interval);
       window.clearInterval(dailyRefresh);
+      window.clearInterval(revisionCheck);
     };
 }, [screenId, token, publicShortCode, isPublicDisplay]);
   // Advance images and roster pages using saved durations.
