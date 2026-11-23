@@ -362,7 +362,7 @@ export async function GET(
       const result = await db
         .from("tv_screens")
         .select(
-          "id, name, is_active, presentation_id, display_mode, slide_duration"
+          "id, name, is_active, presentation_id, display_mode, slide_duration, updated_at"
         )
         .eq("short_code", shortCode)
         .eq("is_active", true)
@@ -417,6 +417,7 @@ export async function GET(
     const screenSettings = {
       id: screen.id,
       name: screen.name,
+      revision: screen.updated_at ?? null,
 
       display_mode:
         screen.display_mode === "single"
