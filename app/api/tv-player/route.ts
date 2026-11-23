@@ -392,7 +392,7 @@ export async function GET(
       const result = await db
         .from("tv_screens")
         .select(
-          "id, name, is_active, presentation_id, display_mode, slide_duration"
+          "id, name, is_active, presentation_id, display_mode, slide_duration, updated_at"
         )
         .eq("id", screenId)
         .eq("display_token", displayToken)
