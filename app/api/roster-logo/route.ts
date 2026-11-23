@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { requireStaffUser } from "@/lib/server/require-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const validId = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+const validId = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 function db() { return createClient(process.env.TV_SUPABASE_URL!, process.env.TV_SUPABASE_SECRET_KEY!, {auth:{persistSession:false,autoRefreshToken:false}}); }
 export async function POST(request: NextRequest) {
  try {
