@@ -6,10 +6,19 @@ import { isUuid } from "@/lib/data/league-listings";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-function validDate(value: string) {
-  if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+function parseDate(input: FormDataEntryValue | null) {
+  if (typeof input !== "string") return null;
+
+  const text = input.trim();
+  const parts = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)
+    ?? /^(\d{2})(\d{2})(\d{4})$/.exec(text);
+  const value = parts
+    ? `${parts[3]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`
+    : text;
+
+  if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const date = new Date(value + "T00:00:00Z");
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
 }
 
 export async function editPB101Guest(
@@ -30,15 +39,14 @@ export async function editPB101Guest(
 
   const firstName = String(formData.get("first_name") ?? "").trim();
   const lastName = String(formData.get("last_name") ?? "").trim();
-  const completedAt = String(formData.get("pb101_completed_at") ?? "");
-  const trialStart = String(formData.get("trial_start_date") ?? "");
+  const completedAt = parseDate(formData.get("pb101_completed_at"));
+  const trialStart = parseDate(formData.get("trial_start_date"));
 
   if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100) {
     return "Enter a first and last name, each up to 100 characters.";
   }
-  if (!validDate(completedAt) || !validDate(trialStart)) {
-    return "Enter a valid class completion date and trial start date.";
-  }
+  if (!completedAt) return "Enter a valid class completion date in MM/DD/YYYY format.";
+  if (!trialStart) return "Enter a valid trial start date in MM/DD/YYYY format.";
 
   const { data, error } = await supabaseAdmin.rpc("edit_pb101_guest_details", {
     p_guest_id: guestId,
