@@ -5,21 +5,7 @@ import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/data/league-listings";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-
-function parseDate(input: FormDataEntryValue | null) {
-  if (typeof input !== "string") return null;
-
-  const text = input.trim();
-  const parts = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)
-    ?? /^(\d{2})(\d{2})(\d{4})$/.exec(text);
-  const value = parts
-    ? `${parts[3]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`
-    : text;
-
-  if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(value + "T00:00:00Z");
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
-}
+import { parsePB101Date } from "../../date-input";
 
 export async function editPB101Guest(
   guestId: string,
@@ -39,8 +25,8 @@ export async function editPB101Guest(
 
   const firstName = String(formData.get("first_name") ?? "").trim();
   const lastName = String(formData.get("last_name") ?? "").trim();
-  const completedAt = parseDate(formData.get("pb101_completed_at"));
-  const trialStart = parseDate(formData.get("trial_start_date"));
+  const completedAt = parsePB101Date(formData.get("pb101_completed_at"));
+  const trialStart = parsePB101Date(formData.get("trial_start_date"));
 
   if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100) {
     return "Enter a first and last name, each up to 100 characters.";

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
+import { PB101_DATE_INPUT_HINT } from "../../date-input";
 import { editPB101Guest } from "./actions";
 
 type GuestDetails = {
@@ -66,7 +67,7 @@ export function GuestEditForm({ guest }: { guest: GuestDetails }) {
       </div>
 
       <p id="pb101-date-format" className="text-sm text-zinc-400">
-        Use MM/DD/YYYY or eight digits, for example 11/24/2026 or 11242026.
+        {PB101_DATE_INPUT_HINT}
       </p>
 
       <p className="text-sm text-zinc-400">

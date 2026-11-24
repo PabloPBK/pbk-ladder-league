@@ -6,6 +6,7 @@ import {
   registerPB101Guest,
   type GuestRegistrationState,
 } from "./actions";
+import { PB101_DATE_INPUT_HINT } from "./date-input";
 
 const initialState: GuestRegistrationState = {
   success: false,
@@ -155,10 +156,17 @@ export function GuestRegistrationForm() {
             <input
               id="pb101_completed_at"
               name="pb101_completed_at"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              placeholder="MM/DD/YYYY"
+              autoComplete="off"
+              aria-describedby="pb101-registration-date-format"
               required
               className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-blue-500"
             />
+            <p id="pb101-registration-date-format" className="mt-2 text-sm text-zinc-400">
+              {PB101_DATE_INPUT_HINT}
+            </p>
           </div>
         </div>
 

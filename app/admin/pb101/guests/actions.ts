@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { schedulePB101Emails } from "@/lib/server/pb101-email-scheduler";
+import { parsePB101Date } from "./date-input";
 
 export type GuestRegistrationState = {
   success: boolean;
@@ -42,9 +43,8 @@ export async function registerPB101Guest(
       formData.get("coach_notes") ?? ""
     ).trim();
 
-    const completionDate = String(
-      formData.get("pb101_completed_at") ?? ""
-    ).trim();
+    const completionInput = formData.get("pb101_completed_at");
+    const completionDate = parsePB101Date(completionInput);
 
     const emailConsent =
       formData.get("email_consent") === "yes";
@@ -53,7 +53,8 @@ export async function registerPB101Guest(
       !firstName ||
       !lastName ||
       !email ||
-      !completionDate
+      (typeof completionInput === "string" && !completionInput.trim()) ||
+      completionInput === null
     ) {
       return {
         success: false,
@@ -69,16 +70,10 @@ export async function registerPB101Guest(
       };
     }
 
-    if (
-      !/^\d{4}-\d{2}-\d{2}$/.test(completionDate) ||
-      Number.isNaN(Date.parse(`${completionDate}T00:00:00Z`)) ||
-      new Date(`${completionDate}T00:00:00Z`)
-        .toISOString()
-        .slice(0, 10) !== completionDate
-    ) {
+    if (!completionDate) {
       return {
         success: false,
-        message: "Please enter a valid PB101 completion date.",
+        message: "Enter a valid PB101 completion date in MM/DD/YYYY format.",
       };
     }
 
