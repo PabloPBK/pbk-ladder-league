@@ -16,6 +16,7 @@ const eventTypes = [
     title: "Leagues",
     description: "Create leagues and recurring competitions.",
     icon: "🎾",
+    href: "/admin/events/leagues",
     color: "border-blue-500/40",
   },
   {

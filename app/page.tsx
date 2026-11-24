@@ -101,6 +101,7 @@ const departments: Department[] = [
     color: "border-yellow-400/70",
     links: [
       { label: "Create Event", href: "/admin/events" },
+      { label: "League Publishing", href: "/admin/events/leagues" },
     ],
   },
   {
