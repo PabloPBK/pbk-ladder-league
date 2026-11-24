@@ -49,9 +49,7 @@ export async function processPB101EmailQueue():
 
   const { data: pending, error } = await supabaseAdmin
     .from("pb101_email_log")
-    .select(
-      "id, guest_id, email_type, recipient_email, scheduled_at"
-    )
+    .select("id")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .order("scheduled_at", { ascending: true })
@@ -81,7 +79,8 @@ export async function processPB101EmailQueue():
       continue;
     }
 
-    if (!claimed?.length) {
+    const message = claimed?.[0];
+    if (!message) {
       result.skipped++;
       continue;
     }
@@ -110,7 +109,7 @@ export async function processPB101EmailQueue():
           .select(
             "first_name, email, trial_end_date, status, email_opted_out, email_consent_at, membership_decision"
           )
-          .eq("id", item.guest_id)
+          .eq("id", message.guest_id)
           .maybeSingle();
 
       if (guestError || !guest) {
@@ -142,7 +141,7 @@ export async function processPB101EmailQueue():
 
       if (
         guest.email.toLowerCase() !==
-        item.recipient_email.toLowerCase()
+        message.recipient_email.toLowerCase()
       ) {
         await cancel(
           "Guest email changed after scheduling."
@@ -150,7 +149,7 @@ export async function processPB101EmailQueue():
         continue;
       }
 
-      const day = EMAIL_DAYS[item.email_type];
+      const day = EMAIL_DAYS[message.email_type];
 
       if (day === undefined) {
         await cancel("Unknown email template.");
@@ -160,7 +159,7 @@ export async function processPB101EmailQueue():
       // Do not send messages scheduled before today.
       // This prevents accidental historical backfills.
       const scheduledDate = new Date(
-        item.scheduled_at
+        message.scheduled_at
       ).toLocaleDateString("en-CA", {
         timeZone: "America/Los_Angeles",
         year: "numeric",

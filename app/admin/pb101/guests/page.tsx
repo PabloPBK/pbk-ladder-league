@@ -1,4 +1,5 @@
 
+import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -37,7 +38,7 @@ function pacificToday(): string {
 export default async function PB101GuestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ guestId?: string }>;
+  searchParams: Promise<{ guestId?: string; edited?: string }>;
 }) {
   await requireStaffUser();
 
@@ -53,10 +54,11 @@ export default async function PB101GuestsPage({
     console.error("Unable to load PB101 guests:", error);
   }
 
-    const guests = (data ?? []) as PB101Guest[];
+  const guests = (data ?? []) as PB101Guest[];
   const today = pacificToday();
 
-  const { guestId } = await searchParams;
+  const { guestId, edited } = await searchParams;
+  const editedGuest = guests.find((guest) => guest.id === edited);
 
   const selectedGuestId =
     guestId && guests.some((guest) => guest.id === guestId)
@@ -119,7 +121,7 @@ export default async function PB101GuestsPage({
 
             <p className="mt-3 text-sm text-amber-100">
               Use Membership Conversion Tracking below
-              to record each guest's decision.
+              to record a membership decision.
             </p>
           </section>
         ) : (
@@ -133,10 +135,7 @@ export default async function PB101GuestsPage({
 
         <PB101CSVImport />
 
-        <MembershipDecisionForm
-  guests={guests}
-  initialGuestId={selectedGuestId}
-/>
+        <MembershipDecisionForm guests={guests} initialGuestId={selectedGuestId} />
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white">
@@ -147,6 +146,12 @@ export default async function PB101GuestsPage({
               {guests.length} shown
             </span>
           </div>
+
+          {editedGuest && (
+            <p role="status" className="mb-4 rounded-xl border border-green-800 bg-green-950/30 p-3 text-sm text-green-300">
+              Saved changes for {editedGuest.first_name} {editedGuest.last_name}.
+            </p>
+          )}
 
           {error ? (
             <p className="text-sm text-red-400">
@@ -185,6 +190,7 @@ export default async function PB101GuestsPage({
                     return (
                       <tr
                         key={guest.id}
+                        id={`guest-${guest.id}`}
                         className={`border-b border-zinc-800 ${
                           overdue
                             ? "bg-amber-950/30 text-amber-100"
@@ -194,6 +200,14 @@ export default async function PB101GuestsPage({
                         <td className="px-3 py-3 font-semibold">
                           {guest.first_name}{" "}
                           {guest.last_name}
+                          <Link
+                            href={`/admin/pb101/guests/${guest.id}/edit`}
+                            prefetch={false}
+                            aria-label={`Edit ${guest.first_name} ${guest.last_name}`}
+                            className="mt-1 block w-fit text-sm font-medium text-blue-300 underline underline-offset-4 hover:text-blue-200"
+                          >
+                            Edit guest
+                          </Link>
                         </td>
 
                         <td className="px-3 py-3">
