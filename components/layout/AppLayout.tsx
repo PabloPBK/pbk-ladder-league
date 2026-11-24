@@ -8,6 +8,7 @@ import { Navigation } from "@/components/navigation/Navigation";
 type AppLayoutProps = {
   title: string;
   description?: ReactNode;
+  headerAside?: ReactNode;
   children: ReactNode;
   showNavigation?: boolean;
 };
@@ -15,6 +16,7 @@ type AppLayoutProps = {
 export function AppLayout({
   title,
   description,
+  headerAside,
   children,
   showNavigation = true,
 }: AppLayoutProps) {
@@ -22,16 +24,19 @@ export function AppLayout({
     return (
       <main className="min-h-screen bg-zinc-950 text-white">
         <section className="w-full px-4 pb-24 pt-6 sm:px-6 md:px-8 md:pb-10 md:pt-8 xl:px-10">
-          <div className="mb-6 border-b border-zinc-800 pb-5">
-            <h1 className="text-2xl font-bold text-white sm:text-3xl">
-              {title}
-            </h1>
+          <div className="mb-6 flex items-center justify-between gap-4 border-b border-zinc-800 pb-5 sm:gap-8">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-white sm:text-3xl">
+                {title}
+              </h1>
 
-            {description && (
-              <p className="mt-1 text-sm text-zinc-400 sm:text-base">
-                {description}
-              </p>
-            )}
+              {description && (
+                <p className="mt-1 text-sm text-zinc-400 sm:text-base">
+                  {description}
+                </p>
+              )}
+            </div>
+            {headerAside}
           </div>
 
           {children}
@@ -111,16 +116,19 @@ export function AppLayout({
 
           {/* PAGE CONTENT */}
           <section className="w-full px-4 pb-24 pt-6 sm:px-6 md:px-8 md:pb-10 md:pt-8 xl:px-10">
-            <div className="mb-6 border-b border-zinc-800 pb-5">
-              <h2 className="text-2xl font-bold text-white sm:text-3xl">
-                {title}
-              </h2>
+            <div className="mb-6 flex items-center justify-between gap-4 border-b border-zinc-800 pb-5 sm:gap-8">
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold text-white sm:text-3xl">
+                  {title}
+                </h2>
 
-              {description && (
-                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400 sm:text-base">
-                  {description}
-                </p>
-              )}
+                {description && (
+                  <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400 sm:text-base">
+                    {description}
+                  </p>
+                )}
+              </div>
+              {headerAside}
             </div>
 
             {children}

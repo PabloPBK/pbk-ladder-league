@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   useEffect,
   useMemo,
@@ -15,6 +16,8 @@ import {
 } from "@/lib/data/leagues";
 import { getSeasonStandings } from "@/lib/data/standings";
 import type { SeasonStanding } from "@/lib/server/statistics";
+
+const leaguesUrl = "https://zz2-pickleball.vercel.app/leagues";
 
 function formatDifferential(value: number) {
   if (value > 0) {
@@ -207,10 +210,23 @@ export default function DisplayPage() {
       description={
         <>
           For league dates, registration, full standings, player stats, and match history, visit{" "}
-          <a href="https://zz2-pickleball.vercel.app/leagues" className="break-all font-semibold text-yellow-300 underline underline-offset-4 hover:text-yellow-200">
+          <a href={leaguesUrl} className="break-all font-semibold text-yellow-300 underline underline-offset-4 hover:text-yellow-200">
             zz2-pickleball.vercel.app/leagues
           </a>.
         </>
+      }
+      headerAside={
+        <a href={leaguesUrl} className="block shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300">
+          <Image
+            src="/zz2-leagues-qr.png"
+            alt="Scan to open the ZZ2 Leagues page"
+            width={123}
+            height={123}
+            unoptimized
+            loading="eager"
+            className="size-[123px] [image-rendering:pixelated] [@media(min-height:900px)]:size-[164px]"
+          />
+        </a>
       }
       showNavigation={false}
     >
@@ -337,7 +353,7 @@ export default function DisplayPage() {
                             key={
                               standing.playerId
                             }
-                            className={`grid min-h-12 grid-cols-[42px_minmax(0,1fr)_38px_38px_54px] items-center border-b border-zinc-800 px-3 py-2 last:border-b-0 ${
+                            className={`grid min-h-12 grid-cols-[42px_minmax(0,1fr)_38px_38px_54px] items-center border-b border-zinc-800 px-3 py-2 last:border-b-0 [@media(min-width:1024px)_and_(max-height:800px)]:min-h-9 [@media(min-width:1024px)_and_(max-height:800px)]:py-0.5 ${
                               rank === 1
                                 ? "bg-yellow-500/15"
                                 : rank === 2
