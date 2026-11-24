@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LeagueWebsiteNote, LeagueWebsiteQr } from "@/components/display/LeagueWebsiteLink";
 import {
   useCallback,
   useEffect,
@@ -386,128 +387,134 @@ export default function TVPage() {
     <main className="h-[100dvh] overflow-hidden bg-zinc-950 p-1 text-white">
       <div className="flex h-full min-h-0 flex-col gap-1">
         {/* COMPACT HEADER */}
-        <header className="shrink-0 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-2">
-                <h1 className="truncate text-base font-black leading-none text-yellow-400">
-                  {matchCenter?.event.name ??
-                    selectedEvent?.name ??
-                    "League TV"}
-                </h1>
+        <header className="flex shrink-0 items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900 p-2 sm:gap-5">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <h1 className="truncate text-base font-black leading-none text-yellow-400">
+                    {matchCenter?.event.name ??
+                      selectedEvent?.name ??
+                      "League TV"}
+                  </h1>
 
-                {selectedEvent && (
-                  <span className="text-[10px] font-semibold text-zinc-400">
-                    {sessionLabel}
-                  </span>
-                )}
+                  {selectedEvent && (
+                    <span className="text-[10px] font-semibold text-zinc-400">
+                      {sessionLabel}
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-0.5 text-[8px] leading-none text-zinc-500">
+                  {selectedLeague?.name ??
+                    "League"}
+
+                  {selectedSeason
+                    ? ` · ${selectedSeason.name}`
+                    : ""}
+                </p>
               </div>
 
-              <p className="mt-0.5 text-[8px] leading-none text-zinc-500">
-                {selectedLeague?.name ??
-                  "League"}
+              <div className="flex flex-wrap items-center gap-1">
+                <select
+                  value={selectedLeagueId}
+                  onChange={(event) =>
+                    setSelectedLeagueId(
+                      event.target.value,
+                    )
+                  }
+                  aria-label="Select league"
+                  className="h-6 max-w-44 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px] font-semibold text-white"
+                >
+                  {leagues.map(
+                    (league) => (
+                      <option
+                        key={league.id}
+                        value={league.id}
+                      >
+                        {league.name}
+                      </option>
+                    ),
+                  )}
+                </select>
 
-                {selectedSeason
-                  ? ` · ${selectedSeason.name}`
-                  : ""}
-              </p>
-            </div>
+                <select
+                  value={selectedSeasonId}
+                  onChange={(event) =>
+                    setSelectedSeasonId(
+                      event.target.value,
+                    )
+                  }
+                  aria-label="Select season"
+                  disabled={
+                    !selectedLeagueId ||
+                    seasons.length === 0
+                  }
+                  className="h-6 max-w-36 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px] font-semibold text-white"
+                >
+                  {seasons.map(
+                    (season) => (
+                      <option
+                        key={season.id}
+                        value={season.id}
+                      >
+                        {season.name}
+                      </option>
+                    ),
+                  )}
+                </select>
 
-            <div className="flex shrink-0 items-center gap-1">
-              <select
-                value={selectedLeagueId}
-                onChange={(event) =>
-                  setSelectedLeagueId(
-                    event.target.value,
-                  )
-                }
-                aria-label="Select league"
-                className="h-6 max-w-44 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px] font-semibold text-white"
-              >
-                {leagues.map(
-                  (league) => (
-                    <option
-                      key={league.id}
-                      value={league.id}
+                {matchCenter && (
+                  <>
+                    <div className="rounded bg-zinc-800 px-2 py-0.5 text-center">
+                      <p className="text-[6px] uppercase leading-none text-zinc-500">
+                        Round
+                      </p>
+
+                      <p className="text-sm font-black leading-none">
+                        {
+                          matchCenter
+                            .round
+                            .round_number
+                        }
+                      </p>
+                    </div>
+
+                    <div className="rounded bg-zinc-800 px-2 py-0.5 text-center">
+                      <p className="text-[6px] uppercase leading-none text-zinc-500">
+                        Complete
+                      </p>
+
+                      <p className="text-sm font-black leading-none">
+                        {completedCourtCount}/
+                        {
+                          matchCenter
+                            .courts
+                            .length
+                        }
+                      </p>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                        matchCenter.roundComplete
+                          ? "bg-green-500/20 text-green-300"
+                          : "bg-blue-500/20 text-blue-300"
+                      }`}
                     >
-                      {league.name}
-                    </option>
-                  ),
+                      {matchCenter.roundComplete
+                        ? "Complete"
+                        : "Live"}
+                    </span>
+                  </>
                 )}
-              </select>
-
-              <select
-                value={selectedSeasonId}
-                onChange={(event) =>
-                  setSelectedSeasonId(
-                    event.target.value,
-                  )
-                }
-                aria-label="Select season"
-                disabled={
-                  !selectedLeagueId ||
-                  seasons.length === 0
-                }
-                className="h-6 max-w-36 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px] font-semibold text-white"
-              >
-                {seasons.map(
-                  (season) => (
-                    <option
-                      key={season.id}
-                      value={season.id}
-                    >
-                      {season.name}
-                    </option>
-                  ),
-                )}
-              </select>
-
-              {matchCenter && (
-                <>
-                  <div className="rounded bg-zinc-800 px-2 py-0.5 text-center">
-                    <p className="text-[6px] uppercase leading-none text-zinc-500">
-                      Round
-                    </p>
-
-                    <p className="text-sm font-black leading-none">
-                      {
-                        matchCenter
-                          .round
-                          .round_number
-                      }
-                    </p>
-                  </div>
-
-                  <div className="rounded bg-zinc-800 px-2 py-0.5 text-center">
-                    <p className="text-[6px] uppercase leading-none text-zinc-500">
-                      Complete
-                    </p>
-
-                    <p className="text-sm font-black leading-none">
-                      {completedCourtCount}/
-                      {
-                        matchCenter
-                          .courts
-                          .length
-                      }
-                    </p>
-                  </div>
-
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                      matchCenter.roundComplete
-                        ? "bg-green-500/20 text-green-300"
-                        : "bg-blue-500/20 text-blue-300"
-                    }`}
-                  >
-                    {matchCenter.roundComplete
-                      ? "Complete"
-                      : "Live"}
-                  </span>
-                </>
-              )}
+              </div>
             </div>
+            <p className="mt-2 text-sm leading-snug text-zinc-300 sm:text-base">
+              <LeagueWebsiteNote />
+            </p>
           </div>
+          <LeagueWebsiteQr />
         </header>
 
         {errorMessage && (

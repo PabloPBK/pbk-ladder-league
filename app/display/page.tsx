@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import {
   useEffect,
   useMemo,
@@ -8,6 +7,7 @@ import {
 } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { LeagueWebsiteNote, LeagueWebsiteQr } from "@/components/display/LeagueWebsiteLink";
 import {
   getActiveLeagues,
   getSeasonsForLeague,
@@ -16,8 +16,6 @@ import {
 } from "@/lib/data/leagues";
 import { getSeasonStandings } from "@/lib/data/standings";
 import type { SeasonStanding } from "@/lib/server/statistics";
-
-const leaguesUrl = "https://zz2-pickleball.vercel.app/leagues";
 
 function formatDifferential(value: number) {
   if (value > 0) {
@@ -207,27 +205,8 @@ export default function DisplayPage() {
   return (
     <AppLayout
       title="Club Display"
-      description={
-        <>
-          For league dates, registration, full standings, player stats, and match history, visit{" "}
-          <a href={leaguesUrl} className="break-all font-semibold text-yellow-300 underline underline-offset-4 hover:text-yellow-200">
-            zz2-pickleball.vercel.app/leagues
-          </a>.
-        </>
-      }
-      headerAside={
-        <a href={leaguesUrl} className="block shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300">
-          <Image
-            src="/zz2-leagues-qr.png"
-            alt="Scan to open the ZZ2 Leagues page"
-            width={123}
-            height={123}
-            unoptimized
-            loading="eager"
-            className="size-[123px] [image-rendering:pixelated] [@media(min-height:900px)]:size-[164px]"
-          />
-        </a>
-      }
+      description={<LeagueWebsiteNote />}
+      headerAside={<LeagueWebsiteQr />}
       showNavigation={false}
     >
       <div className="space-y-4">
