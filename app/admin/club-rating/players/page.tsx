@@ -228,7 +228,12 @@ export default function ClubRatingPlayersPage() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="text-lg font-semibold">
-                            {player.full_name}
+                            <Link
+                              href={`/admin/club-rating/players/${player.player_id}`}
+                              className="text-blue-300 underline-offset-4 hover:underline focus-visible:underline"
+                            >
+                              {player.full_name}
+                            </Link>
                           </h3>
 
                           <span
