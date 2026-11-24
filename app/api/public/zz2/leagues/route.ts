@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCompletedLeagueEvent } from "@/lib/server/league-event-history";
+import { getLeagueEventPrize } from "@/lib/server/league-event-prize";
 import { getLeagueSeasonStandings } from "@/lib/server/league-season-standings";
 import { getLeagueListings, getListingFacilities, getPublishedLeagueEvents, getPublishedLeagueListing } from "@/lib/server/league-listings";
 import type { LeagueListing } from "@/lib/data/league-listings";
@@ -56,9 +57,10 @@ export async function GET(request: NextRequest) {
     const selected = daily || history ? (eventId ? events?.find((event) => event.id === eventId.toLowerCase()) : events?.[0]) : undefined;
     if (eventId && !selected) return NextResponse.json({ error: "League night not found." }, { status: 404, headers });
 
-    const [seasonResults, dayResults] = await Promise.all([
+    const [seasonResults, dayResults, dailyPrizeCents] = await Promise.all([
       season && seasonId && events?.length ? getLeagueSeasonStandings(seasonId) : null,
       selected && seasonId ? getCompletedLeagueEvent(selected.id, seasonId) : null,
+      daily && selected && seasonId ? getLeagueEventPrize(selected.id) : null,
     ]);
     const rounds = history && dayResults ? dayResults.rounds.flatMap((round) => {
       const courts = round.courts.flatMap((court) => {
@@ -77,6 +79,7 @@ export async function GET(request: NextRequest) {
       selectedEventId: selected?.id ?? null,
       seasonStandings: seasonResults?.standings.map((row) => publicStanding(row, playerStats)) ?? [],
       dailyStandings: daily && dayResults ? dayResults.standings.map((row) => publicStanding(row, playerStats)) : [],
+      dailyPrizeCents,
       rounds,
     };
     return NextResponse.json(response, { headers });

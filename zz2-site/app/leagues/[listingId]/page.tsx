@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { isUuid, leagueDate, publicWebUrl, registrationLabels, type PublicLeagueStanding } from "../../../lib/league-contract";
+import { formatPrizeMoney, isUuid, leagueDate, publicWebUrl, registrationLabels, type PublicLeagueStanding } from "../../../lib/league-contract";
 import { getPublicLeague } from "../../../lib/league-feed";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ export default async function PublicLeague({ params, searchParams }: {
   const feed = await getPublicLeague(listingId, event);
   if (!feed) notFound();
   const { listing, facility, sections: { daily, season, history, playerStats }, events,
-    selectedEventId, seasonStandings, dailyStandings, rounds } = feed;
+    selectedEventId, seasonStandings, dailyStandings, dailyPrizeCents, rounds } = feed;
   const registration = publicWebUrl(listing.registration_url);
   const logo = publicWebUrl(listing.logo_url);
   const section = "space-y-4 rounded-xl border border-zinc-200 bg-white p-5 sm:p-6";
@@ -89,7 +89,12 @@ export default async function PublicLeague({ params, searchParams }: {
             <button className="rounded bg-zinc-900 px-4 py-2 text-sm font-bold text-white hover:bg-zinc-700" type="submit">View results</button>
           </form>
           {daily && <>
-            {history && <h3 className="text-lg font-bold">Daily standings</h3>}
+            {(history || dailyPrizeCents != null) && <div className="flex flex-wrap items-center justify-between gap-3">
+              {history && <h3 className="text-lg font-bold">Daily standings</h3>}
+              {dailyPrizeCents != null && <p className="ml-auto rounded-lg bg-yellow-100 px-4 py-2 text-sm font-semibold">
+                Prize money <span className="ml-1 font-extrabold tabular-nums">{formatPrizeMoney(dailyPrizeCents)}</span>
+              </p>}
+            </div>}
             <ResultsTable label="Daily standings" standings={dailyStandings} showPlayerStats={playerStats} />
           </>}
           {history && <div className="space-y-3">

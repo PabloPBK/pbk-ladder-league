@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import LeagueNightPrize from "@/components/admin/LeagueNightPrize";
 import {
   getHistoryEvent,
   type HistoryEventDetail,
@@ -207,6 +208,8 @@ export default function HistoryDetailPage() {
             </div>
           </div>
         </section>
+
+        <div className="mb-6"><LeagueNightPrize key={eventId} eventId={eventId} /></div>
 
         <section className="mb-10 overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900">
           <div className="border-b border-zinc-800 p-6">

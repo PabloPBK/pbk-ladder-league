@@ -23,6 +23,11 @@ export function leagueDate(value: string) {
     .format(new Date(value + "T12:00:00Z"));
 }
 
+const prizeMoneyFormat = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+export function formatPrizeMoney(cents: number) {
+  return prizeMoneyFormat.format(cents / 100);
+}
+
 export type ListingFacility = { id: string; name: string; city: string | null; state: string | null };
 
 export type PublishedLeague = {
@@ -47,6 +52,7 @@ export type LeagueDetailFeed = {
   selectedEventId: string | null;
   seasonStandings: PublicLeagueStanding[];
   dailyStandings: PublicLeagueStanding[];
+  dailyPrizeCents?: number | null;
   rounds: { number: number; courts: {
     number: number; team1: string[]; team2: string[]; score1: number; score2: number;
   }[] }[];

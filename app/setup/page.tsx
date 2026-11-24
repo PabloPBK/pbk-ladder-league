@@ -8,6 +8,7 @@ import {
 
 import { LeagueNightSetup } from "@/components/admin/LeagueNightSetup";
 import { AppLayout } from "@/components/layout/AppLayout";
+import LeagueNightPrize from "@/components/admin/LeagueNightPrize";
 import { useLeague } from "@/components/providers/LeagueProvider";
 import {
   createLeagueEvent,
@@ -215,6 +216,8 @@ export default function SetupPage() {
                 : ""}
             </p>
           </section>
+
+          <LeagueNightPrize key={activeEvent.id} eventId={activeEvent.id} />
 
           <section className="grid gap-4 sm:grid-cols-2">
             <Link
