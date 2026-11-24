@@ -11,6 +11,7 @@ type Tournament = {
   start_date: string;
   end_date: string;
   tournament_facilities: { name: string; city: string | null; state: string | null } | null;
+  destinations?: { id: string; name: string; is_connected: boolean; is_preview_available: boolean }[];
 };
 
 export default function TournamentManagementPage() {
@@ -95,6 +96,7 @@ export default function TournamentManagementPage() {
                     <span className="rounded-full border border-zinc-600 px-3 py-1 text-xs font-semibold uppercase text-zinc-300">{t.status}</span>
                   </div>
                   <p className="mt-2 text-sm text-zinc-400">{t.tournament_facilities?.name ?? "Facility not assigned"} · {t.start_date}{t.end_date !== t.start_date ? " – " + t.end_date : ""}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">{(t.destinations ?? []).map(site => <span key={site.id} className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-300">{site.name} · {site.is_preview_available ? "ZZ2 preview available" : site.is_connected ? "Connected" : "Not connected yet"}</span>)}</div>
                   <div className="mt-3 flex flex-wrap gap-3"><Link href={`/admin/events/tournaments/${t.id}/edit`} className="rounded-lg border border-zinc-600 px-4 py-2 text-sm font-bold text-white">Edit</Link><Link href={`/admin/events/tournaments/${t.id}/preview`} target="_blank" className="rounded-lg border border-zinc-600 px-4 py-2 text-sm font-bold text-white">Preview</Link><button type="button" disabled={!!busyId} onClick={() => changePublish(t)} className="rounded-lg bg-yellow-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-50">{busyId === t.id ? "Saving…" : t.status === "published" ? "Unpublish" : "Publish to ZZ2 Preview"}</button>{t.status === "published" && <Link href={`/zz2/tournaments/${t.id}`} target="_blank" className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-white">View Public Page</Link>}</div>
                 </div>
               ))}</div>}
