@@ -156,7 +156,23 @@ export async function GET() {
       console.error("Tournament listing failed:", error);
       return NextResponse.json({ error: "Unable to load tournaments." }, { status: 500 });
     }
-    return NextResponse.json({ tournaments: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+    const { data: sites, error: sitesError } = await supabaseAdmin.from("tournament_websites").select("id,name,is_connected");
+    if (sitesError) throw sitesError;
+    const { data: mappings, error: mappingsError } = await supabaseAdmin.from("tournament_facility_websites").select("facility_id,website_id");
+    if (mappingsError) throw mappingsError;
+    const tournaments = (data ?? []).map(t => {
+      const destinationIds = new Set(["zz2", ...(mappings ?? []).filter(m => m.facility_id === t.facility_id).map(m => m.website_id)]);
+      return {
+        ...t,
+        destinations: (sites ?? []).filter(site => destinationIds.has(site.id)).map(site => ({
+          id: site.id,
+          name: site.name,
+          is_connected: site.is_connected,
+          is_preview_available: site.id === "zz2",
+        })),
+      };
+    });
+    return NextResponse.json({ tournaments }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "AUTH_REQUIRED") return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });
