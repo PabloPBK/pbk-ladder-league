@@ -1,3 +1,4 @@
+import { getStaffApiDenial } from "@/lib/server/require-auth";
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -20,6 +21,9 @@ export async function DELETE(
   _request: Request,
   context: RouteContext,
 ) {
+  const denied = await getStaffApiDenial();
+  if (denied) return denied;
+
   try {
     const { eventId } = await context.params;
 

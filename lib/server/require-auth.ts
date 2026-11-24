@@ -1,4 +1,5 @@
 
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -35,4 +36,19 @@ export async function requireStaffUser() {
   }
 
   return user;
+}
+
+export async function getStaffApiDenial() {
+  try {
+    await requireStaffUser();
+    return null;
+  } catch (error) {
+    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+      return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "STAFF_ACCESS_DENIED") {
+      return NextResponse.json({ error: "Staff access is required." }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Unable to verify staff access." }, { status: 500 });
+  }
 }

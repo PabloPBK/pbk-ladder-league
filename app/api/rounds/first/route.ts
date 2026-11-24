@@ -1,3 +1,4 @@
+import { getStaffApiDenial } from "@/lib/server/require-auth";
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -19,6 +20,9 @@ type SaveFirstRoundRequest = {
 };
 
 export async function POST(request: Request) {
+  const denied = await getStaffApiDenial();
+  if (denied) return denied;
+
   let createdRoundId: string | null = null;
 
   try {
