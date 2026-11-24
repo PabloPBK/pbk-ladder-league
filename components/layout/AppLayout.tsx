@@ -7,7 +7,7 @@ import { Navigation } from "@/components/navigation/Navigation";
 
 type AppLayoutProps = {
   title: string;
-  description?: string;
+  description?: ReactNode;
   children: ReactNode;
   showNavigation?: boolean;
 };

@@ -203,10 +203,17 @@ export default function DisplayPage() {
 
   return (
     <AppLayout
-  title="Club Display"
-  description="Live cumulative season standings."
-  showNavigation={false}
->
+      title="Club Display"
+      description={
+        <>
+          For league dates, registration, full standings, player stats, and match history, visit{" "}
+          <a href="https://zz2-pickleball.vercel.app/leagues" className="break-all font-semibold text-yellow-300 underline underline-offset-4 hover:text-yellow-200">
+            zz2-pickleball.vercel.app/leagues
+          </a>.
+        </>
+      }
+      showNavigation={false}
+    >
       <div className="space-y-4">
         {/* League + Season */}
         <div className="grid grid-cols-2 gap-3">
