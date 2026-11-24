@@ -222,18 +222,19 @@ export default function ClubRatingPlayersPage() {
                     );
 
                     return (
-                      <div
+                      <Link
                         key={player.player_id}
-                        className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                        href={`/admin/club-rating/players/${player.player_id}`}
+                        prefetch={false}
+                        aria-labelledby={`player-name-${player.player_id} player-history-${player.player_id}`}
+                        className="group block rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition hover:border-blue-400 hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="text-lg font-semibold">
-                            <Link
-                              href={`/admin/club-rating/players/${player.player_id}`}
-                              className="text-blue-300 underline-offset-4 hover:underline focus-visible:underline"
-                            >
-                              {player.full_name}
-                            </Link>
+                          <h3
+                            id={`player-name-${player.player_id}`}
+                            className="min-w-0 break-words text-lg font-semibold text-blue-300 underline underline-offset-4"
+                          >
+                            {player.full_name}
                           </h3>
 
                           <span
@@ -310,7 +311,11 @@ export default function ClubRatingPlayersPage() {
                               : "Not Set"}
                           </p>
                         )}
-                      </div>
+                        <div className="mt-4 border-t border-zinc-700 pt-3 text-sm font-semibold text-blue-300">
+                          <span id={`player-history-${player.player_id}`}>View session &amp; game history</span>
+                          <span aria-hidden="true" className="ml-2 inline-block transition-transform group-hover:translate-x-1">→</span>
+                        </div>
+                      </Link>
                     );
                   })}
                 </div>
