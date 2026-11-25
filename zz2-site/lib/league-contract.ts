@@ -30,11 +30,19 @@ export function formatPrizeMoney(cents: number) {
 
 export type ListingFacility = { id: string; name: string; city: string | null; state: string | null };
 
+export type LeagueRegistrationSession = {
+  date: string;
+  start_time: string;
+  end_time: string;
+  url: string;
+};
+
 export type PublishedLeague = {
   id: string; name: string; facility_id: string; description: string | null;
   format: string | null; skill_level: string | null; dupr_rated: boolean; pricing: string | null;
   start_date: string; end_date: string; registration_status: keyof typeof registrationLabels;
   registration_url: string | null; logo_url: string | null;
+  registration_sessions?: LeagueRegistrationSession[];
 };
 
 export type PublicLeagueStanding = {

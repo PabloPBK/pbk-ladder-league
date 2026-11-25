@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatPrizeMoney, isUuid, leagueDate, publicWebUrl, registrationLabels, type PublicLeagueStanding } from "../../../lib/league-contract";
 import { getPublicLeague } from "../../../lib/league-feed";
+import LeagueRegistrationSchedule, { leagueRegistrationToday } from "../LeagueRegistrationSchedule";
 
 export const dynamic = "force-dynamic";
 
@@ -63,11 +64,12 @@ export default async function PublicLeague({ params, searchParams }: {
         {listing.description && <p className="max-w-3xl whitespace-pre-line leading-relaxed text-zinc-700">{listing.description}</p>}
         <div className="flex flex-wrap items-center gap-4">
           <p className="font-semibold">{registrationLabels[listing.registration_status]}</p>
-          {registration && ["open", "waitlist"].includes(listing.registration_status) &&
+          {!listing.registration_sessions?.length && registration && ["open", "waitlist"].includes(listing.registration_status) &&
             <a className="rounded-lg bg-yellow-300 px-4 py-2 font-bold hover:bg-yellow-400" href={registration}>
               {listing.registration_status === "waitlist" ? "Join waitlist" : "Register"}
             </a>}
         </div>
+        <LeagueRegistrationSchedule listing={listing} today={leagueRegistrationToday()} />
       </div>
 
       {season && <section className={section} aria-labelledby="season-standings">

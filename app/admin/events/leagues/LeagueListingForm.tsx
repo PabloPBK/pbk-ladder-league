@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import type { LeagueRegistrationSession } from "@/zz2-site/lib/league-contract";
 import {
   listingStatuses, registrationLabels, registrationStatuses, resultOptions,
   type LeagueListing, type ListingFacility,
 } from "@/lib/data/league-listings";
 
 const control = "w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2.5 text-white focus-visible:outline-2 focus-visible:outline-yellow-400";
+const sessionFields = [
+  ["date", "Date", "date"],
+  ["start_time", "Starts", "time"],
+  ["end_time", "Ends", "time"],
+  ["url", "Registration link", "url"],
+] as const;
 
 export default function LeagueListingForm({
   listing, facilities, leagues, seasons,
@@ -20,6 +27,10 @@ export default function LeagueListingForm({
   const router = useRouter();
   const [leagueId, setLeagueId] = useState(listing?.league_id ?? "");
   const [seasonId, setSeasonId] = useState(listing?.season_id ?? "");
+  const [sessions, setSessions] = useState(() =>
+    (listing?.registration_sessions ?? []).map((session, key) => ({ ...session, key }))
+  );
+  const nextSessionKey = useRef(sessions.length);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -38,7 +49,10 @@ export default function LeagueListingForm({
       const response = await fetch("/api/league-listings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, ...flags }),
+        body: JSON.stringify({
+          ...payload, ...flags,
+          registration_sessions: sessions.map(({ date, start_time, end_time, url }) => ({ date, start_time, end_time, url })),
+        }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Unable to save league.");
@@ -78,6 +92,34 @@ export default function LeagueListingForm({
       </div>
       <label className="grid gap-1.5 text-sm">Description<textarea name="description" rows={4} maxLength={6000} defaultValue={listing?.description ?? ""} className={control} /></label>
       <label className="flex items-center gap-2 text-sm"><input name="dupr_rated" type="checkbox" defaultChecked={listing?.dupr_rated} />DUPR-rated league</label>
+      <fieldset className="space-y-3 rounded-xl border border-zinc-700 p-4">
+        <legend className="px-2 font-semibold">Drop-in registration</legend>
+        <p className="text-sm text-zinc-400">Add each session with its local times and registration link.</p>
+        {sessions.map((session, index) => (
+          <div key={session.key} className="grid items-end gap-3 rounded-lg border border-zinc-700 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_2fr_auto]">
+            {sessionFields.map(([field, label, type]) => (
+              <label key={field} className="grid gap-1.5 text-sm">
+                {label}
+                <input type={type} required className={control} value={session[field]}
+                  aria-label={`Session ${index + 1} ${label.toLowerCase()}`}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSessions((rows) => rows.map((row) => row.key === session.key ? { ...row, [field]: value } : row));
+                  }} />
+              </label>
+            ))}
+            <button type="button" aria-label={`Remove session ${index + 1}`} className="min-h-10 text-sm text-red-300 underline"
+              onClick={() => setSessions((rows) => rows.filter((row) => row.key !== session.key))}>Remove</button>
+          </div>
+        ))}
+        <button type="button" disabled={sessions.length >= 40} className="rounded-lg border border-zinc-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          onClick={() => {
+            const session: LeagueRegistrationSession & { key: number } = {
+              key: nextSessionKey.current++, date: "", start_time: "", end_time: "", url: "",
+            };
+            setSessions((rows) => [...rows, session]);
+          }}>Add session</button>
+      </fieldset>
       <fieldset className="space-y-3 rounded-xl border border-zinc-700 p-4">
         <legend className="px-2 font-semibold">Public results</legend>
         <div className="grid gap-3 sm:grid-cols-2">

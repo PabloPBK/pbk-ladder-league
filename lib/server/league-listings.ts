@@ -3,7 +3,7 @@ import "server-only";
 import type { LeagueListing, ListingFacility } from "@/lib/data/league-listings";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-const fields = "id, name, facility_id, league_id, season_id, description, format, skill_level, dupr_rated, start_date, end_date, registration_url, logo_url, pricing, status, registration_status, show_daily_standings, show_season_standings, show_player_stats, show_history, updated_at";
+const fields = "id, name, facility_id, league_id, season_id, description, format, skill_level, dupr_rated, start_date, end_date, registration_url, registration_sessions, logo_url, pricing, status, registration_status, show_daily_standings, show_season_standings, show_player_stats, show_history, updated_at";
 
 export async function getListingFacilities(): Promise<ListingFacility[]> {
   const { data, error } = await supabaseAdmin.from("tournament_facilities")

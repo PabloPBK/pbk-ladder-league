@@ -1,4 +1,4 @@
-import { isUuid, publicWebUrl } from "../../zz2-site/lib/league-contract";
+import { isUuid, publicWebUrl, type LeagueRegistrationSession } from "../../zz2-site/lib/league-contract";
 export { isUuid, leagueDate, publicWebUrl, registrationLabels } from "@/zz2-site/lib/league-contract";
 export type { ListingFacility } from "@/zz2-site/lib/league-contract";
 
@@ -15,6 +15,30 @@ function calendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return false;
   const date = new Date(value + "T00:00:00Z");
   return Number.isFinite(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+function readRegistrationSessions(value: unknown, start: string, end: string): LeagueRegistrationSession[] {
+  if (!Array.isArray(value) || value.length > 40) throw new Error("Enter up to 40 registration sessions.");
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    const label = "Session " + (index + 1);
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(label + " is invalid.");
+    const { date, start_time, end_time, url: rawUrl } = entry as Record<string, unknown>;
+    if (typeof date !== "string" || !calendarDate(date) || date < start || date > end) {
+      throw new Error(label + " needs a valid date within the season.");
+    }
+    const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (typeof start_time !== "string" || typeof end_time !== "string" ||
+        !time.test(start_time) || !time.test(end_time) || end_time <= start_time) {
+      throw new Error(label + " needs a start time and a later end time.");
+    }
+    const url = typeof rawUrl === "string" && rawUrl.length <= 2048 ? publicWebUrl(rawUrl.trim()) : null;
+    if (!url) throw new Error(label + " needs a valid registration link.");
+    const key = date + "T" + start_time;
+    if (seen.has(key)) throw new Error(label + " has a duplicate date and start time.");
+    seen.add(key);
+    return { date, start_time, end_time, url };
+  }).sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
 }
 
 export function readLeagueListing(input: unknown) {
@@ -74,6 +98,9 @@ export function readLeagueListing(input: unknown) {
       pricing: field("pricing", 100, "pricing") || null,
       start_date: start, end_date: end, status, registration_status: registration,
       registration_url: optionalUrl("registration_url", "registration"),
+      ...(record.registration_sessions !== undefined && {
+        registration_sessions: readRegistrationSessions(record.registration_sessions, start, end),
+      }),
       logo_url: optionalUrl("logo_url", "logo"),
       dupr_rated: record.dupr_rated === true,
       ...results,

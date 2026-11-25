@@ -14,7 +14,12 @@ function published(listing: LeagueListing): PublishedLeague {
     start_date, end_date, registration_status } = listing;
   return { id, name, facility_id, description, format, skill_level, dupr_rated, pricing,
     start_date, end_date, registration_status, registration_url: publicWebUrl(listing.registration_url),
-    logo_url: publicWebUrl(listing.logo_url) };
+    logo_url: publicWebUrl(listing.logo_url),
+    registration_sessions: (listing.registration_sessions ?? []).flatMap((session) => {
+      const url = publicWebUrl(session.url);
+      return url ? [{ date: session.date, start_time: session.start_time, end_time: session.end_time, url }] : [];
+    }),
+  };
 }
 
 function publicStanding(row: {
