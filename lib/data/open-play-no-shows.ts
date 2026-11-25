@@ -1,6 +1,8 @@
 import { parsePodPlayCsvTable } from "./podplayRoster";
 
 export const noShowStartDate = "2026-11-26";
+export const noShowFacilityId = "e022d6a9-a957-44dc-ab8a-d7460b906124";
+export const noShowFacilityName = "Pickleball Kingdom Lynnwood";
 export const noShowMaxFiles = 5;
 export const noShowMaxFileSize = 500_000;
 export const noShowStatuses = ["pending", "charged", "skipped"] as const;
@@ -53,7 +55,6 @@ export function readNoShowRoster(text: string) {
 
 export type NoShowQueueEntry = {
   id: string;
-  facility_id: string;
   session_date: string;
   session_time: string;
   session_name: string;

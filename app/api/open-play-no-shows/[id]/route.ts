@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/data/league-listings";
+import { noShowFacilityId } from "@/lib/data/open-play-no-shows";
 import { requireStaffUser, staffApiDenial } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -43,7 +44,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Choose a valid review action." }, { status: 400 });
   }
 
-  const { data, error } = await update.eq("id", id).eq("status", "pending").select("id").maybeSingle();
+  const { data, error } = await update.eq("id", id).eq("facility_id", noShowFacilityId)
+    .eq("status", "pending").select("id").maybeSingle();
   if (error) {
     console.error("Unable to update the open-play queue:", error.code);
     return NextResponse.json({ error: "Unable to save the review. Try again." }, { status: 500 });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { noShowStatuses } from "@/lib/data/open-play-no-shows";
+import { noShowFacilityId, noShowFacilityName, noShowStatuses } from "@/lib/data/open-play-no-shows";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { NoShowImport } from "./NoShowImport";
@@ -30,24 +30,18 @@ export default async function OpenPlayNoShows({ searchParams }: {
   const pageNumber = Number(query.page);
   const page = Number.isSafeInteger(pageNumber) && pageNumber > 0 && pageNumber < 100_000 ? pageNumber : 1;
   const offset = (page - 1) * pageSize;
-  const [venues, queue] = await Promise.all([
-    supabaseAdmin.from("tournament_facilities").select("id,name").order("name"),
-    supabaseAdmin.from("open_play_no_shows")
-      .select("id,facility_id,session_date,session_time,session_name,player_name,player_email,status,claimed_by,staff_name,claimed_at,resolved_at,skip_reason", { count: "exact" })
-      .eq("status", status).order("session_date", { ascending: false }).order("session_time", { ascending: false })
-      .order("id").range(offset, offset + pageSize - 1),
-  ]);
-  if (venues.error || queue.error) throw new Error("Unable to load the open-play no-show queue.");
-
-  const facilityNames = new Map(venues.data.map((venue) => [venue.id, venue.name]));
-  const entries = queue.data.map((entry) => ({
-    ...entry, status, facility_name: facilityNames.get(entry.facility_id) ?? "Facility",
-  }));
+  const queue = await supabaseAdmin.from("open_play_no_shows")
+    .select("id,session_date,session_time,session_name,player_name,player_email,claimed_by,staff_name,claimed_at,resolved_at,skip_reason", { count: "exact" })
+    .eq("facility_id", noShowFacilityId).eq("status", status)
+    .order("session_date", { ascending: false }).order("session_time", { ascending: false })
+    .order("id").range(offset, offset + pageSize - 1);
+  if (queue.error) throw new Error("Unable to load the open-play no-show queue.");
+  const entries = queue.data.map((entry) => ({ ...entry, status }));
 
   return (
-    <AppLayout title="Open-play no-shows" description="Review PodPlay no-shows and track charges made in your billing system.">
+    <AppLayout title="Open-play no-shows" description={noShowFacilityName + " · Review PodPlay no-shows and record charge outcomes."}>
       <div className="mx-auto max-w-5xl space-y-6">
-        <NoShowImport facilities={venues.data} />
+        <NoShowImport />
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
           <h2 className="text-xl font-bold">No-show queue</h2>
           <p className="mt-2 text-sm text-zinc-300">

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { NoShowQueueEntry } from "@/lib/data/open-play-no-shows";
 
-type Entry = NoShowQueueEntry & { facility_name: string };
 type Action = "claim" | "release" | "charged" | "skipped";
 
 const sessionDate = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
@@ -17,7 +16,7 @@ const actionButton = "rounded-lg border border-zinc-600 px-3 py-2 text-sm font-s
 const textField = "mt-1 block w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-white";
 
 export function NoShowQueue({ entries, userId, pendingView }: {
-  entries: Entry[];
+  entries: NoShowQueueEntry[];
   userId: string;
   pendingView: boolean;
 }) {
@@ -37,7 +36,7 @@ export function NoShowQueue({ entries, userId, pendingView }: {
   </>;
 }
 
-function QueueEntry({ entry, userId, staffName }: { entry: Entry; userId: string; staffName: string }) {
+function QueueEntry({ entry, userId, staffName }: { entry: NoShowQueueEntry; userId: string; staffName: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState("");
@@ -74,7 +73,7 @@ function QueueEntry({ entry, userId, staffName }: { entry: Entry; userId: string
       <div>
         <h3 className="break-words font-bold">{entry.player_name}</h3>
         <p className="break-all text-sm text-zinc-400">{entry.player_email ?? "No email in the export. Verify the player in PodPlay."}</p>
-        <p className="mt-2 text-sm text-zinc-300">{entry.session_name} · {entry.facility_name}</p>
+        <p className="mt-2 text-sm text-zinc-300">{entry.session_name}</p>
         <p className="text-sm text-zinc-400">
           {sessionDate.format(new Date(entry.session_date + "T00:00:00Z"))}
           {" · "}

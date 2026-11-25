@@ -2,11 +2,11 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { noShowMaxFiles, noShowMaxFileSize, noShowStartDate } from "@/lib/data/open-play-no-shows";
+import { noShowFacilityName, noShowMaxFiles, noShowMaxFileSize, noShowStartDate } from "@/lib/data/open-play-no-shows";
 
 const field = "mt-1 block w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-white";
 
-export function NoShowImport({ facilities }: { facilities: { id: string; name: string }[] }) {
+export function NoShowImport() {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -46,18 +46,12 @@ export function NoShowImport({ facilities }: { facilities: { id: string; name: s
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
       <h2 className="text-xl font-bold">Import PodPlay rosters</h2>
       <p className="mt-2 text-sm text-zinc-300">
-        Choose up to five CSV exports from completed open plays at the same facility.
+        Choose up to five CSV exports from completed open plays at {noShowFacilityName}.
         Only rows with an invitation status of Accepted enter the queue.
       </p>
       <form ref={formRef} onSubmit={submit} className="mt-5 space-y-4">
         <fieldset disabled={busy} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-semibold">Facility
-              <select name="facility_id" className={field} required defaultValue={facilities.find((venue) => /lynnwood/i.test(venue.name))?.id ?? ""}>
-                <option value="">Choose a facility</option>
-                {facilities.map((venue) => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
-              </select>
-            </label>
+          <div className="max-w-xl">
             <label className="block text-sm font-semibold">PodPlay CSV exports
               <input type="file" accept=".csv,text/csv" multiple className={field} onChange={(event) => {
                 const selected = Array.from(event.target.files ?? []);

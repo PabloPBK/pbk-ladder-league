@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { isUuid } from "@/lib/data/league-listings";
-import { noShowMaxFiles, noShowMaxFileSize, readNoShowRoster, validNoShowDate } from "@/lib/data/open-play-no-shows";
+import { noShowFacilityId, noShowFacilityName, noShowMaxFiles, noShowMaxFileSize, readNoShowRoster, validNoShowDate } from "@/lib/data/open-play-no-shows";
 import { staffApiDenial, requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -22,8 +21,9 @@ export async function POST(request: Request) {
     const dates = form.getAll("session_date");
     const times = form.getAll("session_time");
     const names = form.getAll("session_name");
-    const facility = form.get("facility_id");
-    if (typeof facility !== "string" || !isUuid(facility)) throw new ImportInputError("Choose a valid facility.");
+    if (form.getAll("facility_id").some((facility) => facility !== noShowFacilityId)) {
+      throw new ImportInputError("This queue only accepts rosters for " + noShowFacilityName + ".");
+    }
     if (!files.length || files.length > noShowMaxFiles || [dates, times, names].some((fields) => fields.length !== files.length)) {
       throw new ImportInputError("Choose one to five CSV files and enter the session details for each.");
     }
@@ -41,18 +41,13 @@ export async function POST(request: Request) {
       }
       try {
         return readNoShowRoster(await file.text()).map((player) => ({
-          ...player, facility_id: facility, session_date: date, session_time: time,
+          ...player, facility_id: noShowFacilityId, session_date: date, session_time: time,
           session_name: sessionName, source_file: file.name.slice(0, 255), imported_by: user.id,
         }));
       } catch (error) {
         throw new ImportInputError(file.name + " — " + (error instanceof Error ? error.message : "Unreadable CSV."));
       }
     }));
-
-    const { data: venue, error: facilityError } = await supabaseAdmin.from("tournament_facilities")
-      .select("id").eq("id", facility).maybeSingle();
-    if (facilityError) throw facilityError;
-    if (!venue) return NextResponse.json({ error: "The selected facility was not found." }, { status: 400 });
 
     const rows = imports.flat();
     if (rows.length > 1000) throw new ImportInputError("Import up to 1,000 no-shows at a time.");
