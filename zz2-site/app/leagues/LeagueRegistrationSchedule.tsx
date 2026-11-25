@@ -24,8 +24,7 @@ export default function LeagueRegistrationSchedule({ listing, today }: { listing
       <ul aria-label="Drop-in sessions" className="divide-y divide-zinc-200 border-y border-zinc-200 text-sm">
         {sessions.map((session, index) => {
           const url = publicWebUrl(session.url);
-          const onPodPlay = url && new URL(url).hostname.endsWith(".podplay.app");
-          const action = listing.registration_status === "waitlist" ? "Join waitlist" : onPodPlay ? "Register on PodPlay" : "Register";
+          const action = listing.registration_status === "waitlist" ? "Join waitlist" : "Register Here";
           const date = leagueDate(session.date);
 
           return (
