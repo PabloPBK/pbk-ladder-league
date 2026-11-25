@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { noShowMoney, parseNoShowAmount } from "@/lib/data/open-play-no-show-billing";
-import type { NoShowQueueEntry } from "@/lib/data/open-play-no-shows";
+import type { NoShowChargeGroup, NoShowQueueEntry } from "@/lib/data/open-play-no-shows";
 
 type Action = "claim" | "release" | "charged" | "exception" | "refund" | "note";
 
@@ -17,7 +17,11 @@ const defaultChargeAmount = "15.00";
 const actionButton = "rounded-lg border border-zinc-600 px-3 py-2 text-sm font-semibold hover:bg-zinc-800 disabled:opacity-50";
 const textField = "mt-1 block w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-white";
 
-export function NoShowQueue({ entries, userId }: { entries: NoShowQueueEntry[]; userId: string }) {
+export function NoShowQueue({ entries, groups, userId }: {
+  entries: NoShowQueueEntry[];
+  groups: NoShowChargeGroup[];
+  userId: string;
+}) {
   const [staffName, setStaffName] = useState("");
 
   return <>
@@ -26,13 +30,46 @@ export function NoShowQueue({ entries, userId }: { entries: NoShowQueueEntry[]; 
       <input value={staffName} onChange={(event) => setStaffName(event.target.value)} className={textField}
         placeholder="First and last name" maxLength={100} autoComplete="name" />
     </label>
-    <ul className="divide-y divide-zinc-800">
-      {entries.map((entry) => <QueueEntry key={entry.id} entry={entry} userId={userId} staffName={staffName.trim()} />)}
-    </ul>
+    {groups.length > 0 ? (
+      <ul className="space-y-2">
+        {groups.map(({ player_key, entries }) => {
+          const [{ player_name, player_email }] = entries;
+          return (
+            <li key={player_key}>
+              <details className="rounded-lg border border-zinc-700">
+                <summary className="cursor-pointer rounded-lg px-4 py-3 text-zinc-300 hover:bg-zinc-800">
+                  <span className="ml-1 inline-flex max-w-[90%] flex-wrap items-center gap-x-3 gap-y-1 align-middle">
+                    <span className="break-all font-bold text-white">{player_name}</span>
+                    <span className="rounded-full bg-blue-950 px-2 py-0.5 text-xs font-semibold text-blue-200">
+                      {entries.length} {entries.length === 1 ? "charge" : "charges"}
+                    </span>
+                    {player_email && <span className="break-all text-sm text-zinc-400">{player_email}</span>}
+                  </span>
+                </summary>
+                <ul className="divide-y divide-zinc-800 border-t border-zinc-800 px-4">
+                  {entries.map((entry) => (
+                    <QueueEntry key={entry.id} entry={entry} userId={userId} staffName={staffName.trim()} grouped />
+                  ))}
+                </ul>
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <ul className="divide-y divide-zinc-800">
+        {entries.map((entry) => <QueueEntry key={entry.id} entry={entry} userId={userId} staffName={staffName.trim()} />)}
+      </ul>
+    )}
   </>;
 }
 
-function QueueEntry({ entry, userId, staffName }: { entry: NoShowQueueEntry; userId: string; staffName: string }) {
+function QueueEntry({ entry, userId, staffName, grouped = false }: {
+  entry: NoShowQueueEntry;
+  userId: string;
+  staffName: string;
+  grouped?: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [chargeAmount, setChargeAmount] = useState(defaultChargeAmount);
@@ -91,12 +128,18 @@ function QueueEntry({ entry, userId, staffName }: { entry: NoShowQueueEntry; use
   return (
     <li className="grid gap-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div>
-        <h3 className="break-words font-bold">{entry.player_name}</h3>
-        <p className="break-all text-sm text-zinc-400">{entry.player_email ?? "No email in the export. Verify the player in PodPlay."}</p>
+        {grouped ? (
+          <h3 className="font-bold">{sessionDate.format(new Date(entry.session_date + "T00:00:00Z"))}</h3>
+        ) : (
+          <>
+            <h3 className="break-words font-bold">{entry.player_name}</h3>
+            <p className="break-all text-sm text-zinc-400">{entry.player_email ?? "No email in the export. Verify the player in PodPlay."}</p>
+          </>
+        )}
         <p className="mt-2 text-sm text-zinc-300">{entry.session_name}</p>
         <p className="text-sm text-zinc-400">
-          {sessionDate.format(new Date(entry.session_date + "T00:00:00Z"))}
-          {" · "}
+          {!grouped && sessionDate.format(new Date(entry.session_date + "T00:00:00Z"))}
+          {!grouped && " · "}
           {sessionTime.format(new Date("2000-01-01T" + entry.session_time + "Z"))}
         </p>
       </div>

@@ -79,3 +79,8 @@ export type NoShowQueueEntry = {
   notes_updated_at: string | null;
   notes_staff_name: string | null;
 };
+
+export type NoShowChargeGroup = {
+  player_key: string;
+  entries: [NoShowQueueEntry, ...NoShowQueueEntry[]];
+};

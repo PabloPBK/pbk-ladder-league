@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { noShowToday } from "@/lib/data/open-play-no-show-billing";
-import { noShowFacilityId, noShowFacilityName, noShowStatuses } from "@/lib/data/open-play-no-shows";
+import { noShowFacilityId, noShowFacilityName, noShowStatuses, type NoShowChargeGroup, type NoShowQueueEntry, type NoShowStatus } from "@/lib/data/open-play-no-shows";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { NoShowImport } from "./NoShowImport";
@@ -31,16 +31,7 @@ export default async function OpenPlayNoShows({ searchParams }: {
   const pageNumber = Number(query.page);
   const page = Number.isSafeInteger(pageNumber) && pageNumber > 0 && pageNumber < 100_000 ? pageNumber : 1;
   const offset = (page - 1) * pageSize;
-  const queueQuery = supabaseAdmin.from("open_play_no_shows")
-    .select("id,session_date,session_time,session_name,player_name,player_email,claimed_by,staff_name,claimed_at,resolved_at,skip_reason,status,charge_cents,reversal_cents,reversed_at,reversal_staff_name,reversal_reason,notes,notes_updated_at,notes_staff_name", { count: "exact" })
-    .eq("facility_id", noShowFacilityId);
-  const queue = await (status === "reversed"
-    ? queueQuery.in("status", ["reversed", "skipped"])
-    : queueQuery.eq("status", status))
-    .order("session_date", { ascending: false }).order("session_time", { ascending: false })
-    .order("id").range(offset, offset + pageSize - 1);
-  if (queue.error) throw new Error("Unable to load the open-play no-show queue.");
-  const entries = queue.data;
+  const { entries, groups, hasNextPage } = await loadQueue(status, offset);
 
   return (
     <AppLayout title="Open-play no-shows" description={noShowFacilityName + " · Review PodPlay no-shows and record charge outcomes."}>
@@ -73,19 +64,42 @@ export default async function OpenPlayNoShows({ searchParams }: {
               </Link>
             ))}
           </nav>
-          {entries.length ? (
-            <NoShowQueue entries={entries} userId={user.id} />
+          {(entries.length > 0 || groups.length > 0) ? (
+            <NoShowQueue entries={entries} groups={groups} userId={user.id} />
           ) : (
             <p className="py-4 text-sm text-zinc-400">No entries on this page.</p>
           )}
-          {(page > 1 || (queue.count ?? 0) > offset + entries.length) && (
+          {(page > 1 || hasNextPage) && (
             <nav aria-label="Queue pages" className="mt-4 flex gap-5 text-sm font-semibold text-blue-300">
               {page > 1 && <Link href={`${path}?status=${status}&page=${page - 1}`}>← Previous</Link>}
-              {(queue.count ?? 0) > offset + entries.length && <Link href={`${path}?status=${status}&page=${page + 1}`}>Next →</Link>}
+              {hasNextPage && <Link href={`${path}?status=${status}&page=${page + 1}`}>Next →</Link>}
             </nav>
           )}
         </section>
       </div>
     </AppLayout>
   );
+}
+
+async function loadQueue(status: NoShowStatus, offset: number) {
+  if (status === "charged") {
+    const { data, error } = await supabaseAdmin.rpc("open_play_no_show_charge_groups", {
+      report_facility: noShowFacilityId, group_offset: offset,
+    });
+    if (error) throw new Error("Unable to load the open-play charge groups.");
+    const groups = data as NoShowChargeGroup[];
+    return { entries: [], groups: groups.slice(0, pageSize), hasNextPage: groups.length > pageSize };
+  }
+
+  const queueQuery = supabaseAdmin.from("open_play_no_shows")
+    .select("id,session_date,session_time,session_name,player_name,player_email,claimed_by,staff_name,claimed_at,resolved_at,skip_reason,status,charge_cents,reversal_cents,reversed_at,reversal_staff_name,reversal_reason,notes,notes_updated_at,notes_staff_name", { count: "exact" })
+    .eq("facility_id", noShowFacilityId);
+  const queue = await (status === "reversed"
+    ? queueQuery.in("status", ["reversed", "skipped"])
+    : queueQuery.eq("status", status))
+    .order("session_date", { ascending: false }).order("session_time", { ascending: false })
+    .order("id").range(offset, offset + pageSize - 1);
+  if (queue.error) throw new Error("Unable to load the open-play no-show queue.");
+  return { entries: queue.data as NoShowQueueEntry[], groups: [], hasNextPage: (queue.count ?? 0) > offset + queue.data.length };
+
 }
