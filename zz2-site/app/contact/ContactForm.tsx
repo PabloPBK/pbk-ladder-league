@@ -1,33 +1,48 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { contactDraftUrl, contactLimits, contactTopics } from "../../lib/contact";
+import { contactLimits, contactTopics } from "../../lib/contact";
 
 const field = "mt-2 block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-[#081b3b] [color-scheme:light] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1350b6]";
 
-export function ContactForm({ email }: { email: string }) {
-  const [draftOpened, setDraftOpened] = useState(false);
+export function ContactForm() {
+  const [submission, setSubmission] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState("");
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setDraftOpened(false);
+    if (submission === "sending") return;
+
+    const form = event.currentTarget;
+    setSubmission("idle");
     setError("");
     try {
-      const inquiry = Object.fromEntries(new FormData(event.currentTarget));
-      window.location.href = contactDraftUrl(email, inquiry);
-      setDraftOpened(true);
+      const inquiry = Object.fromEntries(new FormData(form));
+      setSubmission("sending");
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inquiry),
+        signal: AbortSignal.timeout(10000),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.sent !== true) {
+        throw new Error(result?.error || "We couldn’t send your message. Try again or use the direct email link.");
+      }
+      form.reset();
+      setSubmission("sent");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Couldn’t open an email draft. Use the direct email link.");
+      setSubmission("idle");
+      setError(failure instanceof Error && failure.name === "Error"
+        ? failure.message : "We couldn’t send your message. Try again or use the direct email link.");
     }
   }
 
   return (
     <form method="post" onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-6 text-[#081b3b] shadow-sm sm:p-8">
       <h2 className="text-2xl font-extrabold">Write to ZZ2</h2>
-      <p className="mt-2 text-sm text-slate-700">This form opens a draft in your email app. Send it from there.</p>
       <noscript><p className="mt-4 text-sm text-slate-700">Enable JavaScript to use the form, or email ZZ2 directly.</p></noscript>
-      <fieldset className="mt-5 space-y-5">
+      <fieldset disabled={submission === "sending"} className="mt-5 space-y-5">
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block text-sm font-semibold">Name
             <input name="name" autoComplete="name" required maxLength={contactLimits.name} className={field} />
@@ -45,11 +60,14 @@ export function ContactForm({ email }: { email: string }) {
         <label className="block text-sm font-semibold">Message
           <textarea name="message" required rows={6} maxLength={contactLimits.message} className={field} />
         </label>
+        <div hidden>
+          <label>Leave this field blank<input name="website" autoComplete="off" tabIndex={-1} /></label>
+        </div>
         <button type="submit" className="min-h-12 rounded-md bg-[#ffd22e] px-6 py-3 text-sm font-bold text-[#06152e] hover:bg-yellow-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1350b6] disabled:opacity-60">
-          Open email draft
+          {submission === "sending" ? "Sending…" : "Send message"}
         </button>
       </fieldset>
-      {draftOpened && <p className="mt-4 text-sm text-slate-700" role="status">If your email app opened, send the draft there. You can also use the direct email link.</p>}
+      {submission === "sent" && <p className="mt-4 text-sm font-semibold text-green-800" role="status">Thanks for reaching out. We sent your message to ZZ2.</p>}
       {error && <p className="mt-4 text-sm font-semibold text-red-700" role="alert">{error}</p>}
     </form>
   );

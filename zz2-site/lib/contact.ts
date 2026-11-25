@@ -1,3 +1,5 @@
+export const inquiryEmail = "pablo@zz2pickleball.com";
+
 export const contactTopics = [
   "Tournaments",
   "Leagues",
@@ -18,7 +20,7 @@ export function readContactInquiry(value: unknown) {
   const topic = contactTopics.find((item) => item === input.topic);
 
   if (!name || name.length > contactLimits.name) throw new Error("Enter your name.");
-  if (email.length > contactLimits.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email.length > contactLimits.email || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(email)) {
     throw new Error("Enter a valid email address.");
   }
   if (!topic) throw new Error("Choose a topic.");
@@ -27,12 +29,4 @@ export function readContactInquiry(value: unknown) {
   return { name, email, topic, message };
 }
 
-export function contactDraftUrl(recipient: string, input: unknown) {
-  const inquiry = readContactInquiry(input);
-  const subject = encodeURIComponent("ZZ2 Pickleball · " + inquiry.topic);
-  const message = inquiry.message.replace(/\r?\n/g, "\r\n");
-  const body = encodeURIComponent(`Name: ${inquiry.name}\r\nReply email: ${inquiry.email}\r\n\r\n${message}`);
-  const draft = `mailto:${recipient}?subject=${subject}&body=${body}`;
-  if (draft.length > 2000) throw new Error("This message is too long for an email draft. Copy it and use the direct email link.");
-  return draft;
-}
+export type ContactInquiry = ReturnType<typeof readContactInquiry>;
