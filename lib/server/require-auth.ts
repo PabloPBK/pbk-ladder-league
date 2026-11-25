@@ -43,12 +43,16 @@ export async function getStaffApiDenial() {
     await requireStaffUser();
     return null;
   } catch (error) {
-    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-      return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
-    }
-    if (error instanceof Error && error.message === "STAFF_ACCESS_DENIED") {
-      return NextResponse.json({ error: "Staff access is required." }, { status: 403 });
-    }
-    return NextResponse.json({ error: "Unable to verify staff access." }, { status: 500 });
+    return staffApiDenial(error);
   }
+}
+
+export function staffApiDenial(error: unknown) {
+  if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+    return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
+  }
+  if (error instanceof Error && error.message === "STAFF_ACCESS_DENIED") {
+    return NextResponse.json({ error: "Staff access is required." }, { status: 403 });
+  }
+  return NextResponse.json({ error: "Unable to verify staff access." }, { status: 500 });
 }

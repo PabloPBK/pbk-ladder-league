@@ -61,6 +61,11 @@ const groups: NavGroup[] = [
         icon: "🎨",
       },
       {
+        href: "/admin/open-play-no-shows",
+        label: "Open-play no-shows",
+        icon: "📋",
+      },
+      {
         href: "/admin/tv-manager",
         label: "TV Display Manager",
         icon: "🖥️",

@@ -35,6 +35,7 @@ const departments: Department[] = [
     color: "border-blue-500/40",
     links: [
       { label: "Daily Schedule", href: "/admin/facility-schedule" },
+      { label: "Open-play no-shows", href: "/admin/open-play-no-shows" },
       { label: "TV Manager", href: "/admin/tv-manager" },
       {
         label: "Wristband Colors",

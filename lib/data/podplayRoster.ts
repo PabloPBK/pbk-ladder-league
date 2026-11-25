@@ -21,7 +21,7 @@ export function getPodPlayImportFields(row: ParsedCsvRow) {
   };
 }
 
-export function parsePodPlayCsv(text: string): ParsedCsvRow[] {
+export function parsePodPlayCsvTable(text: string, { strict = false } = {}): string[][] {
   const cleanedText = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let row: string[] = [];
@@ -79,7 +79,14 @@ export function parsePodPlayCsv(text: string): ParsedCsvRow[] {
     rows.push(row);
   }
 
-  const [headers, ...dataRows] = rows;
+  if (strict && (insideQuotes || rows.some((values) => values.length !== rows[0].length))) {
+    throw new Error("The CSV contains an unfinished quote or an inconsistent number of columns.");
+  }
+  return rows;
+}
+
+export function parsePodPlayCsv(text: string): ParsedCsvRow[] {
+  const [headers, ...dataRows] = parsePodPlayCsvTable(text);
 
   if (!headers) {
     return [];
