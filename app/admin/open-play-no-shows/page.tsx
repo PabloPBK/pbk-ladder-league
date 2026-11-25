@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { noShowToday } from "@/lib/data/open-play-no-show-billing";
 import { noShowFacilityId, noShowFacilityName, noShowStatuses } from "@/lib/data/open-play-no-shows";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const path = "/admin/open-play-no-shows";
 const pageSize = 50;
-const labels = { pending: "Pending", charged: "Charged", skipped: "Skipped" };
+const labels = { pending: "Pending", charged: "Charged", reversed: "Reversals" };
 
 export default async function OpenPlayNoShows({ searchParams }: {
   searchParams: Promise<{ status?: string; page?: string }>;
@@ -26,22 +27,39 @@ export default async function OpenPlayNoShows({ searchParams }: {
   }
 
   const query = await searchParams;
-  const status = noShowStatuses.find((choice) => choice === query.status) ?? "pending";
+  const status = query.status === "skipped" ? "reversed" : noShowStatuses.find((choice) => choice === query.status) ?? "pending";
   const pageNumber = Number(query.page);
   const page = Number.isSafeInteger(pageNumber) && pageNumber > 0 && pageNumber < 100_000 ? pageNumber : 1;
   const offset = (page - 1) * pageSize;
-  const queue = await supabaseAdmin.from("open_play_no_shows")
-    .select("id,session_date,session_time,session_name,player_name,player_email,claimed_by,staff_name,claimed_at,resolved_at,skip_reason", { count: "exact" })
-    .eq("facility_id", noShowFacilityId).eq("status", status)
+  const queueQuery = supabaseAdmin.from("open_play_no_shows")
+    .select("id,session_date,session_time,session_name,player_name,player_email,claimed_by,staff_name,claimed_at,resolved_at,skip_reason,status,charge_cents,reversal_cents,reversed_at,reversal_staff_name,reversal_reason,notes,notes_updated_at,notes_staff_name", { count: "exact" })
+    .eq("facility_id", noShowFacilityId);
+  const queue = await (status === "reversed"
+    ? queueQuery.in("status", ["reversed", "skipped"])
+    : queueQuery.eq("status", status))
     .order("session_date", { ascending: false }).order("session_time", { ascending: false })
     .order("id").range(offset, offset + pageSize - 1);
   if (queue.error) throw new Error("Unable to load the open-play no-show queue.");
-  const entries = queue.data.map((entry) => ({ ...entry, status }));
+  const entries = queue.data;
 
   return (
     <AppLayout title="Open-play no-shows" description={noShowFacilityName + " · Review PodPlay no-shows and record charge outcomes."}>
       <div className="mx-auto max-w-5xl space-y-6">
         <NoShowImport />
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
+          <h2 className="text-xl font-bold">Daily report</h2>
+          <p className="mt-2 text-sm text-zinc-300">Download charges, refunds, exceptions, and notes by the date staff recorded each action (Pacific time).</p>
+          <form action="/api/open-play-no-shows/report" className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="text-sm font-semibold">
+              Report date
+              <input type="date" name="date" defaultValue={noShowToday()} required
+                className="mt-1 block rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-white" />
+            </label>
+            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">
+              Download CSV
+            </button>
+          </form>
+        </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
           <h2 className="text-xl font-bold">No-show queue</h2>
           <p className="mt-2 text-sm text-zinc-300">
@@ -56,9 +74,9 @@ export default async function OpenPlayNoShows({ searchParams }: {
             ))}
           </nav>
           {entries.length ? (
-            <NoShowQueue entries={entries} userId={user.id} pendingView={status === "pending"} />
+            <NoShowQueue entries={entries} userId={user.id} />
           ) : (
-            <p className="py-4 text-sm text-zinc-400">No {status} entries on this page.</p>
+            <p className="py-4 text-sm text-zinc-400">No entries on this page.</p>
           )}
           {(page > 1 || (queue.count ?? 0) > offset + entries.length) && (
             <nav aria-label="Queue pages" className="mt-4 flex gap-5 text-sm font-semibold text-blue-300">

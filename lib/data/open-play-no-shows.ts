@@ -5,11 +5,15 @@ export const noShowFacilityId = "e022d6a9-a957-44dc-ab8a-d7460b906124";
 export const noShowFacilityName = "Pickleball Kingdom Lynnwood";
 export const noShowMaxFiles = 5;
 export const noShowMaxFileSize = 500_000;
-export const noShowStatuses = ["pending", "charged", "skipped"] as const;
+export const noShowStatuses = ["pending", "charged", "reversed"] as const;
 export type NoShowStatus = typeof noShowStatuses[number];
 
 export function validNoShowDate(date: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < noShowStartDate) return false;
+  return date >= noShowStartDate && validCalendarDate(date);
+}
+
+export function validCalendarDate(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date.startsWith("0000")) return false;
   const parsed = new Date(date + "T00:00:00Z");
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
 }
@@ -60,10 +64,18 @@ export type NoShowQueueEntry = {
   session_name: string;
   player_name: string;
   player_email: string | null;
-  status: NoShowStatus;
+  status: NoShowStatus | "skipped";
   claimed_by: string | null;
   claimed_at: string | null;
   staff_name: string | null;
   resolved_at: string | null;
   skip_reason: string | null;
+  charge_cents: number | null;
+  reversal_cents: number | null;
+  reversal_reason: string | null;
+  reversal_staff_name: string | null;
+  reversed_at: string | null;
+  notes: string | null;
+  notes_updated_at: string | null;
+  notes_staff_name: string | null;
 };
