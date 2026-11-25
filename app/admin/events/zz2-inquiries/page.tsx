@@ -29,7 +29,7 @@ export default async function Zz2Inquiries({ searchParams }: { searchParams: Pro
 
   const messages = data.slice(0, pageSize);
   return (
-    <AppLayout title="ZZ2 inquiries" description="Messages from the ZZ2 website contact form.">
+    <AppLayout title="ZZ2 inquiries" description="Earlier messages from the ZZ2 website contact form.">
       <div className="mx-auto max-w-3xl space-y-5">
         <Link href="/admin/events" className="text-sm font-semibold text-yellow-400 hover:underline">← Back to Events</Link>
         {messages.length === 0 && <p className="rounded-xl border border-zinc-800 p-5 text-zinc-300">No inquiries on this page.</p>}

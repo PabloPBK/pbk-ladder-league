@@ -3,7 +3,6 @@ import { ContactForm } from "./ContactForm";
 export const metadata = { title: "Contact", description: "Send an inquiry to ZZ2 Pickleball about events, facility consulting, or partnerships." };
 
 const inquiryEmail = "pablo@zz2pickleball.com";
-const contactEndpoint = new URL("/api/public/zz2/contact", process.env.TOURNAMENT_FEED_URL ?? "https://leagues.zz2pickleball.com").href;
 
 export default function Page() {
   return (
@@ -18,7 +17,7 @@ export default function Page() {
       </header>
       <div className="bg-[#f4f7fb] px-6 py-12 text-[#081b3b] sm:py-16">
         <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <ContactForm endpoint={contactEndpoint} />
+          <ContactForm email={inquiryEmail} />
           <aside className="md:py-4">
             <h2 className="text-xl font-extrabold">Prefer email?</h2>
             <a href={`mailto:${inquiryEmail}`}
