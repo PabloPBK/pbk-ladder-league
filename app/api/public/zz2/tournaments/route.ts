@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isUuid } from "@/zz2-site/lib/league-contract";
 export const dynamic = "force-dynamic";
 const fields = "id,name,start_date,end_date,description,registration_url,registration_platform,logo_url,tournament_facilities(name,city,state,address)";
 export async function GET(request:NextRequest){
@@ -7,7 +8,7 @@ export async function GET(request:NextRequest){
     const id=request.nextUrl.searchParams.get("id");
     let query=supabaseAdmin.from("tournaments").select(fields).eq("status","published").eq("publish_zz2",true);
     if(id){
-      if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return NextResponse.json({error:"Invalid tournament"},{status:400});
+      if(!isUuid(id))return NextResponse.json({error:"Invalid tournament"},{status:400});
       query=query.eq("id",id);
     }else query=query.gte("end_date",new Date().toISOString().slice(0,10)).order("start_date",{ascending:true});
     const {data,error}=await query;
