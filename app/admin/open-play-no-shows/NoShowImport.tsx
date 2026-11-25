@@ -1,24 +1,70 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { noShowFacilityName, noShowMaxFiles, noShowMaxFileSize, noShowStartDate } from "@/lib/data/open-play-no-shows";
+import type { ScheduledOpenPlay } from "@/lib/data/open-play-no-show-schedule";
+
+const dayLabel = new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "UTC" });
+const timeLabel = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+
+function sessionLabel(session: ScheduledOpenPlay) {
+  const start = timeLabel.format(new Date(`2000-01-01T${session.start}:00Z`));
+  const end = timeLabel.format(new Date(`2000-01-01T${session.end}:00Z`));
+  return `${start}–${end} · ${session.name}`;
+}
+
+type Roster = { file: File; name: string; date: string; time: string };
+type ScheduleResult = { date: string; sessions: ScheduledOpenPlay[]; saved: boolean; error?: string };
 
 const field = "mt-1 block w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-white";
 
-export function NoShowImport() {
+export function NoShowImport({ scheduleDates }: { scheduleDates: string[] }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [rosters, setRosters] = useState<Roster[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  const scheduleDate = scheduleDates.includes(selectedDate) ? selectedDate : scheduleDates[0];
+  const schedule = scheduleResult?.date === scheduleDate ? scheduleResult : null;
+  const sessions = schedule?.sessions ?? [];
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadSchedule() {
+      try {
+        const response = await fetch(`/api/open-play-no-shows/schedule?date=${encodeURIComponent(scheduleDate)}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error();
+        const data: Pick<ScheduleResult, "sessions" | "saved"> = await response.json();
+        if (!controller.signal.aborted) setScheduleResult({ ...data, date: scheduleDate });
+      } catch {
+        if (!controller.signal.aborted) {
+          setScheduleResult({
+            date: scheduleDate, sessions: [], saved: false,
+            error: "Could not load the schedule. You can enter the session details manually.",
+          });
+        }
+      }
+    }
+    void loadSchedule();
+    return () => controller.abort();
+  }, [scheduleDate]);
+
+  function updateRoster(index: number, details: Partial<Omit<Roster, "file">>) {
+    setRosters((current) => current.map((roster, i) => i === index ? { ...roster, ...details } : roster));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !files.length) return;
+    if (busy || !rosters.length) return;
     const form = new FormData(event.currentTarget);
-    files.forEach((file) => form.append("file", file));
+    rosters.forEach(({ file }) => form.append("file", file));
     setBusy(true);
     setError("");
     setMessage("");
@@ -33,7 +79,7 @@ export function NoShowImport() {
           : "No Accepted players were found in these exports."
       );
       formRef.current?.reset();
-      setFiles([]);
+      setRosters([]);
       router.refresh();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Unable to import the rosters.");
@@ -49,6 +95,26 @@ export function NoShowImport() {
         Choose up to five CSV exports from completed open plays at {noShowFacilityName}.
         Only rows with an invitation status of Accepted enter the queue.
       </p>
+      <div className="mt-5 space-y-3 rounded-lg border border-zinc-700 p-4">
+        <label className="block max-w-xs text-sm font-semibold">Scheduled open plays
+          <select value={scheduleDate} onChange={(event) => setSelectedDate(event.target.value)} className={field}>
+            {scheduleDates.map((date, index) => (
+              <option key={date} value={date}>
+                {index === 0 ? "Yesterday · " : ""}{dayLabel.format(new Date(date + "T00:00:00Z"))}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div role="status" className="text-sm text-zinc-300">
+          {!schedule ? "Loading open plays…" : schedule.error ?? (!schedule.saved
+            ? "No published schedule is available for this date."
+            : sessions.length === 0 ? "No open plays were scheduled for this date." : (
+              <ul className="space-y-1">
+                {sessions.map((session) => <li key={sessionLabel(session)}>{sessionLabel(session)}</li>)}
+              </ul>
+            ))}
+        </div>
+      </div>
       <form ref={formRef} onSubmit={submit} className="mt-5 space-y-4">
         <fieldset disabled={busy} className="space-y-4">
           <div className="max-w-xl">
@@ -57,36 +123,51 @@ export function NoShowImport() {
                 const selected = Array.from(event.target.files ?? []);
                 setMessage("");
                 if (selected.length > noShowMaxFiles || selected.some((file) => !file.size || file.size > noShowMaxFileSize || !/\.csv$/i.test(file.name))) {
-                  setFiles([]);
+                  setRosters([]);
                   event.target.value = "";
                   setError("Choose up to five non-empty CSV files, each under 500 KB.");
                   return;
                 }
-                setFiles(selected);
+                setRosters(selected.map((file) => ({ file, name: "", date: "", time: "" })));
                 setError("");
               }} />
             </label>
           </div>
-          {files.map((file, index) => (
+          {rosters.map(({ file, name, date, time }, index) => (
             <fieldset key={`${file.name}-${file.lastModified}-${index}`} className="grid gap-3 rounded-lg border border-zinc-700 px-4 pb-4 pt-2 sm:grid-cols-3">
               <legend className="max-w-full break-all px-1 text-sm font-semibold">{file.name}</legend>
+              {sessions.length > 0 && scheduleDate >= noShowStartDate && (
+                <label className="block text-sm sm:col-span-3">Fill details from the schedule
+                  <select className={field} value={date === scheduleDate
+                    ? String(sessions.findIndex((session) => session.name === name && session.start === time)) : "-1"}
+                    onChange={(event) => {
+                      const session = sessions[Number(event.target.value)];
+                      if (session) updateRoster(index, { name: session.name, date: scheduleDate, time: session.start });
+                    }}>
+                    <option value="-1" disabled>Choose a scheduled open play</option>
+                    {sessions.map((session, sessionIndex) => (
+                      <option key={sessionLabel(session)} value={sessionIndex}>{sessionLabel(session)}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="block text-sm">Open-play name
-                <input name="session_name" className={field} placeholder="e.g. Beginner Open Play" required maxLength={160} />
+                <input name="session_name" value={name} onChange={(event) => updateRoster(index, { name: event.target.value })} className={field} placeholder="e.g. Beginner Open Play" required maxLength={160} />
               </label>
               <label className="block text-sm">Session date
-                <input name="session_date" type="date" className={field} required min={noShowStartDate} />
+                <input name="session_date" type="date" value={date} onChange={(event) => updateRoster(index, { date: event.target.value })} className={field} required min={noShowStartDate} />
               </label>
               <label className="block text-sm">Start time at the facility
-                <input name="session_time" type="time" className={field} required />
+                <input name="session_time" type="time" value={time} onChange={(event) => updateRoster(index, { time: event.target.value })} className={field} required />
               </label>
             </fieldset>
           ))}
-          {files.length > 0 && <label className="flex items-center gap-2 text-sm">
+          {rosters.length > 0 && <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="completed" value="yes" required />
             I confirmed these open plays have ended.
           </label>}
         </fieldset>
-        <button type="submit" disabled={!files.length || busy} className="rounded-lg bg-blue-500 px-5 py-2.5 font-bold text-zinc-950 hover:bg-blue-400 disabled:opacity-50">
+        <button type="submit" disabled={!rosters.length || busy} className="rounded-lg bg-blue-500 px-5 py-2.5 font-bold text-zinc-950 hover:bg-blue-400 disabled:opacity-50">
           {busy ? "Importing…" : "Import CSVs"}
         </button>
         {message && <p role="status" className="text-sm font-semibold text-green-300">{message}</p>}

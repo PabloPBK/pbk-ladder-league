@@ -2,6 +2,7 @@ import Form from "next/form";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { recentOpenPlayDates } from "@/lib/data/open-play-no-show-schedule";
 import { noShowToday } from "@/lib/data/open-play-no-show-billing";
 import { noShowFacilityId, noShowFacilityName, noShowStatuses, type NoShowPlayerGroup, type NoShowQueueEntry, type NoShowStatus } from "@/lib/data/open-play-no-shows";
 import { requireStaffUser } from "@/lib/server/require-auth";
@@ -41,7 +42,7 @@ export default async function OpenPlayNoShows({ searchParams }: {
   return (
     <AppLayout title="Open-play no-shows" description={noShowFacilityName + " · Review PodPlay no-shows and record charge outcomes."}>
       <div className="mx-auto max-w-5xl space-y-6">
-        <NoShowImport />
+        <NoShowImport scheduleDates={recentOpenPlayDates(noShowToday())} />
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
           <h2 className="text-xl font-bold">Daily report</h2>
           <p className="mt-2 text-sm text-zinc-300">Download charges, refunds, exceptions, and notes by the date staff recorded each action (Pacific time).</p>
