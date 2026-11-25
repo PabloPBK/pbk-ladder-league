@@ -80,7 +80,7 @@ export type NoShowQueueEntry = {
   notes_staff_name: string | null;
 };
 
-export type NoShowChargeGroup = {
+export type NoShowPlayerGroup = {
   player_key: string;
   entries: [NoShowQueueEntry, ...NoShowQueueEntry[]];
 };

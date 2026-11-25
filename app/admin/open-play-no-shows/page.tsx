@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { noShowToday } from "@/lib/data/open-play-no-show-billing";
-import { noShowFacilityId, noShowFacilityName, noShowStatuses, type NoShowChargeGroup, type NoShowQueueEntry, type NoShowStatus } from "@/lib/data/open-play-no-shows";
+import { noShowFacilityId, noShowFacilityName, noShowStatuses, type NoShowPlayerGroup, type NoShowQueueEntry, type NoShowStatus } from "@/lib/data/open-play-no-shows";
 import { requireStaffUser } from "@/lib/server/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { NoShowImport } from "./NoShowImport";
@@ -65,7 +65,7 @@ export default async function OpenPlayNoShows({ searchParams }: {
             ))}
           </nav>
           {(entries.length > 0 || groups.length > 0) ? (
-            <NoShowQueue entries={entries} groups={groups} userId={user.id} />
+            <NoShowQueue entries={entries} groups={groups} status={status} userId={user.id} />
           ) : (
             <p className="py-4 text-sm text-zinc-400">No entries on this page.</p>
           )}
@@ -82,24 +82,20 @@ export default async function OpenPlayNoShows({ searchParams }: {
 }
 
 async function loadQueue(status: NoShowStatus, offset: number) {
-  if (status === "charged") {
-    const { data, error } = await supabaseAdmin.rpc("open_play_no_show_charge_groups", {
-      report_facility: noShowFacilityId, group_offset: offset,
+  if (status !== "pending") {
+    const { data, error } = await supabaseAdmin.rpc("open_play_no_show_player_groups", {
+      report_facility: noShowFacilityId, queue_status: status, group_offset: offset, group_limit: pageSize + 1,
     });
-    if (error) throw new Error("Unable to load the open-play charge groups.");
-    const groups = data as NoShowChargeGroup[];
+    if (error) throw new Error("Unable to load the grouped open-play no-show entries.");
+    const groups = data as NoShowPlayerGroup[];
     return { entries: [], groups: groups.slice(0, pageSize), hasNextPage: groups.length > pageSize };
   }
 
-  const queueQuery = supabaseAdmin.from("open_play_no_shows")
+  const queue = await supabaseAdmin.from("open_play_no_shows")
     .select("id,session_date,session_time,session_name,player_name,player_email,claimed_by,staff_name,claimed_at,resolved_at,skip_reason,status,charge_cents,reversal_cents,reversed_at,reversal_staff_name,reversal_reason,notes,notes_updated_at,notes_staff_name", { count: "exact" })
-    .eq("facility_id", noShowFacilityId);
-  const queue = await (status === "reversed"
-    ? queueQuery.in("status", ["reversed", "skipped"])
-    : queueQuery.eq("status", status))
+    .eq("facility_id", noShowFacilityId).eq("status", status)
     .order("session_date", { ascending: false }).order("session_time", { ascending: false })
     .order("id").range(offset, offset + pageSize - 1);
   if (queue.error) throw new Error("Unable to load the open-play no-show queue.");
   return { entries: queue.data as NoShowQueueEntry[], groups: [], hasNextPage: (queue.count ?? 0) > offset + queue.data.length };
-
 }

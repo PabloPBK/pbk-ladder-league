@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { noShowMoney, parseNoShowAmount } from "@/lib/data/open-play-no-show-billing";
-import type { NoShowChargeGroup, NoShowQueueEntry } from "@/lib/data/open-play-no-shows";
+import type { NoShowPlayerGroup, NoShowQueueEntry, NoShowStatus } from "@/lib/data/open-play-no-shows";
 
 type Action = "claim" | "release" | "charged" | "exception" | "refund" | "note";
 
@@ -17,12 +17,14 @@ const defaultChargeAmount = "15.00";
 const actionButton = "rounded-lg border border-zinc-600 px-3 py-2 text-sm font-semibold hover:bg-zinc-800 disabled:opacity-50";
 const textField = "mt-1 block w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-white";
 
-export function NoShowQueue({ entries, groups, userId }: {
+export function NoShowQueue({ entries, groups, status, userId }: {
   entries: NoShowQueueEntry[];
-  groups: NoShowChargeGroup[];
+  groups: NoShowPlayerGroup[];
+  status: NoShowStatus;
   userId: string;
 }) {
   const [staffName, setStaffName] = useState("");
+  const outcome = status === "reversed" ? "reversal" : "charge";
 
   return <>
     <label className="mb-4 block max-w-xs text-sm font-semibold">
@@ -35,13 +37,13 @@ export function NoShowQueue({ entries, groups, userId }: {
         {groups.map(({ player_key, entries }) => {
           const [{ player_name, player_email }] = entries;
           return (
-            <li key={player_key}>
+            <li key={`${status}:${player_key}`}>
               <details className="rounded-lg border border-zinc-700">
                 <summary className="cursor-pointer rounded-lg px-4 py-3 text-zinc-300 hover:bg-zinc-800">
                   <span className="ml-1 inline-flex max-w-[90%] flex-wrap items-center gap-x-3 gap-y-1 align-middle">
                     <span className="break-all font-bold text-white">{player_name}</span>
                     <span className="rounded-full bg-blue-950 px-2 py-0.5 text-xs font-semibold text-blue-200">
-                      {entries.length} {entries.length === 1 ? "charge" : "charges"}
+                      {entries.length} {outcome}{entries.length === 1 ? "" : "s"}
                     </span>
                     {player_email && <span className="break-all text-sm text-zinc-400">{player_email}</span>}
                   </span>
@@ -167,7 +169,7 @@ function QueueEntry({ entry, userId, staffName, grouped = false }: {
               {" · "}{entry.reversal_staff_name ?? entry.staff_name}
             </p>
             {(entry.reversed_at || entry.resolved_at) && (
-              <p className="text-zinc-300">{reviewedAt.format(new Date((entry.reversed_at ?? entry.resolved_at)!))} PT</p>
+              <p className="text-zinc-300">Recorded {reviewedAt.format(new Date((entry.reversed_at ?? entry.resolved_at)!))} PT</p>
             )}
             <p className="mt-2 whitespace-pre-wrap break-words text-zinc-300">{entry.reversal_reason ?? entry.skip_reason}</p>
           </div>
