@@ -1,8 +1,6 @@
-
-"use client";
-
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { canReadZz2Contact } from "@/lib/server/zz2-contact";
 
 const eventTypes = [
   {
@@ -33,7 +31,8 @@ const eventTypes = [
   },
 ];
 
-export default function EventsPage() {
+export default async function EventsPage() {
+  const showInquiries = await canReadZz2Contact().catch(() => false);
   return (
     <AppLayout
       title="Add an Event"
@@ -46,6 +45,13 @@ export default function EventsPage() {
         >
           ← Back to Operations Hub
         </Link>
+
+        {showInquiries && (
+          <Link href="/admin/events/zz2-inquiries" className="block rounded-xl border border-blue-500/40 bg-zinc-900 p-5 hover:bg-zinc-800">
+            <span className="block font-bold">ZZ2 inquiries</span>
+            <span className="mt-1 block text-sm text-zinc-400">Read messages from the website contact form.</span>
+          </Link>
+        )}
 
         <section className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6">
           <h2 className="text-2xl font-black text-white">
