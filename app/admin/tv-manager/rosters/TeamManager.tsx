@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { assignRoundOneCourts, roundOneCourtLimit } from "./round-one-courts";
 
 type RatingMethod = "dupr_doubles" | "dupr_singles" | "club_rating";
 
@@ -34,6 +35,7 @@ type Props = {
   eventType: "partnered" | "individual";
   ratingMethod: RatingMethod;
   playersVersion?: number;
+  view?: "roster" | "courts";
 };
 
 const ratingNames: Record<RatingMethod, string> = {
@@ -55,6 +57,7 @@ export default function TeamManager({
   eventType,
   ratingMethod,
   playersVersion = 0,
+  view = "roster",
 }: Props) {
   const [data, setData] = useState<TeamResponse | null>(null);
   const [player1Id, setPlayer1Id] = useState("");
@@ -194,6 +197,86 @@ export default function TeamManager({
     } finally {
       setRemovingId(null);
     }
+  }
+
+  if (view === "courts") {
+    const teams = data?.teams ?? [];
+    const { courts, unrated } = assignRoundOneCourts(teams);
+    const partnered = eventType === "partnered";
+
+    return (
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-yellow-400">Round 1 Court Assignments</h2>
+            <p className="mt-2 font-semibold">{eventName}</p>
+            <p className="mt-2 text-sm text-zinc-400">
+              Teams are paired in order of combined doubles DUPR, starting with the two highest-rated teams on Court 1.
+              After Round 1, use the event’s court movement rules.
+            </p>
+          </div>
+          {partnered && (
+            <button
+              type="button"
+              onClick={() => void loadTeams()}
+              disabled={loading}
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Refresh Teams
+            </button>
+          )}
+        </div>
+
+        {!partnered ? (
+          <p className="mt-5 text-zinc-400">Choose a partnered event to see court assignments.</p>
+        ) : loading ? (
+          <p role="status" className="mt-5 text-zinc-400">Loading teams…</p>
+        ) : error ? (
+          <p role="alert" className="mt-5 text-red-300">{error}</p>
+        ) : teams.length === 0 ? (
+          <p className="mt-5 text-zinc-400">Create teams in the Roster tab to assign courts.</p>
+        ) : (
+          <div className="mt-5 space-y-4">
+            {teams.length > roundOneCourtLimit * 2 && (
+              <p role="status" className="text-amber-300">These 12 courts can hold up to 24 teams. This event has {teams.length} teams.</p>
+            )}
+            {teams.length % 2 === 1 && (
+              <p role="status" className="text-amber-300">There are {teams.length} teams. An even number is needed to give every team an opponent.</p>
+            )}
+            {unrated.length > 0 && (
+              <div className="rounded-lg border border-amber-800 p-4 text-sm text-amber-200">
+                <p>Complete the doubles DUPR ratings for these teams in the Roster tab to assign courts.</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {unrated.map((team) => (
+                    <li key={team.id}>{team.player1.full_name} &amp; {team.player2.full_name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {courts.length > 0 && (
+              <>
+                <p className="text-sm text-zinc-400">{teams.length} teams · {courts.length} courts</p>
+                <ol className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {courts.map((court) => (
+                    <li key={court.number} className="rounded-xl border border-zinc-700 bg-zinc-950 p-4">
+                      <h3 className="font-bold text-yellow-400">Court {court.number}</h3>
+                      <ul className="mt-2 divide-y divide-zinc-800">
+                        {court.teams.map(({ team, rating }) => (
+                          <li key={team.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                            <span className="min-w-0 break-words">{team.player1.full_name} &amp; {team.player2.full_name}</span>
+                            <span className="shrink-0 tabular-nums text-zinc-300">{rating.toFixed(3)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+          </div>
+        )}
+      </section>
+    );
   }
 
   if (eventType !== "partnered") {

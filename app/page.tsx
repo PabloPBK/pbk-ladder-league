@@ -23,6 +23,7 @@ const departments: Department[] = [
     color: "border-yellow-500/40",
     links: [
       { label: "Manage League", href: "/admin" },
+      { label: "Event Roster Manager", href: "/admin/tv-manager/rosters" },
       { label: "Scores", href: "/walking" },
       { label: "Standings", href: "/display" },
     ],

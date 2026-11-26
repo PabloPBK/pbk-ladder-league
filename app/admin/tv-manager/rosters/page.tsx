@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TeamManager from "./TeamManager";
 
@@ -154,8 +155,18 @@ function formatDate(value: string | null) {
 }
 
 export default function LiveRostersPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-zinc-400">Loading event rosters…</p>}>
+      <LiveRosters />
+    </Suspense>
+  );
+}
+
+function LiveRosters() {
+  const searchParams = useSearchParams();
+  const showCourts = searchParams.get("tab") === "courts";
   const [events, setEvents] = useState<RosterEvent[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState(searchParams.get("event") ?? "");
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [playersVersion, setPlayersVersion] = useState(0);
 
@@ -192,6 +203,14 @@ export default function LiveRostersPage() {
   const [editType, setEditType] = useState<"partnered" | "individual">("partnered");
   const [editRating, setEditRating] = useState<RatingMethod>("dupr_doubles");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  function selectEvent(eventId: string) {
+    setSelectedEventId(eventId);
+    setEditingEvent(false);
+    setError("");
+    setSuccess("");
+  }
+
   function beginEditEvent(event: RosterEvent) {
     setEditName(event.name);
     setEditDate(event.event_date ?? "");
@@ -745,6 +764,25 @@ async function deletePlayer(player: RosterPlayer) {
           </p>
         </section>
 
+        <nav aria-label="Event Roster Manager views" className="flex flex-wrap gap-2 border-b border-zinc-800">
+          {[
+            { label: "Roster", tab: undefined, active: !showCourts },
+            { label: "Round 1 Court Assignments", tab: "courts", active: showCourts },
+          ].map(({ label, tab, active }) => (
+            <Link
+              key={label}
+              href={{
+                pathname: "/admin/tv-manager/rosters",
+                query: { ...(tab && { tab }), ...(selectedEventId && { event: selectedEventId }) },
+              }}
+              aria-current={active ? "page" : undefined}
+              className={`border-b-2 px-4 py-3 text-sm font-semibold ${active ? "border-yellow-400 text-yellow-400" : "border-transparent text-zinc-300 hover:text-white"}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
         {error && (
           <p role="alert" className="rounded-lg border border-red-800 bg-red-950 p-4 text-red-200">
             {error}
@@ -757,6 +795,7 @@ async function deletePlayer(player: RosterPlayer) {
           </p>
         )}
 
+        {!showCourts && (
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-xl font-bold">Create New Event</h2>
 
@@ -840,6 +879,7 @@ async function deletePlayer(player: RosterPlayer) {
             </button>
           </form>
         </section>
+        )}
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -858,18 +898,27 @@ async function deletePlayer(player: RosterPlayer) {
             <p className="mt-4 text-zinc-400">Loading events...</p>
           ) : events.length === 0 ? (
             <p className="mt-4 text-zinc-400">No events yet.</p>
+          ) : showCourts ? (
+            <div className="mt-4">
+              <label htmlFor="court-roster-event" className="mb-2 block text-sm font-semibold">Select an event</label>
+              <select
+                id="court-roster-event"
+                value={selectedEventId}
+                onChange={(event) => selectEvent(event.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-3 text-white sm:max-w-md"
+              >
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>{event.name} · {formatDate(event.event_date)}</option>
+                ))}
+              </select>
+            </div>
           ) : (
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               {events.map((event) => (
                 <button
                   type="button"
                   key={event.id}
-                  onClick={() => {
-                    setSelectedEventId(event.id);
-                    setEditingEvent(false);
-                    setError("");
-                    setSuccess("");
-                  }}
+                  onClick={() => selectEvent(event.id)}
                   className={`rounded-xl border p-5 text-left ${
                     selectedEventId === event.id
                       ? "border-yellow-400 bg-zinc-800"
@@ -904,6 +953,8 @@ async function deletePlayer(player: RosterPlayer) {
 
         {selectedEvent && (
           <>
+            {!showCourts && (
+            <>
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-xl font-bold text-yellow-400">Event Details — {selectedEvent.name}</h2>
@@ -1307,13 +1358,17 @@ async function deletePlayer(player: RosterPlayer) {
                 </div>
               )}
             </section>
+            </>
+            )}
             <TeamManager
-  eventId={selectedEvent.id}
-  eventName={selectedEvent.name}
-  eventType={selectedEvent.event_type}
-  ratingMethod={selectedEvent.rating_method ?? "dupr_doubles"}
-  playersVersion={playersVersion}
-/>
+              key={selectedEvent.id}
+              eventId={selectedEvent.id}
+              eventName={selectedEvent.name}
+              eventType={selectedEvent.event_type}
+              ratingMethod={selectedEvent.rating_method ?? "dupr_doubles"}
+              playersVersion={playersVersion}
+              view={showCourts ? "courts" : "roster"}
+            />
           </>
         )}
 
