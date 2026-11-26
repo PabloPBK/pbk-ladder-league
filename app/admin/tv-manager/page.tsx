@@ -15,7 +15,7 @@ const managerSections = [
     href: "/admin/tv-manager/presentations",
   },
   {
-    title: "Live Rosters",
+    title: "Partnered League Management",
     description: "Manage teams and DUPR rankings.",
     icon: "🏆",
     href: "/admin/tv-manager/rosters",

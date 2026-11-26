@@ -750,21 +750,11 @@ async function deletePlayer(player: RosterPlayer) {
 
   return (
     <AppLayout
-      title="Live Event Rosters"
-      description="Manage events, players, ratings, and CSV registrations."
+      title="Partnered League Management"
+      description="Manage event rosters, ratings, CSV registrations, and Round 1 court assignments."
     >
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-2xl font-black text-yellow-400">
-            Event Roster Manager
-          </h2>
-          <p className="mt-2 text-zinc-400">
-            Manage event registrations and select Club Rating or DUPR
-            for each event.
-          </p>
-        </section>
-
-        <nav aria-label="Event Roster Manager views" className="flex flex-wrap gap-2 border-b border-zinc-800">
+        <nav aria-label="Partnered League Management views" className="flex flex-wrap gap-2 border-b border-zinc-800">
           {[
             { label: "Roster", tab: undefined, active: !showCourts },
             { label: "Round 1 Court Assignments", tab: "courts", active: showCourts },
