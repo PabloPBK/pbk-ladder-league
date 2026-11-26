@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { assignRoundOneCourts, roundOneCourtLimit } from "./round-one-courts";
+import { assignRoundOneCourts, roundOneCourtLimit } from "@/lib/data/round-one-courts";
 
 type RatingMethod = "dupr_doubles" | "dupr_singles" | "club_rating";
 

@@ -2,6 +2,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { liveRosterSlideLabels, roundOneSlideType, type LiveRosterSlideType } from "@/lib/data/tv-roster-slides";
 
 type RosterEvent = {
   id: string;
@@ -22,9 +24,7 @@ export default function LiveRosterSlides({
 }: Props) {
   const [events, setEvents] = useState<RosterEvent[]>([]);
   const [eventId, setEventId] = useState("");
-  const [slideType, setSlideType] = useState<
-    "roster_teams" | "roster_free_agents"
-  >("roster_teams");
+  const [slideType, setSlideType] = useState<LiveRosterSlideType>("roster_teams");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -85,19 +85,13 @@ export default function LiveRosterSlides({
   const selectedEvent = events.find(
     (item) => item.id === eventId
   );
+  const partnered = selectedEvent?.event_type === "partnered";
+  const availableType = partnered ? slideType : "roster_free_agents";
 
   async function addSlide(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!eventId || !presentationId || saving || disabled) {
-      return;
-    }
-
-    if (
-      slideType === "roster_teams" &&
-      selectedEvent?.event_type !== "partnered"
-    ) {
-      setError("Team rankings require a partnered event.");
       return;
     }
 
@@ -114,7 +108,7 @@ export default function LiveRosterSlides({
         body: JSON.stringify({
           presentation_id: presentationId,
           roster_event_id: eventId,
-          media_type: slideType,
+          media_type: availableType,
         }),
       });
 
@@ -128,11 +122,7 @@ export default function LiveRosterSlides({
 
       await onSlideAdded();
 
-      setMessage(
-        slideType === "roster_teams"
-          ? "Live Team Rankings slide added successfully."
-          : "Live Free Agents slide added successfully."
-      );
+      setMessage(`${liveRosterSlideLabels[availableType]} added.`);
     } catch (err) {
       setError(
         err instanceof Error
@@ -151,8 +141,7 @@ export default function LiveRosterSlides({
       </h3>
 
       <p className="mt-2 text-sm text-zinc-400">
-        Add live event rankings or Free Agents to this presentation.
-        No image upload is required.
+        Show live team rankings, free agents, or Round 1 court assignments from an event roster.
       </p>
 
       {loading ? (
@@ -161,7 +150,9 @@ export default function LiveRosterSlides({
         </p>
       ) : events.length === 0 ? (
         <p className="mt-5 text-zinc-400">
-          No roster events available. Create an event in Live Rosters first.
+          Create an event in{" "}
+          <Link className="underline" href="/admin/tv-manager/rosters">Partnered League Management</Link>{" "}
+          to add a live roster slide.
         </p>
       ) : (
         <form onSubmit={addSlide} className="mt-5 space-y-4">
@@ -201,25 +192,20 @@ export default function LiveRosterSlides({
 
             <select
               id="live-roster-type"
-              value={slideType}
-              onChange={(e) =>
-                setSlideType(
-                  e.target.value as
-                    | "roster_teams"
-                    | "roster_free_agents"
-                )
-              }
+              value={availableType}
+              onChange={(e) => setSlideType(e.target.value as LiveRosterSlideType)}
               disabled={saving || disabled}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-white"
             >
-              {selectedEvent?.event_type === "partnered" && (
-                <option value="roster_teams">
-                  Live Team Rankings
-                </option>
+              {partnered && (
+                <>
+                  <option value="roster_teams">{liveRosterSlideLabels.roster_teams}</option>
+                  <option value={roundOneSlideType}>{liveRosterSlideLabels[roundOneSlideType]}</option>
+                </>
               )}
 
               <option value="roster_free_agents">
-                Live Free Agents
+                {liveRosterSlideLabels.roster_free_agents}
               </option>
             </select>
           </div>
@@ -229,9 +215,7 @@ export default function LiveRosterSlides({
             disabled={
               saving ||
               disabled ||
-              !eventId ||
-              (slideType === "roster_teams" &&
-                selectedEvent?.event_type !== "partnered")
+              !eventId
             }
             className="rounded-lg bg-yellow-400 px-6 py-3 font-bold text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
           >

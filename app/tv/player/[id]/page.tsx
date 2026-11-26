@@ -7,6 +7,8 @@ import {
   useState,
 } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import RoundOneCourtDisplay from "@/components/tv/RoundOneCourtDisplay";
+import { isLiveRosterSlideType, roundOneSlideType, type RoundOneCourtSlide } from "@/lib/data/tv-roster-slides";
 
 type TeamEntry = {
   id: string;
@@ -39,6 +41,7 @@ type Slide = {
   sort_order: number;
   duration_seconds: number | null;
   roster?: RosterData;
+  assignments?: RoundOneCourtSlide | null;
 };
 
 type PlayerData = {
@@ -539,8 +542,7 @@ const isPublicDisplay = Boolean(publicShortCode);
     const interval = window.setInterval(() => {
       const current = playerRef.current;
       const hasLiveRoster = current?.slides.some(
-        (slide) => slide.media_type === "roster_teams" ||
-          slide.media_type === "roster_free_agents"
+        (slide) => isLiveRosterSlideType(slide.media_type)
       );
       // Retry failed initial loads; otherwise skip routine static queries.
       if (!current || hasLiveRoster) void loadPlayer();
@@ -551,7 +553,7 @@ const isPublicDisplay = Boolean(publicShortCode);
       if (cancelled || inFlight) return;
       const current = playerRef.current;
       if (!current) return;
-      if (current.slides.some(slide => slide.media_type === "roster_teams" || slide.media_type === "roster_free_agents")) return;
+      if (current.slides.some(slide => isLiveRosterSlideType(slide.media_type))) return;
       try {
         const query = publicShortCode
           ? new URLSearchParams({short_code: publicShortCode})
@@ -725,6 +727,14 @@ const isPublicDisplay = Boolean(publicShortCode);
         )}
 
       {currentSlide &&
+        currentSlide.media_type === roundOneSlideType && (
+          <RoundOneCourtDisplay
+            assignments={currentSlide.assignments}
+            logoUrl={player?.presentation?.logo_url}
+          />
+        )}
+
+      {currentSlide &&
         (currentSlide.media_type === "roster_teams" ||
           currentSlide.media_type ===
             "roster_free_agents") && (     
@@ -775,9 +785,7 @@ const isPublicDisplay = Boolean(publicShortCode);
       {currentSlide &&
         !currentSlide.media_type.startsWith("image") &&
         !currentSlide.media_type.startsWith("video") &&
-        currentSlide.media_type !== "roster_teams" &&
-        currentSlide.media_type !==
-          "roster_free_agents" && (
+        !isLiveRosterSlideType(currentSlide.media_type) && (
           <div className="flex h-full items-center justify-center">
             <p className="text-zinc-400">
               Unsupported slide format

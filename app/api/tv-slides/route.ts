@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { requireStaffUser } from "@/lib/server/require-auth";
+import { isLiveRosterSlideType, liveRosterSlideLabels, roundOneSlideType } from "@/lib/data/tv-roster-slides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +17,6 @@ const allowedTypes = new Map([
   ["video/mp4", "mp4"],
   ["video/webm", "webm"],
 ]);
-
-const liveTypes = [
-  "roster_teams",
-  "roster_free_agents",
-] as const;
 
 function isUUID(value: unknown): value is string {
   return typeof value === "string" && uuidPattern.test(value);
@@ -96,12 +92,13 @@ export async function POST(request: NextRequest) {
     // LIVE ROSTER SLIDE
     if (contentType.includes("application/json")) {
       const body = await request.json().catch(() => null);
+      const mediaType: unknown = body?.media_type;
 
       if (
         !body ||
         !isUUID(body.presentation_id) ||
         !isUUID(body.roster_event_id) ||
-        !liveTypes.includes(body.media_type)
+        !isLiveRosterSlideType(mediaType)
       ) {
         return NextResponse.json(
           { error: "Invalid live roster slide details" },
@@ -127,7 +124,7 @@ export async function POST(request: NextRequest) {
 
       const { data: event, error: eventError } = await db
         .from("roster_events")
-        .select("id, name")
+        .select("id, name, event_type")
         .eq("id", body.roster_event_id)
         .maybeSingle();
 
@@ -140,10 +137,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const title =
-        body.media_type === "roster_teams"
-          ? `${event.name} - Team Rankings`
-          : `${event.name} - Free Agents`;
+      if (mediaType === roundOneSlideType && event.event_type !== "partnered") {
+        return NextResponse.json(
+          { error: "Round 1 court assignments require a partnered event" },
+          { status: 400 },
+        );
+      }
+
+      const title = `${event.name} - ${liveRosterSlideLabels[mediaType].replace(/^Live /, "")}`;
 
       const sortOrder = await getNextSortOrder(
         db,
@@ -156,11 +157,11 @@ export async function POST(request: NextRequest) {
           .insert({
             presentation_id: body.presentation_id,
             title: title.slice(0, 200),
-            media_type: body.media_type,
+            media_type: mediaType,
             storage_path: null,
             roster_event_id: body.roster_event_id,
             sort_order: sortOrder,
-            duration_seconds: 15,
+            duration_seconds: mediaType === roundOneSlideType ? 30 : 15,
           })
           .select("*")
           .single();
@@ -305,10 +306,7 @@ export async function GET(request: NextRequest) {
     const slides = await Promise.all(
       (data ?? []).map(async (slide) => {
         // Live roster slides have no uploaded media.
-        if (
-          slide.media_type === "roster_teams" ||
-          slide.media_type === "roster_free_agents"
-        ) {
+        if (isLiveRosterSlideType(slide.media_type)) {
           return {
             ...slide,
             media_url: null,

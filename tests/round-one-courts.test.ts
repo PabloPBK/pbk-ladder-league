@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assignRoundOneCourts } from "../app/admin/tv-manager/rosters/round-one-courts";
+import { assignRoundOneCourts } from "../lib/data/round-one-courts";
+import { buildRoundOneCourtSlide } from "../lib/data/tv-roster-slides";
 
 function team(id: number, first: number | string | null, second: number | string | null = 4) {
   return {
@@ -41,4 +42,28 @@ test("does not show partial assignments when teams are unrated, odd in number, o
   }
   assert.deepEqual(assignRoundOneCourts([rated]).courts, []);
   assert.deepEqual(assignRoundOneCourts(Array.from({ length: 26 }, (_, index) => team(index, 4))).courts, []);
+});
+
+test("the TV slide uses the same court pairings and includes only display names", () => {
+  const teams = [
+    { id: "A", player1_id: "A1", player2_id: "A2" },
+    { id: "B", player1_id: "B1", player2_id: "B2" },
+    { id: "C", player1_id: "C1", player2_id: "C2" },
+    { id: "D", player1_id: "D1", player2_id: "D2" },
+  ];
+  const players = new Map(teams.flatMap(({ player1_id, player2_id }, index) => [
+    [player1_id, { full_name: player1_id, dupr_doubles: 3 + index / 2 }],
+    [player2_id, { full_name: player2_id, dupr_doubles: 3.5 }],
+  ] as const));
+  const event = { name: "Turkey Cup", event_type: "partnered" };
+
+  assert.deepEqual(buildRoundOneCourtSlide(event, teams, players), {
+    eventName: "Turkey Cup",
+    courts: [
+      { number: 1, teams: ["D1 & D2", "C1 & C2"] },
+      { number: 2, teams: ["B1 & B2", "A1 & A2"] },
+    ],
+  });
+  players.delete("B2");
+  assert.deepEqual(buildRoundOneCourtSlide(event, teams, players).courts, []);
 });

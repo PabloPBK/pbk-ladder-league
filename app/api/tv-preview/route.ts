@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireStaffUser } from "@/lib/server/require-auth";
+import { buildRoundOneCourtSlide, isLiveRosterSlideType, roundOneSlideType } from "@/lib/data/tv-roster-slides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -92,6 +93,7 @@ async function loadRosterData(
   if (eventError) throw eventError;
 
   if (!event) {
+    if (mediaType === roundOneSlideType) return null;
     return {
       event_name: "Event unavailable",
       rating_method: "dupr_doubles",
@@ -124,6 +126,10 @@ async function loadRosterData(
   const playerMap = new Map(
     rosterPlayers.map((player) => [player.id, player])
   );
+
+  if (mediaType === roundOneSlideType) {
+    return buildRoundOneCourtSlide(event, rosterTeams, playerMap);
+  }
 
   const assignedIds = new Set<string>();
 
@@ -283,10 +289,14 @@ if (presentation.logo_storage_path) {
             slide.duration_seconds ?? 10,
         };
 
-        if (
-          slide.media_type === "roster_teams" ||
-          slide.media_type === "roster_free_agents"
-        ) {
+        if (isLiveRosterSlideType(slide.media_type)) {
+          if (slide.media_type === roundOneSlideType) {
+            const assignments = isUUID(slide.roster_event_id)
+              ? await loadRosterData(db, slide.roster_event_id, roundOneSlideType)
+              : null;
+            return { ...baseSlide, media_url: null, assignments };
+          }
+
           const roster = isUUID(slide.roster_event_id)
             ? await loadRosterData(
                 db,

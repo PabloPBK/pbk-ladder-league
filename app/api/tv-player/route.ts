@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { buildRoundOneCourtSlide, isLiveRosterSlideType, roundOneSlideType } from "@/lib/data/tv-roster-slides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,6 +169,7 @@ async function loadRosterData(
   }
 
   if (!event) {
+    if (mediaType === roundOneSlideType) return null;
     return {
       event_name: "Event unavailable",
       rating_method: "dupr_doubles",
@@ -209,6 +211,10 @@ async function loadRosterData(
       player,
     ])
   );
+
+  if (mediaType === roundOneSlideType) {
+    return buildRoundOneCourtSlide(event, rosterTeams, playerMap);
+  }
 
   const assignedIds = new Set<string>();
 
@@ -512,12 +518,14 @@ export async function GET(
         };
 
         // Preserve live roster functionality.
-        if (
-          slide.media_type ===
-            "roster_teams" ||
-          slide.media_type ===
-            "roster_free_agents"
-        ) {
+        if (isLiveRosterSlideType(slide.media_type)) {
+          if (slide.media_type === roundOneSlideType) {
+            const assignments = isUUID(slide.roster_event_id)
+              ? await loadRosterData(db, slide.roster_event_id, roundOneSlideType)
+              : null;
+            return { ...baseSlide, media_url: null, assignments };
+          }
+
           if (
             !isUUID(slide.roster_event_id)
           ) {
@@ -568,7 +576,7 @@ export async function GET(
       })
     );
 
-    const rosterEventId = (slides ?? []).find(slide => (slide.media_type === "roster_teams" || slide.media_type === "roster_free_agents") && slide.roster_event_id)?.roster_event_id;
+    const rosterEventId = (slides ?? []).find(slide => isLiveRosterSlideType(slide.media_type) && slide.roster_event_id)?.roster_event_id;
     if (rosterEventId) {
       const {data:rosterEvent,error:rosterEventError} = await db.from("roster_events").select("logo_storage_path").eq("id",rosterEventId).maybeSingle();
       if (rosterEventError) throw rosterEventError;

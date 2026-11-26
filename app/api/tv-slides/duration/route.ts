@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireStaffUser } from "@/lib/server/require-auth";
+import { isLiveRosterSlideType } from "@/lib/data/tv-roster-slides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,13 +77,7 @@ export async function PATCH(request: NextRequest) {
     // Images and live roster slides support
     // individual display durations.
     // Videos continue playing until finished.
-    const allowedTypes = [
-      "image",
-      "roster_teams",
-      "roster_free_agents",
-    ];
-
-    if (!allowedTypes.includes(slide.media_type)) {
+    if (slide.media_type !== "image" && !isLiveRosterSlideType(slide.media_type)) {
       return NextResponse.json(
         {
           error:

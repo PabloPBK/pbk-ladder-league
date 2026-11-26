@@ -11,6 +11,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import LiveRosterSlides from "./LiveRosterSlides";
 import PresentationLogoManager from "./PresentationLogoManager";
+import { isLiveRosterSlideType, liveRosterSlideLabels, roundOneSlideType } from "@/lib/data/tv-roster-slides";
 
 
 type Presentation = {
@@ -499,7 +500,7 @@ export default function PresentationEditorPage() {
   return (
     <AppLayout
       title="Presentation Editor"
-      description="Manage images and videos for your TVs."
+      description="Manage media and live roster slides for your TVs."
     >
       <div className="mx-auto max-w-6xl space-y-6">
         <Link
@@ -528,20 +529,23 @@ export default function PresentationEditorPage() {
           {!loading &&
             presentation && (
               <>
-                
-<div className="flex flex-wrap items-center justify-between gap-4">
-  <h2 className="text-2xl font-bold text-white">
-    🎬 {presentation.name}
-  </h2>
-
-  <Link
-    href={`/admin/tv-manager/presentations/${presentationId}/preview`}
-    className="rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black hover:bg-yellow-300"
-  >
-    ▶ Preview Presentation
-  </Link>
-</div>
-
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <h2 className="text-2xl font-bold text-white">🎬 {presentation.name}</h2>
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href={`/admin/tv-manager/presentations/${presentationId}/preview`}
+                      className="rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black hover:bg-yellow-300"
+                    >
+                      ▶ Preview Presentation
+                    </Link>
+                    <Link
+                      href="/admin/tv-manager/screens"
+                      className="rounded-xl border border-zinc-700 px-6 py-3 font-bold text-white hover:bg-zinc-800"
+                    >
+                      TV Screens &amp; Display Links
+                    </Link>
+                  </div>
+                </div>
 
                 <p className="mt-2 text-zinc-400">
                   {presentation.description ||
@@ -771,16 +775,13 @@ export default function PresentationEditorPage() {
                               {index + 1}
                             </div>
 
-                            {slide.media_type === "roster_teams" ||
-slide.media_type === "roster_free_agents" ? (
+                            {isLiveRosterSlideType(slide.media_type) ? (
   <div className="flex h-56 flex-col items-center justify-center bg-black p-6 text-center">
-    <span className="text-5xl">
-      {slide.media_type === "roster_teams" ? "🏆" : "👥"}
+    <span aria-hidden="true" className="text-5xl">
+      {slide.media_type === roundOneSlideType ? "🏓" : slide.media_type === "roster_teams" ? "🏆" : "👥"}
     </span>
     <h3 className="mt-4 text-xl font-black text-yellow-400">
-      {slide.media_type === "roster_teams"
-        ? "LIVE TEAM RANKINGS"
-        : "LIVE FREE AGENTS"}
+      {liveRosterSlideLabels[slide.media_type]}
     </h3>
     <p className="mt-2 text-sm text-zinc-400">
       Automatically updated from your event roster
@@ -860,8 +861,7 @@ slide.media_type === "roster_free_agents" ? (
                               </div>
 
                               {(slide.media_type.startsWith("image") ||
-  slide.media_type === "roster_teams" ||
-  slide.media_type === "roster_free_agents") && (
+  isLiveRosterSlideType(slide.media_type)) && (
                                 <div className="mt-4 border-t border-zinc-700 pt-4">
                                   <label
                                     htmlFor={`duration-${slide.id}`}

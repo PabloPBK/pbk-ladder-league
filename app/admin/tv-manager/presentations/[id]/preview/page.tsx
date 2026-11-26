@@ -7,6 +7,8 @@ import {
   useState,
 } from "react";
 import { useParams, useRouter } from "next/navigation";
+import RoundOneCourtDisplay from "@/components/tv/RoundOneCourtDisplay";
+import { isLiveRosterSlideType, roundOneSlideType, type RoundOneCourtSlide } from "@/lib/data/tv-roster-slides";
 
 type TeamEntry = {
   id: string;
@@ -39,6 +41,7 @@ type Slide = {
   sort_order: number;
   duration_seconds: number | null;
   roster?: RosterData;
+  assignments?: RoundOneCourtSlide | null;
 };
 
 type PreviewData = {
@@ -585,6 +588,14 @@ export default function PresentationPreviewPage() {
       )}
 
       {currentSlide &&
+        currentSlide.media_type === roundOneSlideType && (
+          <RoundOneCourtDisplay
+            assignments={currentSlide.assignments}
+            logoUrl={preview?.presentation.logo_url}
+          />
+        )}
+
+      {currentSlide &&
         (currentSlide.media_type === "roster_teams" ||
           currentSlide.media_type ===
             "roster_free_agents") && (     
@@ -635,9 +646,7 @@ export default function PresentationPreviewPage() {
       {currentSlide &&
         !currentSlide.media_type.startsWith("image") &&
         !currentSlide.media_type.startsWith("video") &&
-        currentSlide.media_type !== "roster_teams" &&
-        currentSlide.media_type !==
-          "roster_free_agents" && (
+        !isLiveRosterSlideType(currentSlide.media_type) && (
           <div className="flex h-full items-center justify-center">
             <p className="text-zinc-400">
               Unsupported slide format
