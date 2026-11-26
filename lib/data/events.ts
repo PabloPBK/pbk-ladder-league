@@ -159,13 +159,17 @@ export async function getLeagueEventForDate({
   return result.event ?? null;
 }
 
-export async function createLeagueEvent({
+export async function createLeagueEvent(input: CreateLeagueEventInput): Promise<LeagueEventRecord> {
+  return (await createOrGetLeagueEvent(input)).event;
+}
+
+export async function createOrGetLeagueEvent({
   seasonId,
   eventDate,
   sessionNumber = 1,
   sessionNote,
   name,
-}: CreateLeagueEventInput): Promise<LeagueEventRecord> {
+}: CreateLeagueEventInput): Promise<{ event: LeagueEventRecord; existing: boolean }> {
   const response = await fetch("/api/league-events", {
     method: "POST",
     headers: {
@@ -191,5 +195,5 @@ export async function createLeagueEvent({
     );
   }
 
-  return result.event;
+  return { event: result.event, existing: result.existing === true };
 }

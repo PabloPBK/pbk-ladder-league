@@ -13,6 +13,7 @@ import { ActiveLeagueCard } from "@/components/admin/ActiveLeagueCard";
 import { CompletionScreen } from "@/components/admin/CompletionScreen";
 import { CourtAssignments } from "../../components/admin/CourtAssignments";
 import { LeagueNightSetup } from "@/components/admin/LeagueNightSetup";
+import { LeagueSessionRevenue } from "@/components/admin/LeagueSessionRevenue";
 import { PlayerCheckIn } from "@/components/admin/PlayerCheckIn";
 import { RoundControls } from "../../components/admin/RoundControls";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -22,10 +23,12 @@ import {
   type SavedRoundCourt,
 } from "@/lib/data/currentRound";
 import {
-  createLeagueEvent,
+  createOrGetLeagueEvent,
   getActiveLeagueEvent,
   getLeagueEventsForDate,
+  type LeagueEventRecord,
 } from "@/lib/data/events";
+import type { LeagueSessionOption } from "@/lib/data/league-session-schedule";
 import {
   completeLeagueEvent,
   getMatchCenter,
@@ -156,6 +159,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   );
   const [sessionNumber, setSessionNumber] =
     useState(1);
+  const [selectedSession, setSelectedSession] = useState<LeagueSessionOption | null>(null);
   const [sessionNote, setSessionNote] =
     useState("");
 
@@ -167,6 +171,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     useState(false);
   const [isCheckingEvent, setIsCheckingEvent] =
     useState(false);
+  const [isCalculatingSession, setIsCalculatingSession] = useState(false);
   const [isGenerating, setIsGenerating] =
     useState(false);
   const [isGeneratingNextRound, setIsGeneratingNextRound] =
@@ -181,6 +186,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     useState(false);
   const [showCompletionScreen, setShowCompletionScreen] =
     useState(false);
+  const [completedEventId, setCompletedEventId] = useState("");
   const [completedEventName, setCompletedEventName] =
     useState("");
   const [availableActiveEvent, setAvailableActiveEvent] =
@@ -270,6 +276,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     (leagueId: string) => {
       setSelectedLeagueId(leagueId);
       setSelectedSeasonId("");
+      setSelectedSession(null);
       if (!runningEvent) clearRoundState();
       setSessionNumber(1);
       setSessionNote("");
@@ -282,6 +289,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   const handleSeasonChange = useCallback(
     (seasonId: string) => {
       setSelectedSeasonId(seasonId);
+      setSelectedSession(null);
       if (!runningEvent) clearRoundState();
       setSessionNumber(1);
       setSessionNote("");
@@ -290,6 +298,14 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     },
     [clearRoundState, runningEvent],
   );
+
+  function handleChooseSession(session: LeagueSessionOption | null) {
+    setSelectedSession(session);
+    setEventDate(session?.date ?? getLocalDateValue());
+    setSessionNumber(session?.number ?? 1);
+    setSessionNote(session?.event?.session_note ?? "");
+    setErrorMessage("");
+  }
 
   useEffect(() => {
     if (
@@ -332,7 +348,8 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   }, [isLoadingPlayers, runtimePlayerIdByDatabaseId, activeSeasonFilter]);
 
   useEffect(() => {
-    if (!selectedSeasonId || !eventDate || activeEvent) {
+    if (!selectedSeasonId || !eventDate || activeEvent || selectedSession) {
+      setIsCalculatingSession(false);
       return;
     }
 
@@ -340,7 +357,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
 
     async function calculateNextSession() {
       try {
-        setIsCheckingEvent(true);
+        setIsCalculatingSession(true);
         setErrorMessage("");
 
         const events = await getLeagueEventsForDate({
@@ -371,7 +388,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
         }
       } finally {
         if (!cancelled) {
-          setIsCheckingEvent(false);
+          setIsCalculatingSession(false);
         }
       }
     }
@@ -381,10 +398,10 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     return () => {
       cancelled = true;
     };
-  }, [selectedSeasonId, eventDate, activeEvent]);
+  }, [selectedSeasonId, eventDate, activeEvent, selectedSession]);
 
-  async function handleResumeLeagueNight() {
-    if (!availableActiveEvent) {
+  async function handleResumeLeagueNight(session: LeagueEventRecord | null = availableActiveEvent) {
+    if (!session || session.status === "complete") {
       return;
     }
 
@@ -393,17 +410,17 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       setErrorMessage("");
       setSuccessMessage("");
 
-      setActiveEvent(availableActiveEvent);
-      setSelectedSeasonId(availableActiveEvent.season_id);
-      setEventDate(availableActiveEvent.event_date);
+      setActiveEvent(session);
+      setSelectedSeasonId(session.season_id);
+      setEventDate(session.event_date);
       setSessionNumber(
-        availableActiveEvent.session_number ?? 1,
+        session.session_number ?? 1,
       );
       setSessionNote(
-        availableActiveEvent.session_note ?? "",
+        session.session_note ?? "",
       );
 
-      await restoreEvent(availableActiveEvent.id);
+      await restoreEvent(session.id);
     } catch (error) {
       setActiveEvent(null);
       setErrorMessage(
@@ -464,7 +481,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       setErrorMessage("");
       setSuccessMessage("");
 
-      const event = await createLeagueEvent({
+      const { event, existing } = await createOrGetLeagueEvent({
         seasonId: selectedSeasonId,
         eventDate,
         sessionNumber,
@@ -475,6 +492,11 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
         throw new Error(
           `Session ${sessionNumber} is already complete. Choose another session number.`,
         );
+      }
+
+      if (existing) {
+        await handleResumeLeagueNight(event);
+        return;
       }
 
       setActiveEvent(event);
@@ -687,6 +709,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       setAvailableActiveEvent(null);
       setRoundSaved(false);
       setRoundComplete(false);
+      setCompletedEventId(activeEvent.id);
       setCompletedEventName(finishedEventName);
       setShowCompletionScreen(true);
     } catch (error) {
@@ -724,6 +747,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       setAvailableActiveEvent(null);
       setSelectedLeagueId("");
       setSelectedSeasonId("");
+      setSelectedSession(null);
       setEventDate(getLocalDateValue());
       setSessionNumber(1);
       setSessionNote("");
@@ -747,12 +771,14 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     resetLeague();
     setSelectedLeagueId("");
     setSelectedSeasonId("");
+    setSelectedSession(null);
     setEventDate(getLocalDateValue());
     setSessionNumber(1);
     setSessionNote("");
     setRoundSaved(false);
     setRoundComplete(false);
     setCompletedEventName("");
+    setCompletedEventId("");
     setShowCompletionScreen(false);
     setErrorMessage("");
     setSuccessMessage("");
@@ -764,12 +790,13 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
         title="League Night Complete"
         description="The completed event is saved in History and the active session has been cleared."
       >
-        <CompletionScreen
-          completedEventName={completedEventName}
-          onStartNewLeagueNight={
-            handleStartNewLeagueNight
-          }
-        />
+        <div className="mx-auto max-w-5xl space-y-6">
+          <CompletionScreen
+            completedEventName={completedEventName}
+            onStartNewLeagueNight={handleStartNewLeagueNight}
+          />
+          {completedEventId && <LeagueSessionRevenue key={completedEventId} eventId={completedEventId} />}
+        </div>
       </AppLayout>
     );
   }
@@ -839,6 +866,12 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               onEventDateChange={setEventDate}
               onSessionNumberChange={setSessionNumber}
               onSessionNoteChange={setSessionNote}
+              sessionNavigation={{
+                isCheckingSession: isCheckingEvent || isCalculatingSession,
+                selectedSession,
+                onChooseSession: handleChooseSession,
+                onResumeSession: (session) => void handleResumeLeagueNight(session),
+              }}
               onStartLeagueNight={() =>
                 void handleStartLeagueNight()
               }
@@ -859,6 +892,8 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               currentRound={currentRound}
               roundIsGenerated={roundIsGenerated}
             />
+
+            <LeagueSessionRevenue key={activeEvent.id} eventId={activeEvent.id} />
 
             {errorMessage && (
               <div className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-300">

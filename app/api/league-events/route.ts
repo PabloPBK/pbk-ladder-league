@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "A season ID is required." }, { status: 400 });
     }
 
-    let query = supabaseAdmin
+    const query = supabaseAdmin
       .from("league_events")
       .select(eventSelection)
       .eq("season_id", seasonId)
@@ -77,13 +77,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A league night cannot be created for a completed or archived season." }, { status: 400 });
     }
 
-    const { data: existingEvent, error: existingEventError } = await supabaseAdmin
+    const findSession = () => supabaseAdmin
       .from("league_events")
       .select(eventSelection)
       .eq("season_id", seasonId)
       .eq("event_date", eventDate)
       .eq("session_number", sessionNumber)
       .maybeSingle();
+    const { data: existingEvent, error: existingEventError } = await findSession();
     if (existingEventError) throw existingEventError;
     if (existingEvent) return NextResponse.json({ event: existingEvent, existing: true });
 
@@ -104,6 +105,11 @@ export async function POST(request: Request) {
       .select(eventSelection)
       .single();
 
+    if (insertError?.code === "23505") {
+      const { data: concurrentSession, error: lookupError } = await findSession();
+      if (lookupError) throw lookupError;
+      if (concurrentSession) return NextResponse.json({ event: concurrentSession, existing: true });
+    }
     if (insertError || !createdEvent) throw insertError ?? new Error("Unable to create league event.");
     return NextResponse.json({ event: createdEvent, existing: false }, { status: 201 });
   } catch (error) {

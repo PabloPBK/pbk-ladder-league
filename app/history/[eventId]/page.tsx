@@ -9,6 +9,7 @@ import {
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import LeagueNightPrize from "@/components/admin/LeagueNightPrize";
+import { LeagueSessionRevenue } from "@/components/admin/LeagueSessionRevenue";
 import {
   getHistoryEvent,
   type HistoryEventDetail,
@@ -210,6 +211,7 @@ export default function HistoryDetailPage() {
         </section>
 
         <div className="mb-6"><LeagueNightPrize key={eventId} eventId={eventId} /></div>
+        <LeagueSessionRevenue key={eventId} eventId={eventId} />
 
         <section className="mb-10 overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900">
           <div className="border-b border-zinc-800 p-6">
