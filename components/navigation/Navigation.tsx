@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LeagueMenu } from "./LeagueMenu";
+import { rosterWorkspace } from "@/lib/data/league-directory";
 
 type NavLink = {
   href: string;
@@ -36,8 +38,6 @@ const groups: NavGroup[] = [
     label: "League Management",
     icon: "🏆",
     links: [
-      { href: "/admin", label: "League Admin", icon: "⚙️" },
-      { href: "/admin/tv-manager/rosters", label: "Partnered League Management", icon: "📋" },
       { href: "/admin/players", label: "Import Players", icon: "👥" },
       { href: "/walking", label: "Score Management", icon: "🏃" },
       { href: "/tv", label: "Today's Standings", icon: "📺" },
@@ -161,6 +161,8 @@ function isActive(pathname: string, href: string) {
 }
 
 function activeGroup(pathname: string) {
+  if (pathname === "/admin" || pathname === rosterWorkspace) return "league";
+
   const matches = groups.flatMap((group) =>
     group.links
       .filter((link) => isActive(pathname, link.href))
@@ -233,6 +235,7 @@ export function Navigation() {
               id={`nav-group-${group.id}`}
               className="mt-1 space-y-1 pl-2"
             >
+              {group.id === "league" && <LeagueMenu onNavigate={() => setMobileOpen(false)} />}
               {group.links.map((link) => {
                 const active = isActive(pathname, link.href);
 

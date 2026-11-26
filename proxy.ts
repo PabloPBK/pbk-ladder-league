@@ -59,7 +59,7 @@ export async function proxy(request: NextRequest) {
 
     loginUrl.searchParams.set(
       "next",
-      pathname,
+      pathname + request.nextUrl.search,
     );
 
     return NextResponse.redirect(

@@ -17,6 +17,8 @@ type LeagueSeasonSelectorProps = {
   onSeasonChange: (seasonId: string) => void;
 };
 
+const emptySeasons: SeasonRecord[] = [];
+
 export function LeagueSeasonSelector({
   selectedLeagueId,
   selectedSeasonId,
@@ -24,7 +26,7 @@ export function LeagueSeasonSelector({
   onSeasonChange,
 }: LeagueSeasonSelectorProps) {
   const [leagues, setLeagues] = useState<LeagueRecord[]>([]);
-  const [seasons, setSeasons] = useState<SeasonRecord[]>([]);
+  const [seasonList, setSeasonList] = useState<{ leagueId: string; seasons: SeasonRecord[] }>();
   const [loadingLeagues, setLoadingLeagues] = useState(true);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -32,6 +34,8 @@ export function LeagueSeasonSelector({
   const [newSeasonNumber, setNewSeasonNumber] = useState(1);
   const [newSeasonStartDate, setNewSeasonStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isCreatingSeason, setIsCreatingSeason] = useState(false);
+  const seasonsLoaded = seasonList?.leagueId === selectedLeagueId;
+  const seasons = seasonsLoaded ? seasonList.seasons : emptySeasons;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,21 +75,18 @@ export function LeagueSeasonSelector({
   }, []);
 
   useEffect(() => {
-    if (selectedLeagueId || leagues.length === 0) {
+    if (loadingLeagues || leagues.length === 0 || leagues.some(({ id }) => id === selectedLeagueId)) {
       return;
     }
 
     onLeagueChange(leagues[0].id);
-  }, [leagues, onLeagueChange, selectedLeagueId]);
+  }, [leagues, loadingLeagues, onLeagueChange, selectedLeagueId]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSeasons() {
-      if (!selectedLeagueId) {
-        setSeasons([]);
-        return;
-      }
+      if (!selectedLeagueId) return;
 
       try {
         setLoadingSeasons(true);
@@ -98,7 +99,7 @@ export function LeagueSeasonSelector({
           return;
         }
 
-        setSeasons(seasonRecords);
+        setSeasonList({ leagueId: selectedLeagueId, seasons: seasonRecords });
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(
@@ -122,7 +123,7 @@ export function LeagueSeasonSelector({
   }, [selectedLeagueId]);
 
   useEffect(() => {
-    if (!selectedLeagueId) {
+    if (!seasonsLoaded) {
       return;
     }
 
@@ -150,7 +151,7 @@ export function LeagueSeasonSelector({
   }, [
     onSeasonChange,
     seasons,
-    selectedLeagueId,
+    seasonsLoaded,
     selectedSeasonId,
   ]);
 
@@ -174,7 +175,7 @@ export function LeagueSeasonSelector({
         startDate: newSeasonStartDate,
       });
       const refreshed = await getSeasonsForLeague(selectedLeagueId);
-      setSeasons(refreshed);
+      setSeasonList({ leagueId: selectedLeagueId, seasons: refreshed });
       onSeasonChange(created.id);
       setShowNewSeason(false);
     } catch (error) {
@@ -211,10 +212,7 @@ export function LeagueSeasonSelector({
           <select
             value={selectedLeagueId}
             disabled={loadingLeagues}
-            onChange={(event) => {
-              onLeagueChange(event.target.value);
-              onSeasonChange("");
-            }}
+            onChange={(event) => onLeagueChange(event.target.value)}
             className="min-h-14 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-lg text-white outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:text-zinc-500"
           >
             <option value="">

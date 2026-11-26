@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { LeagueMenu } from "@/components/navigation/LeagueMenu";
 
 type Department = {
   title: string;
@@ -10,6 +11,7 @@ type Department = {
   icon: string;
   href?: string;
   color: string;
+  leagueMenu?: boolean;
   comingSoon?: boolean;
   links: { label: string; href: string }[];
 };
@@ -19,11 +21,9 @@ const departments: Department[] = [
     title: "League Management",
     description: "Players, scores, and standings.",
     icon: "🏆",
-    href: "/admin",
     color: "border-yellow-500/40",
+    leagueMenu: true,
     links: [
-      { label: "Manage League", href: "/admin" },
-      { label: "Partnered League Management", href: "/admin/tv-manager/rosters" },
       { label: "Scores", href: "/walking" },
       { label: "Standings", href: "/display" },
     ],
@@ -194,14 +194,17 @@ export default function Home() {
                     {department.description}
                   </p>
 
-                  <span className="mt-2 inline-block text-xs font-semibold text-zinc-500">
-                    Coming Soon
-                  </span>
+                  {department.comingSoon && (
+                    <span className="mt-2 inline-block text-xs font-semibold text-zinc-500">
+                      Coming Soon
+                    </span>
+                  )}
                 </div>
               )}
 
-              {department.links.length > 0 && (
+              {(department.leagueMenu || department.links.length > 0) && (
                 <div className="mt-auto border-t border-zinc-700/70 pt-3">
+                  {department.leagueMenu && <div className="mb-2"><LeagueMenu /></div>}
                   <div className="flex flex-wrap gap-1.5">
                     {department.links.map((link) => (
                       <Link

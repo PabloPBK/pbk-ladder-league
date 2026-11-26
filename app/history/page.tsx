@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { getHistoryEvents, type HistoryEventSummary, updateHistoryEventSeason } from "@/lib/data/history";
 import { getSeasonsForLeague, type SeasonRecord } from "@/lib/data/leagues";
+import { isUuid } from "@/lib/data/league-listings";
 
 function formatEventDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -21,12 +23,23 @@ function formatDifferential(value: number) {
 }
 
 export default function HistoryPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-zinc-400">Loading league history…</p>}>
+      <LeagueHistory />
+    </Suspense>
+  );
+}
+
+function LeagueHistory() {
+  const searchParams = useSearchParams();
+  const leagueFilter = searchParams.get("leagueId");
+  const seasonFilter = searchParams.get("seasonId") || "all";
   const [events, setEvents] = useState<HistoryEventSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [seasonFilter, setSeasonFilter] = useState("all");
   const [editingEventId, setEditingEventId] = useState("");
   const [availableSeasons, setAvailableSeasons] = useState<SeasonRecord[]>([]);
+  const [linkedSeasons, setLinkedSeasons] = useState<{ leagueId: string; seasons: SeasonRecord[] }>();
   const [draftSeasonId, setDraftSeasonId] = useState("");
   const [savingEventId, setSavingEventId] = useState("");
 
@@ -46,16 +59,44 @@ export default function HistoryPage() {
     void loadHistory();
   }, []);
 
+  useEffect(() => {
+    if (!leagueFilter || !isUuid(leagueFilter)) return;
+
+    let cancelled = false;
+    void getSeasonsForLeague(leagueFilter).then((seasons) => {
+      if (!cancelled) setLinkedSeasons({ leagueId: leagueFilter, seasons });
+    }).catch(() => {
+      // Keep the filters for recorded events available if season metadata fails to load.
+    });
+    return () => { cancelled = true; };
+  }, [leagueFilter]);
+
+  const leagueEvents = useMemo(
+    () => leagueFilter ? events.filter((event) => event.leagueId === leagueFilter) : events,
+    [events, leagueFilter],
+  );
+
   const seasonOptions = useMemo(() => {
     const byId = new Map<string, string>();
-    events.forEach((event) => byId.set(event.seasonId, event.seasonName));
+    leagueEvents.forEach((event) => byId.set(event.seasonId, leagueFilter ? event.seasonName : `${event.leagueName} · ${event.seasonName}`));
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1], undefined, { numeric: true }));
-  }, [events]);
+  }, [leagueEvents, leagueFilter]);
 
   const visibleEvents = useMemo(
-    () => seasonFilter === "all" ? events : events.filter((event) => event.seasonId === seasonFilter),
-    [events, seasonFilter],
+    () => seasonFilter === "all" ? leagueEvents : leagueEvents.filter((event) => event.seasonId === seasonFilter),
+    [leagueEvents, seasonFilter],
   );
+  const leagueName = leagueFilter ? leagueEvents[0]?.leagueName : null;
+  const linkedSeasonName = linkedSeasons?.leagueId === leagueFilter
+    ? linkedSeasons?.seasons.find(({ id }) => id === seasonFilter)?.name
+    : null;
+
+  function changeSeason(seasonId: string) {
+    const url = new URL(window.location.href);
+    if (seasonId === "all") url.searchParams.delete("seasonId");
+    else url.searchParams.set("seasonId", seasonId);
+    window.history.replaceState(null, "", url);
+  }
 
   const groupedEvents = useMemo(() => {
     const groups = new Map<string, HistoryEventSummary[]>();
@@ -97,15 +138,18 @@ export default function HistoryPage() {
   }
 
   return (
-    <AppLayout title="League History" description="Review completed league nights, standings, rounds, match results, and season assignments.">
+    <AppLayout title={leagueName ? `${leagueName.trim()} History` : "League History"} description="Review completed league nights, standings, rounds, match results, and season assignments.">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-white">Filter by season</p>
             <p className="text-xs text-zinc-400">Staff can also correct a league night&apos;s season here.</p>
           </div>
-          <select value={seasonFilter} onChange={(event) => setSeasonFilter(event.target.value)} className="min-h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-white">
+          <select aria-label="Filter by season" value={seasonFilter} onChange={(event) => changeSeason(event.target.value)} className="min-h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-white">
             <option value="all">All seasons</option>
+            {seasonFilter !== "all" && !seasonOptions.some(([id]) => id === seasonFilter) && (
+              <option value={seasonFilter}>{linkedSeasonName ?? "Selected season"}</option>
+            )}
             {seasonOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </div>

@@ -166,7 +166,6 @@ function LiveRosters() {
   const searchParams = useSearchParams();
   const showCourts = searchParams.get("tab") === "courts";
   const [events, setEvents] = useState<RosterEvent[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState(searchParams.get("event") ?? "");
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [playersVersion, setPlayersVersion] = useState(0);
 
@@ -195,7 +194,8 @@ function LiveRosters() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const selectedEvent = events.find((event) => event.id === searchParams.get("event")) ?? events[0];
+  const selectedEventId = selectedEvent?.id ?? "";
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [editingEvent, setEditingEvent] = useState(false);
   const [editName, setEditName] = useState("");
@@ -205,7 +205,9 @@ function LiveRosters() {
   const [savingEdit, setSavingEdit] = useState(false);
 
   function selectEvent(eventId: string) {
-    setSelectedEventId(eventId);
+    const url = new URL(window.location.href);
+    url.searchParams.set("event", eventId);
+    window.history.replaceState(null, "", url);
     setEditingEvent(false);
     setError("");
     setSuccess("");
@@ -270,11 +272,6 @@ function LiveRosters() {
       const nextEvents: RosterEvent[] = result.events || [];
       setEvents(nextEvents);
 
-      setSelectedEventId((current) =>
-        nextEvents.some((event) => event.id === current)
-          ? current
-          : nextEvents[0]?.id || ""
-      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load events");
     } finally {
@@ -282,7 +279,7 @@ function LiveRosters() {
     }
   }, []);
 
-  const loadPlayers = useCallback(async (eventId: string) => {
+  const loadPlayers = useCallback(async (eventId: string, signal?: AbortSignal) => {
     if (!eventId) {
       setPlayers([]);
       return;
@@ -293,7 +290,7 @@ function LiveRosters() {
     try {
       const response = await fetch(
         `/api/roster-players?event_id=${encodeURIComponent(eventId)}`,
-        { cache: "no-store" }
+        { cache: "no-store", signal }
       );
       const result = await response.json();
 
@@ -301,12 +298,14 @@ function LiveRosters() {
         throw new Error(result.error || "Unable to load players");
       }
 
-      setPlayers(result.players || []);
-      setPlayersVersion((current) => current + 1);
+      if (!signal?.aborted) {
+        setPlayers(result.players || []);
+        setPlayersVersion((current) => current + 1);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load players");
+      if (!signal?.aborted) setError(err instanceof Error ? err.message : "Unable to load players");
     } finally {
-      setPlayersLoading(false);
+      if (!signal?.aborted) setPlayersLoading(false);
     }
   }, []);
 
@@ -315,12 +314,15 @@ function LiveRosters() {
   }, [loadEvents]);
 
   useEffect(() => {
+    const controller = new AbortController();
     setEditingId(null);
+    setEditingEvent(false);
     setPlayerForm(emptyPlayer);
     setPlayers([]);
     setImportRows([]);
     setFileName("");
-    void loadPlayers(selectedEventId);
+    void loadPlayers(selectedEventId, controller.signal);
+    return () => controller.abort();
   }, [selectedEventId, loadPlayers]);
 
   async function createEvent(event: FormEvent<HTMLFormElement>) {
@@ -355,7 +357,7 @@ function LiveRosters() {
       setRatingMethod("dupr_doubles");
 
       await loadEvents();
-      setSelectedEventId(result.event.id);
+      selectEvent(result.event.id);
       setSuccess("Event created successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create event");

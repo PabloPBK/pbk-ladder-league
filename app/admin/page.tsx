@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ActiveLeagueCard } from "@/components/admin/ActiveLeagueCard";
 import { CompletionScreen } from "@/components/admin/CompletionScreen";
@@ -34,6 +36,7 @@ import {
 } from "@/lib/data/rounds";
 import { generateInitialCourts } from "@/lib/ladder/generateInitialCourts";
 import { deleteLeagueSession } from "@/lib/data/sessionControls";
+import { isUuid } from "@/lib/data/league-listings";
 import type { GeneratedCourt } from "@/types/court";
 import type { Player } from "@/types/player";
 
@@ -110,6 +113,23 @@ function convertSavedCourt(
 }
 
 export default function AdminPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-zinc-400">Loading League Night…</p>}>
+      <LeagueNightFromUrl />
+    </Suspense>
+  );
+}
+
+function LeagueNightFromUrl() {
+  const params = useSearchParams();
+  const requestedLeague = params.get("leagueId") ?? "";
+  const requestedSeason = params.get("seasonId") ?? "";
+  const leagueId = isUuid(requestedLeague) ? requestedLeague : "";
+  const seasonId = leagueId && isUuid(requestedSeason) ? requestedSeason : "";
+  return <LeagueNight key={`${leagueId}:${seasonId}`} initialLeagueId={leagueId} initialSeasonId={seasonId} />;
+}
+
+function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: string; initialSeasonId: string }) {
   const {
     players,
     setPlayers,
@@ -117,7 +137,7 @@ export default function AdminPage() {
     setCourts,
     currentRound,
     setCurrentRound,
-    activeEvent,
+    activeEvent: runningEvent,
     setActiveEvent,
     playerDatabaseIds,
     isLoadingPlayers,
@@ -126,9 +146,11 @@ export default function AdminPage() {
   } = useLeague();
 
   const [selectedLeagueId, setSelectedLeagueId] =
-    useState("");
+    useState(initialLeagueId);
   const [selectedSeasonId, setSelectedSeasonId] =
-    useState("");
+    useState(initialSeasonId);
+  const activeEvent = initialLeagueId && runningEvent?.season_id !== selectedSeasonId ? null : runningEvent;
+  const activeSeasonFilter = initialLeagueId ? selectedSeasonId : undefined;
   const [eventDate, setEventDate] = useState(
     getLocalDateValue,
   );
@@ -248,27 +270,25 @@ export default function AdminPage() {
     (leagueId: string) => {
       setSelectedLeagueId(leagueId);
       setSelectedSeasonId("");
-      setActiveEvent(null);
-      clearRoundState();
+      if (!runningEvent) clearRoundState();
       setSessionNumber(1);
       setSessionNote("");
       setErrorMessage("");
       setSuccessMessage("");
     },
-    [clearRoundState, setActiveEvent],
+    [clearRoundState, runningEvent],
   );
 
   const handleSeasonChange = useCallback(
     (seasonId: string) => {
       setSelectedSeasonId(seasonId);
-      setActiveEvent(null);
-      clearRoundState();
+      if (!runningEvent) clearRoundState();
       setSessionNumber(1);
       setSessionNote("");
       setErrorMessage("");
       setSuccessMessage("");
     },
-    [clearRoundState, setActiveEvent],
+    [clearRoundState, runningEvent],
   );
 
   useEffect(() => {
@@ -284,7 +304,7 @@ export default function AdminPage() {
     async function loadDashboard() {
       try {
         setIsLoadingDashboard(true);
-        const event = await getActiveLeagueEvent();
+        const event = activeSeasonFilter === "" ? null : await getActiveLeagueEvent(activeSeasonFilter);
 
         if (!cancelled) {
           setAvailableActiveEvent(event);
@@ -309,7 +329,7 @@ export default function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [isLoadingPlayers, runtimePlayerIdByDatabaseId]);
+  }, [isLoadingPlayers, runtimePlayerIdByDatabaseId, activeSeasonFilter]);
 
   useEffect(() => {
     if (!selectedSeasonId || !eventDate || activeEvent) {
@@ -766,7 +786,7 @@ export default function AdminPage() {
               <div className="mb-6 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-blue-300">
                 Checking for an active league night...
               </div>
-            ) : availableActiveEvent ? (
+            ) : availableActiveEvent && (!initialLeagueId || availableActiveEvent.season_id === selectedSeasonId) ? (
               <section className="mb-8 rounded-2xl border border-green-500/40 bg-green-500/10 p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-green-300">
                   Resume current league night
