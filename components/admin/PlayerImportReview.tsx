@@ -102,6 +102,8 @@ type ReviewProps = {
   reviewedRowIds?: Set<number>;
   warnings?: Record<number, string[]>;
   editedDuprIds?: Record<number, string>;
+  editedRatings?: Record<number, string>;
+  onEditRating?: (rowId: number, value: string) => void;
   onEditDuprId?: (rowId: number, value: string) => void;
   onCheckDuprId?: (rowId: number) => void;
   onUndoDecision?: (rowId: number) => void;
@@ -128,6 +130,8 @@ export function PlayerImportReview({
   reviewedRowIds,
   warnings,
   editedDuprIds,
+  editedRatings,
+  onEditRating,
   onEditDuprId,
   onCheckDuprId,
   onUndoDecision,
@@ -176,6 +180,17 @@ export function PlayerImportReview({
           {preview.savesEmail && " · Save this email"}
         </p>
         {warnings?.[row.rowId]?.map((warning) => <p key={warning} className="mt-1 text-sm font-semibold text-amber-300">{warning}</p>)}
+        {onEditRating && decision?.action !== "skip" && (
+          <label className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            Session rating for {row.name}
+            <input type="text" inputMode="decimal"
+              value={editedRatings?.[row.rowId] ?? row.rating?.toString() ?? ""}
+              placeholder="Saved rating"
+              onChange={(event) => onEditRating(row.rowId, event.target.value)}
+              className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+            />
+          </label>
+        )}
         {onEditDuprId && (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="text-sm">
@@ -264,6 +279,9 @@ export function PlayerImportReview({
         <button type="button" className={buttonStyle} disabled={busy} onClick={onClose}>Close</button>
       </header>
       <fieldset disabled={busy || retryOnly || Boolean(onRetryIdentity)} className="space-y-3">
+        {onEditRating && (
+          <p className="text-sm text-zinc-400">If PodPlay supplied a club rating, enter the rating to use for court placement. Clear the field to use the saved rating.</p>
+        )}
         {focusPending && completedRows.some(({ rowId }) => warnings?.[rowId]?.includes(missingDuprIdWarning)) && (
           <p className="text-sm text-amber-300">
             {completedRows.filter(({ rowId }) => warnings?.[rowId]?.includes(missingDuprIdWarning)).length} matched players still need a DUPR ID. See reviewed players to add IDs when available.
@@ -275,7 +293,7 @@ export function PlayerImportReview({
         )}
         {focusPending && completedRows.length > 0 && (
           <details className="rounded-xl border border-zinc-700 p-3">
-            <summary className="cursor-pointer text-sm text-zinc-300">Show reviewed players ({completedRows.length})</summary>
+            <summary className="cursor-pointer text-sm text-zinc-300">Show reviewed players ({completedRows.length}){onEditRating ? " and edit session ratings" : ""}</summary>
             <div className="mt-3 space-y-3">{completedRows.map(renderRow)}</div>
           </details>
         )}

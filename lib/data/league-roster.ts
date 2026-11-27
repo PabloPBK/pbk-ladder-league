@@ -83,3 +83,11 @@ export function resolveRosterReview(
   }
   return { decisions, warnings };
 }
+
+export function readSessionRating(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) return undefined;
+  const rating = Number(trimmed);
+  return rating <= 8 ? rating : undefined;
+}

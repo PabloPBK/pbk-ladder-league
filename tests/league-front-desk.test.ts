@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
-import { readLeagueRoster, resolveRosterReview, rosterWarnings, suggestedRosterPlayers } from "../lib/data/league-roster";
+import { readLeagueRoster, readSessionRating, resolveRosterReview, rosterWarnings, suggestedRosterPlayers } from "../lib/data/league-roster";
 import { isFrontDesk, isFrontDeskApi, isFrontDeskWorkspace } from "../lib/data/operations-role";
 import type { PreviewRow } from "../lib/data/playerImport";
 
@@ -74,6 +74,14 @@ test("name suggestions handle emojis and leave ambiguous or conflicting records 
   assert.deepEqual(resolveRosterReview([row], [{
     rowId: 1, status: "review", reason: "no_identifier_match", savesEmail: false, player: null,
   }], {}).decisions, {});
+});
+
+test("session rating accepts decimals and a blank fallback and rejects invalid input", () => {
+  assert.equal(readSessionRating(" 3.825 "), 3.825);
+  assert.equal(readSessionRating("0"), 0);
+  assert.equal(readSessionRating("  "), null);
+  assert.equal(readSessionRating("8.1"), undefined);
+  assert.equal(readSessionRating("DUPR"), undefined);
 });
 
 test("front desk can run a league but cannot reach admin-only finance or cancel a session", () => {

@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 
 import { PlayerImportReview } from "@/components/admin/PlayerImportReview";
 import { useLeague } from "@/components/providers/LeagueProvider";
-import { readLeagueRoster, resolveRosterReview } from "@/lib/data/league-roster";
+import { readLeagueRoster, readSessionRating, resolveRosterReview } from "@/lib/data/league-roster";
 import {
   importPlayers, PlayerImportError, rosterSelectionError,
   type AppliedRow, type CommitRow, type ImportDecision, type ImportRow, type PreviewRow,
@@ -30,6 +30,7 @@ export function SessionRosterUpload({
   const { players, playerDatabaseIds } = useLeague();
   const [review, setReview] = useState<Review>();
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [ratingDrafts, setRatingDrafts] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -67,7 +68,10 @@ export function SessionRosterUpload({
       delete next[editedRowId];
       return next;
     });
-    if (editedRowId === undefined && !refreshReview) setSavedIdentities(new Set());
+    if (editedRowId === undefined && !refreshReview) {
+      setSavedIdentities(new Set());
+      setRatingDrafts({});
+    }
     setReview({ rows, previews, reviewed, requestId: crypto.randomUUID(), replace });
     onBusyChange(true);
   }
@@ -90,6 +94,7 @@ export function SessionRosterUpload({
   function close() {
     setReview(undefined);
     setDrafts({});
+    setRatingDrafts({});
     setRetryIdentity(undefined);
     setSavedIdentities(new Set());
     setError("");
@@ -97,6 +102,11 @@ export function SessionRosterUpload({
   }
 
   const resolution = review && resolveRosterReview(review.rows, review.previews, review.reviewed);
+  const invalidRating = review?.rows.find(({ rowId }) =>
+    resolution?.decisions[rowId]?.action !== "skip"
+      && ratingDrafts[rowId] !== undefined && readSessionRating(ratingDrafts[rowId]) === undefined,
+  );
+  const ratingError = invalidRating ? `Enter a session rating from 0 to 8 for ${invalidRating.name}, or clear the field to use the saved rating.` : "";
 
   async function saveIdentity(attempt: IdentitySave) {
     if (!review || busy) return;
@@ -139,12 +149,17 @@ export function SessionRosterUpload({
   }
 
   async function confirm() {
-    if (!review || !resolution || busy || retryIdentity || Object.keys(drafts).length
+    if (!review || !resolution || busy || retryIdentity || ratingError || Object.keys(drafts).length
       || rosterSelectionError(review.rows, resolution.decisions)) return;
     try {
       updateBusy(true);
       setError("");
-      const rows = review.rows.map((row) => ({ ...row, decision: resolution.decisions[row.rowId] }));
+      const rows = review.rows.map((row) => {
+        const decision = resolution.decisions[row.rowId];
+        const draft = ratingDrafts[row.rowId];
+        const rating = draft === undefined || decision?.action === "skip" ? row.rating : readSessionRating(draft);
+        return { ...row, rating: rating ?? null, decision };
+      });
       if (rows.some(({ decision }) => !decision)) return;
       const applied = await importPlayers({ mode: "commit", rows, requestId: review.requestId });
       onApply(applied, review.replace);
@@ -208,9 +223,11 @@ export function SessionRosterUpload({
         savedIdentityCount={savedIdentities.size}
         onRetryIdentity={retryIdentity ? () => void saveIdentity(retryIdentity) : undefined}
         canRefresh={conflict}
-        selectionError={Object.keys(drafts).length ? "Use Check DUPR ID on each edited row to continue." : rosterSelectionError(review.rows, resolution.decisions)}
+        selectionError={Object.keys(drafts).length ? "Use Check DUPR ID on each edited row to continue." : ratingError || rosterSelectionError(review.rows, resolution.decisions)}
         warnings={resolution.warnings}
         editedDuprIds={drafts}
+        editedRatings={ratingDrafts}
+        onEditRating={(rowId, value) => setRatingDrafts((current) => ({ ...current, [rowId]: value }))}
         onEditDuprId={(rowId, value) => setDrafts((current) => ({ ...current, [rowId]: value }))}
         onCheckDuprId={(rowId) => void load(async () => review.rows.map((row) =>
           row.rowId === rowId ? { ...row, duprId: drafts[rowId].trim() || null } : row,
