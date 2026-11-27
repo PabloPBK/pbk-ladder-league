@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
-import { readLeagueRoster, resolveRosterReview, rosterWarnings } from "../lib/data/league-roster";
+import { readLeagueRoster, resolveRosterReview, rosterWarnings, suggestedRosterPlayers } from "../lib/data/league-roster";
 import { isFrontDesk, isFrontDeskApi, isFrontDeskWorkspace } from "../lib/data/operations-role";
 import type { PreviewRow } from "../lib/data/playerImport";
 
@@ -41,9 +41,12 @@ test("clean matches leave the work list while verified choices stay in the event
       player: { id: "morgan", name: "Morgan", dupr: 3, dupr_id: "M12345" } },
   ];
 
-  assert.deepEqual(resolveRosterReview(input, previews, {}).decisions, {
+  const emailMatch = resolveRosterReview(input, previews, {});
+  assert.deepEqual(emailMatch.decisions, {
+    1: { action: "match", playerId: "casey" },
     2: { action: "match", playerId: "morgan" },
   });
+  assert.deepEqual(emailMatch.warnings[1], ["Missing DUPR ID"]);
   input[0].duprId = "C12345";
   previews[0].status = "review";
   previews[0].reason = "verify_new_dupr_id";
@@ -60,6 +63,17 @@ test("clean matches leave the work list while verified choices stay in the event
     2: { action: "match", playerId: "morgan" },
     3: { action: "skip" },
   });
+});
+
+test("name suggestions handle emojis and leave ambiguous or conflicting records for staff review", () => {
+  const player = { id: "existing", name: "Casey Smith 🏓", dupr: 4, dupr_id: "C12345" };
+  const row = { rowId: 1, name: "Casey Smith", email: "casey@club.example", duprId: null, rating: 4 };
+  assert.equal(suggestedRosterPlayers([player])(row)?.id, player.id);
+  assert.equal(suggestedRosterPlayers([player])({ ...row, duprId: "D12345" }), null);
+  assert.equal(suggestedRosterPlayers([player, { ...player, id: "second" }])(row), null);
+  assert.deepEqual(resolveRosterReview([row], [{
+    rowId: 1, status: "review", reason: "no_identifier_match", savesEmail: false, player: null,
+  }], {}).decisions, {});
 });
 
 test("front desk can run a league but cannot reach admin-only finance or cancel a session", () => {

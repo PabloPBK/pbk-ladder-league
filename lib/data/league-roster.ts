@@ -1,5 +1,25 @@
 import { getPodPlayImportFields, parsePodPlayCsv } from "./podplayRoster";
 import type { ImportDecision, ImportRow, PreviewRow } from "./playerImport";
+import type { DatabasePlayerRecord } from "./players";
+
+export const missingDuprIdWarning = "Missing DUPR ID";
+
+function rosterNameKey(name: string) {
+  return name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, " ").trim();
+}
+
+export function suggestedRosterPlayers(players: DatabasePlayerRecord[]) {
+  const byName = new Map<string, DatabasePlayerRecord | null>();
+  for (const player of players) {
+    const key = rosterNameKey(player.name);
+    if (key.includes(" ")) byName.set(key, byName.has(key) ? null : player);
+  }
+  return (row: ImportRow) => {
+    const candidate = byName.get(rosterNameKey(row.name));
+    if (candidate?.dupr_id && row.duprId && candidate.dupr_id.trim().toUpperCase() !== row.duprId.trim().toUpperCase()) return null;
+    return candidate ?? null;
+  };
+}
 
 export function readLeagueRoster(csv: string): ImportRow[] {
   const rows = parsePodPlayCsv(csv);
@@ -41,7 +61,7 @@ export function rosterWarnings(rows: ImportRow[], previews: PreviewRow[]) {
   return Object.fromEntries(identities.map(({ row, keys, player, name, verified }) => [
     row.rowId,
     [
-      ...(!row.duprId && !player?.dupr_id ? ["Missing DUPR ID"] : []),
+      ...(!row.duprId && !player?.dupr_id ? [missingDuprIdWarning] : []),
       ...(keys.some((key) => (counts.get(key) ?? 0) > 1)
         ? ["Possible duplicate in this CSV"]
         : !verified && (names.get(name) ?? 0) > 1 ? ["This name appears more than once. Verify the players’ identities."] : []),
@@ -57,7 +77,7 @@ export function resolveRosterReview(
   const warnings = rosterWarnings(rows.filter(({ rowId }) => reviewed[rowId]?.action !== "skip"), previews);
   const decisions = { ...reviewed };
   for (const { rowId, status, player } of previews) {
-    if (!decisions[rowId] && status === "match" && player && !warnings[rowId]?.length) {
+    if (!decisions[rowId] && status === "match" && player && !warnings[rowId]?.some((warning) => warning !== missingDuprIdWarning)) {
       decisions[rowId] = { action: "match", playerId: player.id };
     }
   }

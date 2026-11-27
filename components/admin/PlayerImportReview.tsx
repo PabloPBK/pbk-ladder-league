@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { missingDuprIdWarning, suggestedRosterPlayers } from "@/lib/data/league-roster";
 import type { ImportDecision, ImportRow, PreviewRow } from "@/lib/data/playerImport";
 import type { DatabasePlayerRecord } from "@/lib/data/players";
 
@@ -10,7 +11,7 @@ const messages: Record<string, string> = {
   dupr_id: "DUPR ID matches",
   email: "Email matches",
   no_identifier: "No DUPR ID or email supplied",
-  no_identifier_match: "No saved DUPR ID or email matches",
+  no_identifier_match: "This email or DUPR ID isn’t linked to a league player yet.",
   verify_new_dupr_id: "Email matches. Verify the new DUPR ID before saving it.",
   invalid_identifier: "The email or DUPR ID is invalid. Check in a verified player without saving these identifiers, or skip this row.",
   different_players: "DUPR ID and email point to different players. Check in a verified player without saving these identifiers, or skip this row.",
@@ -145,6 +146,7 @@ export function PlayerImportReview({
 
   const byRow = new Map(previews.map((row) => [row.rowId, row]));
   const byPlayer = new Map(players.map((player) => [player.id, player]));
+  const suggest = focusPending ? suggestedRosterPlayers(players) : undefined;
   const pending = rows.filter(({ rowId }) => !decisions[rowId]).length;
   const selected = rows.filter(({ rowId }) => decisions[rowId] && decisions[rowId].action !== "skip").length;
 
@@ -157,6 +159,8 @@ export function PlayerImportReview({
     const decision = decisions[row.rowId];
     const edited = editedDuprIds?.[row.rowId] !== undefined;
     const candidate = preview.player;
+    const canLink = preview.status === "review" && !candidate && Boolean(row.email || row.duprId);
+    const suggestion = canLink && !decision ? suggest?.(row) : null;
     const chosen = decision && "playerId" in decision
       ? byPlayer.get(decision.playerId) ?? candidate
       : null;
@@ -186,6 +190,23 @@ export function PlayerImportReview({
           </div>
         )}
         <fieldset disabled={edited} className="mt-2">
+          {suggestion && (
+            <div className="mb-3 rounded-lg border border-zinc-700 p-3">
+              <p className="text-sm font-semibold">Possible existing profile · {suggestion.name}</p>
+              <p className="mt-1 text-sm text-zinc-400">
+                {suggestion.dupr_id ? `DUPR ID ${suggestion.dupr_id}` : "No DUPR ID saved"} · Player …{suggestion.id.slice(-8)}
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">Verify this is the same person before saving the link.</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button type="button" className={buttonStyle} onClick={() => choose({ action: "link", playerId: suggestion.id })}>
+                  Save verified link
+                </button>
+                <Link href={`/players/${suggestion.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-200 underline">
+                  Player history
+                </Link>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {preview.status === "match" && candidate && decision?.action !== "match" && (
               <button type="button" className={buttonStyle} onClick={() => choose({ action: "match", playerId: candidate.id })}>Use match</button>
@@ -205,7 +226,7 @@ export function PlayerImportReview({
           </div>
           <PlayerPicker
             players={players}
-            canLink={preview.status === "review" && !candidate && Boolean(row.email || row.duprId)}
+            canLink={canLink}
             onChoose={choose}
             saveIdentitiesImmediately={saveIdentitiesImmediately}
           />
@@ -243,6 +264,11 @@ export function PlayerImportReview({
         <button type="button" className={buttonStyle} disabled={busy} onClick={onClose}>Close</button>
       </header>
       <fieldset disabled={busy || retryOnly || Boolean(onRetryIdentity)} className="space-y-3">
+        {focusPending && completedRows.some(({ rowId }) => warnings?.[rowId]?.includes(missingDuprIdWarning)) && (
+          <p className="text-sm text-amber-300">
+            {completedRows.filter(({ rowId }) => warnings?.[rowId]?.includes(missingDuprIdWarning)).length} matched players still need a DUPR ID. See reviewed players to add IDs when available.
+          </p>
+        )}
         {visibleRows.map(renderRow)}
         {focusPending && visibleRows.length === 0 && !selectionError && (
           <p role="status" className="text-sm text-green-300">All roster rows have been reviewed.</p>
