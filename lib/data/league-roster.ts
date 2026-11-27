@@ -22,11 +22,12 @@ export function readLeagueRoster(csv: string): ImportRow[] {
 }
 
 export function rosterWarnings(rows: ImportRow[], previews: PreviewRow[]) {
-  const matched = new Map(previews.map((preview) => [preview.rowId, preview.player]));
+  const matched = new Map(previews.map((preview) => [preview.rowId, preview]));
   const counts = new Map<string, number>();
   const names = new Map<string, number>();
   const identities = rows.map((row) => {
-    const player = matched.get(row.rowId);
+    const preview = matched.get(row.rowId);
+    const player = preview?.player;
     const keys = [
       row.duprId && `dupr:${row.duprId.trim().toUpperCase()}`,
       row.email && `email:${row.email.trim().toLowerCase()}`,
@@ -35,15 +36,15 @@ export function rosterWarnings(rows: ImportRow[], previews: PreviewRow[]) {
     for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
     const name = row.name.normalize("NFKC").toLowerCase();
     names.set(name, (names.get(name) ?? 0) + 1);
-    return { row, keys, player, name };
+    return { row, keys, player, name, verified: preview?.status === "match" };
   });
-  return Object.fromEntries(identities.map(({ row, keys, player, name }) => [
+  return Object.fromEntries(identities.map(({ row, keys, player, name, verified }) => [
     row.rowId,
     [
       ...(!row.duprId && !player?.dupr_id ? ["Missing DUPR ID"] : []),
       ...(keys.some((key) => (counts.get(key) ?? 0) > 1)
         ? ["Possible duplicate in this CSV"]
-        : (names.get(name) ?? 0) > 1 ? ["This name appears more than once. Verify the players’ identities."] : []),
+        : !verified && (names.get(name) ?? 0) > 1 ? ["This name appears more than once. Verify the players’ identities."] : []),
     ],
   ]));
 }

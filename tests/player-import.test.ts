@@ -155,6 +155,35 @@ test("Supabase migration resolves and commits roster identity without rewriting 
     assert.equal(verifiedId.player?.dupr_id, "NEW123");
   });
 
+  await t.test("saving a verified link makes the original PodPlay row importable again without its DUPR ID", async () => {
+    const podPlayRow = row({
+      rowId: 81, name: "Alex Same", email: "roster-reupload@example.com", duprId: null, rating: 3.75,
+    });
+    const [initial] = await importRows([podPlayRow]);
+    assert.equal(initial.status, "review");
+    assert.equal(initial.player, null);
+
+    const requestId = randomUUID();
+    const [saved] = await importRows([{
+      ...podPlayRow,
+      decision: { action: "link", playerId: other },
+    }], requestId);
+    assert.equal(saved.player?.dupr_id, "XY12ZW");
+
+    const [repeat] = await importRows([podPlayRow]);
+    assert.equal(repeat.status, "match");
+    assert.equal(repeat.reason, "email");
+    assert.equal(repeat.player?.id, other);
+    assert.equal(repeat.player?.dupr_id, "XY12ZW");
+    const [reimported] = await importRows([{
+      ...podPlayRow, decision: { action: "match", playerId: other },
+    }], randomUUID());
+    assert.equal(reimported.player?.id, other);
+    assert.deepEqual((await db.query("select id from players where name = 'Alex Same' order by id")).rows, [
+      { id: legacy }, { id: other },
+    ]);
+  });
+
   await t.test("blocks disagreeing identifiers and permits verified check-in without changing them", async () => {
     const conflict = { ...alex, duprId: "AB12CD" };
     const [preview] = await importRows([conflict]);

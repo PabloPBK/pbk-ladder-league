@@ -23,10 +23,12 @@ function PlayerPicker({
   players,
   onChoose,
   canLink,
+  saveIdentitiesImmediately,
 }: {
   players: DatabasePlayerRecord[];
   onChoose: (decision: ImportDecision) => void;
   canLink: boolean;
+  saveIdentitiesImmediately: boolean;
 }) {
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
@@ -47,6 +49,9 @@ function PlayerPicker({
         />
       </label>
       {query && matches.length === 0 && <p className="mt-2 text-sm text-zinc-400">No saved players found.</p>}
+      {query && canLink && saveIdentitiesImmediately && (
+        <p className="mt-2 text-sm text-zinc-400">Save the verified link to match future CSVs by their email or DUPR ID.</p>
+      )}
       {matches.length > 20 && <p className="mt-2 text-sm text-zinc-400">Showing the first 20 matches. Narrow your search to see others.</p>}
       <ul className="mt-2 space-y-2">
         {matches.slice(0, 20).map((player) => (
@@ -57,7 +62,7 @@ function PlayerPicker({
             <div className="flex flex-wrap items-center gap-2">
               {canLink && (
                 <button type="button" className={buttonStyle} onClick={() => onChoose({ action: "link", playerId: player.id })}>
-                  Link verified identifiers
+                  {saveIdentitiesImmediately ? "Save verified link" : "Link verified identifiers"}
                 </button>
               )}
               <button type="button" className={buttonStyle} onClick={() => onChoose({ action: "check-in", playerId: player.id })}>
@@ -90,6 +95,9 @@ type ReviewProps = {
   canRefresh: boolean;
   retryOnly: boolean;
   focusPending?: boolean;
+  saveIdentitiesImmediately?: boolean;
+  savedIdentityCount?: number;
+  onRetryIdentity?: () => void;
   reviewedRowIds?: Set<number>;
   warnings?: Record<number, string[]>;
   editedDuprIds?: Record<number, string>;
@@ -113,6 +121,9 @@ export function PlayerImportReview({
   canRefresh,
   retryOnly,
   focusPending = false,
+  saveIdentitiesImmediately = false,
+  savedIdentityCount = 0,
+  onRetryIdentity,
   reviewedRowIds,
   warnings,
   editedDuprIds,
@@ -180,10 +191,10 @@ export function PlayerImportReview({
               <button type="button" className={buttonStyle} onClick={() => choose({ action: "match", playerId: candidate.id })}>Use match</button>
             )}
             {preview.status === "review" && candidate && (
-              <button type="button" className={buttonStyle} onClick={() => choose({ action: "link", playerId: candidate.id })}>Verify and link</button>
+              <button type="button" className={buttonStyle} onClick={() => choose({ action: "link", playerId: candidate.id })}>{saveIdentitiesImmediately ? "Save verified link" : "Verify and link"}</button>
             )}
             {preview.status === "review" && !candidate && decision?.action !== "new" && (
-              <button type="button" className={buttonStyle} onClick={() => choose({ action: "new" })}>Confirm new player</button>
+              <button type="button" className={buttonStyle} onClick={() => choose({ action: "new" })}>{saveIdentitiesImmediately && (row.duprId || row.email) ? "Save new player" : "Confirm new player"}</button>
             )}
             {reviewedRowIds?.has(row.rowId) && onUndoDecision && (
               <button type="button" className={buttonStyle} onClick={() => onUndoDecision(row.rowId)}>Undo decision</button>
@@ -196,6 +207,7 @@ export function PlayerImportReview({
             players={players}
             canLink={preview.status === "review" && !candidate && Boolean(row.email || row.duprId)}
             onChoose={choose}
+            saveIdentitiesImmediately={saveIdentitiesImmediately}
           />
         </fieldset>
         {decision && (
@@ -224,11 +236,13 @@ export function PlayerImportReview({
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 id="player-review-title" className="text-xl font-bold">Review player matches</h2>
-          <p className="mt-1 text-sm text-zinc-400">Verify returning players before linking identifiers or creating a new profile.</p>
+          <p className="mt-1 text-sm text-zinc-400">{saveIdentitiesImmediately
+            ? "Save verified links for future uploads. Apply and check in when the roster is ready."
+            : "Verify returning players before linking identifiers or creating a new profile."}</p>
         </div>
         <button type="button" className={buttonStyle} disabled={busy} onClick={onClose}>Close</button>
       </header>
-      <fieldset disabled={busy || retryOnly} className="space-y-3">
+      <fieldset disabled={busy || retryOnly || Boolean(onRetryIdentity)} className="space-y-3">
         {visibleRows.map(renderRow)}
         {focusPending && visibleRows.length === 0 && !selectionError && (
           <p role="status" className="text-sm text-green-300">All roster rows have been reviewed.</p>
@@ -243,12 +257,16 @@ export function PlayerImportReview({
       <footer className="sticky bottom-0 mt-4 space-y-2 border-t border-zinc-700 bg-zinc-900 pt-3">
         {(selectionError || error) && <p role="alert" className="text-sm text-red-300">{error || selectionError}</p>}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p role="status" className="text-sm text-zinc-400">{selected} ready · {pending} need a decision</p>
+          <p role="status" className="text-sm text-zinc-400">
+            {selected} ready · {pending} need a decision
+            {savedIdentityCount > 0 && <span className="ml-2 text-green-300">{savedIdentityCount} saved for future uploads</span>}
+          </p>
           <div className="flex gap-2">
+            {onRetryIdentity && <button type="button" className={buttonStyle} disabled={busy} onClick={onRetryIdentity}>Retry player save</button>}
             {canRefresh && <button type="button" className={buttonStyle} disabled={busy} onClick={onRefresh}>Refresh matches</button>}
             <button
               type="button"
-              disabled={busy || pending > 0 || Boolean(selectionError)}
+              disabled={busy || pending > 0 || Boolean(selectionError) || Boolean(onRetryIdentity)}
               className="rounded-lg bg-green-700 px-4 py-2 font-semibold disabled:opacity-40"
               onClick={onConfirm}
             >
