@@ -246,6 +246,34 @@ function LeagueNight({ initialLeagueId, initialSeasonId, resumeEventId }: {
     [players],
   );
 
+  // Warn before leaving an unfinished league setup, including browser Back.
+  const protectSetup = !roundSaved && (rosterBusy || rosterReviewed || Boolean(activeEvent));
+  useEffect(() => {
+    if (!protectSetup) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const url = window.location.href;
+    const marker = "__leagueSetupGuard";
+    if (!window.history.state?.[marker]) {
+      window.history.pushState({ ...window.history.state, [marker]: true }, "", url);
+    }
+    const onBack = () => {
+      if (window.confirm("Leave this league setup? Unsaved changes may be lost.")) {
+        window.history.back();
+      } else {
+        window.history.pushState({ ...window.history.state, [marker]: true }, "", url);
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    window.addEventListener("popstate", onBack);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      window.removeEventListener("popstate", onBack);
+    };
+  }, [protectSetup]);
+
   const remainingPlayers = checkedInCount % 4;
   const roundIsGenerated =
     roundSaved && Boolean(activeEvent);
