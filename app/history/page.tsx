@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { LeagueSeasonRevenue } from "@/components/admin/LeagueSeasonRevenue";
 import { getHistoryEvents, type HistoryEventSummary, updateHistoryEventSeason } from "@/lib/data/history";
 import { getSeasonsForLeague, type SeasonRecord } from "@/lib/data/leagues";
 import { isUuid } from "@/lib/data/league-listings";
@@ -154,6 +155,7 @@ function LeagueHistory() {
           </select>
         </div>
 
+        {isUuid(seasonFilter) && <LeagueSeasonRevenue key={seasonFilter} seasonId={seasonFilter} />}
         {isLoading && <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-8 text-center text-blue-300">Loading league history...</div>}
         {errorMessage && <div className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-red-300">{errorMessage}</div>}
 

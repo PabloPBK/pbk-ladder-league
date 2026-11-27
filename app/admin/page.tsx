@@ -14,6 +14,7 @@ import { CompletionScreen } from "@/components/admin/CompletionScreen";
 import { CourtAssignments } from "../../components/admin/CourtAssignments";
 import { LeagueNightSetup } from "@/components/admin/LeagueNightSetup";
 import { LeagueSessionRevenue } from "@/components/admin/LeagueSessionRevenue";
+import { LeagueSeasonRevenue } from "@/components/admin/LeagueSeasonRevenue";
 import { PlayerCheckIn } from "@/components/admin/PlayerCheckIn";
 import { RoundControls } from "../../components/admin/RoundControls";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -187,6 +188,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   const [showCompletionScreen, setShowCompletionScreen] =
     useState(false);
   const [completedEventId, setCompletedEventId] = useState("");
+  const [revenueVersion, setRevenueVersion] = useState(0);
   const [completedEventName, setCompletedEventName] =
     useState("");
   const [availableActiveEvent, setAvailableActiveEvent] =
@@ -795,7 +797,11 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
             completedEventName={completedEventName}
             onStartNewLeagueNight={handleStartNewLeagueNight}
           />
-          {completedEventId && <LeagueSessionRevenue key={completedEventId} eventId={completedEventId} />}
+          {completedEventId && (
+            <LeagueSessionRevenue key={completedEventId} eventId={completedEventId}
+              onSaved={() => setRevenueVersion((version) => version + 1)} />
+          )}
+          {selectedSeasonId && <LeagueSeasonRevenue key={`${selectedSeasonId}:${revenueVersion}`} seasonId={selectedSeasonId} />}
         </div>
       </AppLayout>
     );
@@ -807,6 +813,12 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       description="Start a session, check players in, and run the ladder."
     >
       <div className="mx-auto max-w-6xl">
+        {(activeEvent?.season_id || selectedSeasonId) && (
+          <LeagueSeasonRevenue
+            key={`${activeEvent?.season_id ?? selectedSeasonId}:${revenueVersion}`}
+            seasonId={activeEvent?.season_id ?? selectedSeasonId}
+          />
+        )}
         {!activeEvent && (
           <>
             {isLoadingDashboard ? (
@@ -893,7 +905,8 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               roundIsGenerated={roundIsGenerated}
             />
 
-            <LeagueSessionRevenue key={activeEvent.id} eventId={activeEvent.id} />
+            <LeagueSessionRevenue key={activeEvent.id} eventId={activeEvent.id}
+              onSaved={() => setRevenueVersion((version) => version + 1)} />
 
             {errorMessage && (
               <div className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-300">

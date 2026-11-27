@@ -7,7 +7,7 @@ import {
   type SavedSessionRevenue,
 } from "@/lib/data/league-session-revenue";
 
-export function LeagueSessionRevenue({ eventId }: { eventId: string }) {
+export function LeagueSessionRevenue({ eventId, onSaved }: { eventId: string; onSaved?: () => void }) {
   const endpoint = `/api/events/${encodeURIComponent(eventId)}/revenue`;
   const [report, setReport] = useState<SavedSessionRevenue | null>(null);
   const [members, setMembers] = useState("");
@@ -70,6 +70,7 @@ export function LeagueSessionRevenue({ eventId }: { eventId: string }) {
       if (!response.ok) throw new Error(data.error ?? "Unable to save revenue.");
       setReport(data.report);
       setStatus("Revenue report saved.");
+      onSaved?.();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Unable to save revenue.");
     } finally {
