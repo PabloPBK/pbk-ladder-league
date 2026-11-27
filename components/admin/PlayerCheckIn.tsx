@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Player } from "@/types/player";
 
 type PlayerCheckInProps = {
@@ -31,6 +32,7 @@ export function PlayerCheckIn({
   onMovePlayer,
   onRatingChange,
 }: PlayerCheckInProps) {
+  const [showPreview, setShowPreview] = useState(false);
   const checkedInPlayers = players.filter((player) => player.checkedIn);
   const checkedInCount = checkedInPlayers.length;
   const courtCount = Math.floor(checkedInCount / 4);
@@ -54,9 +56,28 @@ export function PlayerCheckIn({
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={checkedInCount < 4 || remainingPlayers !== 0} onClick={() => window.print()} className="min-h-12 rounded-xl border border-zinc-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Print Court List</button>
-          <button type="button" disabled={!canGenerateFirstRound || roundIsGenerated} onClick={onGenerateFirstRound} className="min-h-12 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400">{roundIsGenerated ? `Round ${currentRound} Generated ✓` : isGenerating ? "Saving Round 1..." : "Generate 1st Round"}</button>
+          <button type="button" disabled={!canGenerateFirstRound || roundIsGenerated} onClick={() => setShowPreview(true)} className="min-h-12 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400">{roundIsGenerated ? `Round ${currentRound} Generated ✓` : isGenerating ? "Saving Round 1..." : "Preview Round 1"}</button>
         </div>
       </section>
+
+      {showPreview && !roundIsGenerated && (
+        <section className="mb-6 rounded-xl border border-blue-500/40 bg-zinc-900 p-4 no-print">
+          <h2 className="text-xl font-bold text-white">Round 1 Court Preview</h2>
+          <p className="mt-1 text-sm text-zinc-400">Adjust check-in or player order below. This preview updates automatically. Nothing is saved until you confirm.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: courtCount }, (_, index) => (
+              <article key={index} className="rounded-lg border border-zinc-700 p-3">
+                <h3 className="font-bold text-yellow-400">Court {index + 1}</h3>
+                <ol className="mt-2 space-y-1">{checkedInPlayers.slice(index * 4, index * 4 + 4).map((player, slot) => <li key={player.id}>{slot + 1}. {player.name} · {player.dupr.toFixed(2)}</li>)}</ol>
+              </article>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" disabled={isGenerating} onClick={() => setShowPreview(false)} className="rounded-xl border border-zinc-600 px-5 py-3">Close preview</button>
+            <button type="button" disabled={!canGenerateFirstRound || isGenerating} onClick={onGenerateFirstRound} className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:opacity-40">{isGenerating ? "Saving Round 1…" : "Confirm & Start Round 1"}</button>
+          </div>
+        </section>
+      )}
 
       <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 no-print">
         {players.map((player, index) => {
