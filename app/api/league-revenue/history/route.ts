@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/data/league-listings";
 import type { HistoricalPaidEntries } from "@/lib/data/league-session-revenue";
-import { getStaffApiDenial } from "@/lib/server/require-auth";
+import { getRevenueApiDenial } from "@/lib/server/require-revenue-admin";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type Row = {
@@ -11,7 +11,7 @@ type Row = {
 };
 
 export async function GET(request: Request) {
-  const denial = await getStaffApiDenial();
+  const denial = await getRevenueApiDenial();
   if (denial) return denial;
 
   const leagueId = new URL(request.url).searchParams.get("leagueId");

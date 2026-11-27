@@ -8,9 +8,9 @@ import {
   type HistoricalPaidEntries, type SavedSessionRevenue,
 } from "@/lib/data/league-session-revenue";
 
-export type RevenueDraft = { members: string; nonmembers: string };
+type RevenueDraft = { members: string; nonmembers: string };
 
-export const emptyRevenueDraft: RevenueDraft = { members: "", nonmembers: "" };
+const emptyRevenueDraft: RevenueDraft = { members: "", nonmembers: "" };
 
 function readDraft({ members, nonmembers }: RevenueDraft) {
   return {
@@ -90,23 +90,15 @@ function readFee(value: string) {
 }
 
 export function SessionPayoutEstimate({
-  draft, onChange, disabled = false, leagueId = "", plannedSessions,
-}: {
-  draft?: RevenueDraft;
-  onChange?: (draft: RevenueDraft) => void;
-  disabled?: boolean;
-  leagueId?: string;
-  plannedSessions?: number;
-}) {
-  const [manualDraft, setManualDraft] = useState(emptyRevenueDraft);
+  leagueId, plannedSessions,
+}: { leagueId: string; plannedSessions: number }) {
+  const [manualDraft, setDraft] = useState(emptyRevenueDraft);
   const [mode, setMode] = useState<"manual" | "history">("manual");
   const [expected, setExpected] = useState("");
   const [memberFee, setMemberFee] = useState((defaultEntryFees.memberCents / 100).toFixed(2));
   const [nonmemberFee, setNonmemberFee] = useState((defaultEntryFees.nonmemberCents / 100).toFixed(2));
   const [customSessions, setCustomSessions] = useState<string>();
   const [history, setHistory] = useState<{ leagueId: string; mix: HistoricalPaidEntries | null; error?: string }>();
-  const setDraft = onChange ?? setManualDraft;
-  const editableFees = !onChange;
 
   useEffect(() => {
     if (mode !== "history") return;
@@ -132,50 +124,44 @@ export function SessionPayoutEstimate({
   const mix = source ? paidEntryMix(source.members, source.nonmembers) : null;
   const projected = source && expected !== "" ? estimatePaidEntries(Number(expected), source) : null;
   const projectedDraft = projected ? { members: String(projected.members), nonmembers: String(projected.nonmembers) } : null;
-  const memberCents = editableFees ? readFee(memberFee) : defaultEntryFees.memberCents;
-  const nonmemberCents = editableFees ? readFee(nonmemberFee) : defaultEntryFees.nonmemberCents;
+  const memberCents = readFee(memberFee);
+  const nonmemberCents = readFee(nonmemberFee);
   const feesValid = memberCents !== null && nonmemberCents !== null;
-  const sessionInput = customSessions ?? String(plannedSessions ?? 1);
+  const sessionInput = customSessions ?? String(plannedSessions);
   const seasonCount = Number(sessionInput);
   const countValid = Number.isInteger(seasonCount) && seasonCount > 0 && seasonCount <= 10000;
 
   return (
-    <details className="mt-5 rounded-xl border border-zinc-700 bg-zinc-900 p-4 text-white">
-      <summary className="cursor-pointer font-bold">{editableFees ? "Revenue and payout estimate" : "Estimate session payout"}</summary>
+    <section className="rounded-xl border border-zinc-700 bg-zinc-900 p-4 text-white">
       <div className="mt-3 space-y-3">
         <p className="text-sm text-zinc-400">
-          {editableFees ? "Estimate paid entries per session. You can adjust the fees for this forecast."
-            : "Use expected paid entries to plan the payout. Counts carry into a new session as a draft."}
+          Estimate paid entries per session. You can adjust the fees for this forecast.
         </p>
         <label className="grid gap-1 text-sm font-semibold sm:max-w-xs">
           Membership estimate
-          <select className={estimateInputClass} value={mode} disabled={disabled}
+          <select className={estimateInputClass} value={mode}
             onChange={(event) => setMode(event.target.value === "history" ? "history" : "manual")}>
             <option value="manual">Enter counts manually</option>
             <option value="history">Use past paid entries</option>
           </select>
         </label>
-        {editableFees && (
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="grid gap-1 text-sm font-semibold">
               Member fee ($)
               <input className={estimateInputClass} type="text" inputMode="decimal" value={memberFee}
-                onChange={(event) => setMemberFee(event.target.value)} disabled={disabled} />
+                onChange={(event) => setMemberFee(event.target.value)} />
             </label>
             <label className="grid gap-1 text-sm font-semibold">
               Non-member fee ($)
               <input className={estimateInputClass} type="text" inputMode="decimal" value={nonmemberFee}
-                onChange={(event) => setNonmemberFee(event.target.value)} disabled={disabled} />
+                onChange={(event) => setNonmemberFee(event.target.value)} />
             </label>
-            {plannedSessions !== undefined && (
               <label className="grid gap-1 text-sm font-semibold">
                 Sessions in forecast
                 <input className={estimateInputClass} type="number" min={1} step={1} value={sessionInput}
-                  onChange={(event) => setCustomSessions(event.target.value)} disabled={disabled} />
+                  onChange={(event) => setCustomSessions(event.target.value)} />
               </label>
-            )}
           </div>
-        )}
         {!feesValid && <p className="text-sm text-amber-300">Enter a valid fee for each group.</p>}
         {!countValid && <p className="text-sm text-amber-300">Enter a valid number of sessions.</p>}
         {mode === "history" && (
@@ -189,13 +175,13 @@ export function SessionPayoutEstimate({
               <label className="grid gap-1 text-sm font-semibold sm:max-w-xs">
                 Expected paying players per session
                 <input className={estimateInputClass} type="number" inputMode="numeric" min={0} max={maxPayingPlayers}
-                  step={1} value={expected} onChange={(event) => setExpected(event.target.value)} disabled={disabled} />
+                  step={1} value={expected} onChange={(event) => setExpected(event.target.value)} />
               </label>
             )}
             {projectedDraft && (
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-sm">{projectedDraft.members} estimated members · {projectedDraft.nonmembers} estimated non-members</p>
-                <button type="button" disabled={disabled} className="text-sm font-semibold text-yellow-300 underline"
+                <button type="button" className="text-sm font-semibold text-yellow-300 underline"
                   onClick={() => { setDraft(projectedDraft); setMode("manual"); }}>
                   Use these counts
                 </button>
@@ -204,27 +190,20 @@ export function SessionPayoutEstimate({
           </div>
         )}
         {feesValid && (mode === "manual" || projectedDraft) && (
-          <PayoutFields draft={mode === "manual" ? draft ?? manualDraft : projectedDraft ?? emptyRevenueDraft}
-            onChange={setDraft} disabled={disabled} estimating showCounts={mode === "manual"}
+          <PayoutFields draft={mode === "manual" ? manualDraft : projectedDraft ?? emptyRevenueDraft}
+            onChange={setDraft} estimating showCounts={mode === "manual"}
             fees={{ memberCents: memberCents ?? 0, nonmemberCents: nonmemberCents ?? 0 }}
             sessions={countValid ? seasonCount : 1} />
         )}
       </div>
-    </details>
+    </section>
   );
 }
 
-export function LeagueSessionRevenue({
-  eventId, onSaved, initialDraft = emptyRevenueDraft, onDraftChange,
-}: {
-  eventId: string;
-  onSaved?: () => void;
-  initialDraft?: RevenueDraft;
-  onDraftChange?: (draft: RevenueDraft) => void;
-}) {
+export function LeagueSessionRevenue({ eventId }: { eventId: string }) {
   const endpoint = `/api/events/${encodeURIComponent(eventId)}/revenue`;
   const [report, setReport] = useState<SavedSessionRevenue | null>(null);
-  const [draft, setDraft] = useState(initialDraft);
+  const [draft, setDraft] = useState(emptyRevenueDraft);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -277,7 +256,6 @@ export function LeagueSessionRevenue({
       if (!response.ok) throw new Error(data.error ?? "Unable to save revenue.");
       setReport(data.report);
       setStatus("Revenue report saved.");
-      onSaved?.();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Unable to save revenue.");
     } finally {
@@ -296,7 +274,6 @@ export function LeagueSessionRevenue({
           <PayoutFields draft={draft} disabled={saving} onChange={(counts) => {
             setDraft(counts);
             setStatus("");
-            onDraftChange?.(counts);
           }} />
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" disabled={!validCounts || saving || savedCounts || reloadRequired}

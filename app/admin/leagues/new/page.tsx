@@ -13,7 +13,7 @@ export default async function NewLeaguePage() {
   }
 
   return (
-    <AppLayout title="Create League" description="Estimate revenue and set up seasons and session dates for staff.">
+    <AppLayout title="Create League" description="Set up seasons and session dates for staff.">
       <LeaguePlanForm />
     </AppLayout>
   );

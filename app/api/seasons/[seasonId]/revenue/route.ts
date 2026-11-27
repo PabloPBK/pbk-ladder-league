@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/data/league-listings";
 import { seasonRevenueCsv, summarizeSeasonRevenue, type SeasonRevenueSession } from "@/lib/data/league-session-revenue";
-import { getStaffApiDenial } from "@/lib/server/require-auth";
+import { getRevenueApiDenial } from "@/lib/server/require-revenue-admin";
 import { buildSeasonRevenuePdf } from "@/lib/server/season-revenue-pdf";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -13,7 +13,7 @@ type Season = {
 const headers = { "Cache-Control": "private, no-store" };
 
 export async function GET(request: Request, { params }: { params: Promise<{ seasonId: string }> }) {
-  const denial = await getStaffApiDenial();
+  const denial = await getRevenueApiDenial();
   if (denial) return denial;
 
   const { seasonId } = await params;

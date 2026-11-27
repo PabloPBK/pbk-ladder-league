@@ -161,6 +161,7 @@ function isActive(pathname: string, href: string) {
 }
 
 function activeGroup(pathname: string) {
+  if (pathname === "/admin/revenue") return "administration";
   if (pathname === "/admin" || pathname === rosterWorkspace || pathname === "/admin/leagues/new") return "league";
 
   const matches = groups.flatMap((group) =>
@@ -183,6 +184,19 @@ export function Navigation() {
 
   const [expanded, setExpanded] = useState<string[]>([currentGroup]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [revenueAllowed, setRevenueAllowed] = useState(false);
+  const administrationOpen = expanded.includes("administration");
+
+  useEffect(() => {
+    if (!administrationOpen) return;
+    const abort = new AbortController();
+    void fetch("/api/league-revenue/access", { cache: "no-store", signal: abort.signal })
+      .then((response) => {
+        if (!abort.signal.aborted) setRevenueAllowed(response.ok);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [administrationOpen]);
 
   useEffect(() => {
     setExpanded((previous) =>
@@ -236,6 +250,13 @@ export function Navigation() {
               className="mt-1 space-y-1 pl-2"
             >
               {group.id === "league" && <LeagueMenu onNavigate={() => setMobileOpen(false)} />}
+              {group.id === "administration" && revenueAllowed && (
+                <Link href="/admin/revenue" aria-current={pathname === "/admin/revenue" ? "page" : undefined}
+                  onClick={() => setMobileOpen(false)}
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-800">
+                  Revenue Details
+                </Link>
+              )}
               {group.links.map((link) => {
                 const active = isActive(pathname, link.href);
 

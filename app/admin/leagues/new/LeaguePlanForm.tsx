@@ -2,7 +2,6 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { SessionPayoutEstimate } from "@/components/admin/LeagueSessionRevenue";
 
 const field = "min-h-11 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-white";
 const button = "min-h-10 rounded-lg border border-zinc-600 px-3 text-sm font-semibold hover:bg-zinc-800 disabled:opacity-50";
@@ -14,7 +13,6 @@ export default function LeaguePlanForm() {
   const [seasons, setSeasons] = useState<string[][]>([[]]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const sessionCount = seasons.reduce((sum, dates) => sum + dates.filter(Boolean).length, 0);
 
   function updateSeason(index: number, change: (dates: string[]) => string[]) {
     setSeasons((previous) => previous.map((dates, i) => i === index ? change(dates) : dates));
@@ -47,7 +45,6 @@ export default function LeaguePlanForm() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <SessionPayoutEstimate disabled={saving} plannedSessions={Math.max(1, sessionCount)} />
       <form onSubmit={submit} className="space-y-5 rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
         <fieldset disabled={saving} className="space-y-4">
           <label className="grid gap-1 text-sm font-semibold">

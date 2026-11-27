@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/data/league-listings";
 import { isPaidPlayerCount, sessionRevenueCsv } from "@/lib/data/league-session-revenue";
-import { requireStaffUser, staffApiDenial } from "@/lib/server/require-auth";
+import { requireRevenueAdmin, revenueApiDenial } from "@/lib/server/require-revenue-admin";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type Context = { params: Promise<{ eventId: string }> };
@@ -17,9 +17,9 @@ const responseOptions = { headers: { "Cache-Control": "private, no-store" } };
 
 export async function GET(request: Request, { params }: Context) {
   try {
-    await requireStaffUser();
+    await requireRevenueAdmin();
   } catch (error) {
-    return staffApiDenial(error);
+    return revenueApiDenial(error);
   }
   const { eventId } = await params;
   if (!isUuid(eventId)) return NextResponse.json({ error: "Invalid league night." }, { status: 400 });
@@ -62,9 +62,9 @@ export async function GET(request: Request, { params }: Context) {
 export async function PATCH(request: Request, { params }: Context) {
   let staff;
   try {
-    staff = await requireStaffUser();
+    staff = await requireRevenueAdmin();
   } catch (error) {
-    return staffApiDenial(error);
+    return revenueApiDenial(error);
   }
   const { eventId } = await params;
   if (!isUuid(eventId)) return NextResponse.json({ error: "Invalid league night." }, { status: 400 });

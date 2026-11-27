@@ -13,8 +13,6 @@ import { ActiveLeagueCard } from "@/components/admin/ActiveLeagueCard";
 import { CompletionScreen } from "@/components/admin/CompletionScreen";
 import { CourtAssignments } from "../../components/admin/CourtAssignments";
 import { LeagueNightSetup } from "@/components/admin/LeagueNightSetup";
-import { emptyRevenueDraft, LeagueSessionRevenue, type RevenueDraft } from "@/components/admin/LeagueSessionRevenue";
-import { LeagueSeasonRevenue } from "@/components/admin/LeagueSeasonRevenue";
 import { PlayerCheckIn } from "@/components/admin/PlayerCheckIn";
 import { RoundControls } from "../../components/admin/RoundControls";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -161,10 +159,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   const [sessionNumber, setSessionNumber] =
     useState(1);
   const [selectedSession, setSelectedSession] = useState<LeagueSessionOption | null>(null);
-  const [payoutEstimate, setPayoutEstimate] = useState<{ key: string; draft: RevenueDraft }>();
-  const [revenueDraft, setRevenueDraft] = useState<{ eventId: string; draft: RevenueDraft }>();
-  const estimateKey = `${selectedSeasonId}:${eventDate}:${sessionNumber}`;
-  const plannedDraft = payoutEstimate?.key === estimateKey ? payoutEstimate.draft : emptyRevenueDraft;
   const [sessionNote, setSessionNote] =
     useState("");
 
@@ -191,8 +185,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     useState(false);
   const [showCompletionScreen, setShowCompletionScreen] =
     useState(false);
-  const [completedEventId, setCompletedEventId] = useState("");
-  const [revenueVersion, setRevenueVersion] = useState(0);
   const [completedEventName, setCompletedEventName] =
     useState("");
   const [availableActiveEvent, setAvailableActiveEvent] =
@@ -505,8 +497,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
         return;
       }
 
-      setRevenueDraft({ eventId: event.id, draft: plannedDraft });
-      setPayoutEstimate(undefined);
       setActiveEvent(event);
       setAvailableActiveEvent(event);
       setPlayers((currentPlayers) =>
@@ -717,7 +707,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       setAvailableActiveEvent(null);
       setRoundSaved(false);
       setRoundComplete(false);
-      setCompletedEventId(activeEvent.id);
       setCompletedEventName(finishedEventName);
       setShowCompletionScreen(true);
     } catch (error) {
@@ -786,7 +775,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     setRoundSaved(false);
     setRoundComplete(false);
     setCompletedEventName("");
-    setCompletedEventId("");
     setShowCompletionScreen(false);
     setErrorMessage("");
     setSuccessMessage("");
@@ -803,12 +791,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
             completedEventName={completedEventName}
             onStartNewLeagueNight={handleStartNewLeagueNight}
           />
-          {completedEventId && (
-            <LeagueSessionRevenue key={completedEventId} eventId={completedEventId}
-              initialDraft={revenueDraft?.eventId === completedEventId ? revenueDraft.draft : undefined}
-              onSaved={() => setRevenueVersion((version) => version + 1)} />
-          )}
-          {selectedSeasonId && <LeagueSeasonRevenue key={`${selectedSeasonId}:${revenueVersion}`} seasonId={selectedSeasonId} />}
         </div>
       </AppLayout>
     );
@@ -820,12 +802,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       description="Start a session, check players in, and run the ladder."
     >
       <div className="mx-auto max-w-6xl">
-        {(activeEvent?.season_id || selectedSeasonId) && (
-          <LeagueSeasonRevenue
-            key={`${activeEvent?.season_id ?? selectedSeasonId}:${revenueVersion}`}
-            seasonId={activeEvent?.season_id ?? selectedSeasonId}
-          />
-        )}
         {!activeEvent && (
           <>
             {isLoadingDashboard ? (
@@ -885,10 +861,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               onEventDateChange={setEventDate}
               onSessionNumberChange={setSessionNumber}
               onSessionNoteChange={setSessionNote}
-              payoutEstimate={{
-                draft: plannedDraft,
-                onChange: (draft) => setPayoutEstimate({ key: estimateKey, draft }),
-              }}
               sessionNavigation={{
                 isCheckingSession: isCheckingEvent || isCalculatingSession,
                 selectedSession,
@@ -915,11 +887,6 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               currentRound={currentRound}
               roundIsGenerated={roundIsGenerated}
             />
-
-            <LeagueSessionRevenue key={activeEvent.id} eventId={activeEvent.id}
-              initialDraft={revenueDraft?.eventId === activeEvent.id ? revenueDraft.draft : undefined}
-              onDraftChange={(draft) => setRevenueDraft({ eventId: activeEvent.id, draft })}
-              onSaved={() => setRevenueVersion((version) => version + 1)} />
 
             {errorMessage && (
               <div className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-300">

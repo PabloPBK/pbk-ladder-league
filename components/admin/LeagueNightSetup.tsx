@@ -6,7 +6,6 @@ import { LeagueSeasonSelector } from "@/components/league-selectors/LeagueSeason
 import type { LeagueEventRecord } from "@/lib/data/events";
 import { leagueDate } from "@/lib/data/league-listings";
 import type { LeagueSessionOption } from "@/lib/data/league-session-schedule";
-import { SessionPayoutEstimate, type RevenueDraft } from "@/components/admin/LeagueSessionRevenue";
 
 type LeagueNightSetupProps = {
   selectedLeagueId: string;
@@ -27,7 +26,6 @@ type LeagueNightSetupProps = {
     sessionNote: string,
   ) => void;
   onStartLeagueNight: () => void;
-  payoutEstimate?: { draft: RevenueDraft; onChange: (draft: RevenueDraft) => void };
   sessionNavigation?: {
     isCheckingSession: boolean;
     selectedSession: LeagueSessionOption | null;
@@ -50,7 +48,6 @@ export function LeagueNightSetup({
   onSessionNumberChange,
   onSessionNoteChange,
   onStartLeagueNight,
-  payoutEstimate,
   sessionNavigation,
 }: LeagueNightSetupProps) {
   const [schedule, setSchedule] = useState<{ seasonId: string; sessions: LeagueSessionOption[]; error?: string }>();
@@ -240,10 +237,6 @@ export function LeagueNightSetup({
         </>
         )}
 
-        {payoutEstimate && selectedSeasonId && eventDate && !booked && !loadingSchedule && (manual || selectedSession) && (
-          <SessionPayoutEstimate leagueId={selectedLeagueId} draft={payoutEstimate.draft} onChange={payoutEstimate.onChange} disabled={isStarting} />
-        )}
-
         {errorMessage && (
           <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {errorMessage}
@@ -251,8 +244,8 @@ export function LeagueNightSetup({
         )}
 
         {booked?.status === "complete" ? (
-          <Link href={`/history/${booked.id}#session-revenue`} className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 font-bold text-white hover:bg-blue-500">
-            View results and revenue report
+          <Link href={`/history/${booked.id}`} className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 font-bold text-white hover:bg-blue-500">
+            View session results
           </Link>
         ) : booked ? (
           <button type="button" disabled={isCheckingSession} onClick={() => onResumeSession?.(booked)}
