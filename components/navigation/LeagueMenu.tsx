@@ -74,6 +74,7 @@ export function LeagueMenu({ onNavigate }: { onNavigate?: () => void }) {
           </>
         )}
         <div className="border-t border-zinc-700">
+          <Link href="/admin/leagues/new" onClick={closeMenu} className={linkClass}>Create League</Link>
           <Link href="/admin" onClick={closeMenu} className={linkClass}>League Night Setup</Link>
           <Link href={rosterWorkspace} onClick={closeMenu} className={linkClass}>Partnered League Management</Link>
         </div>

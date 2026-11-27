@@ -161,7 +161,7 @@ function isActive(pathname: string, href: string) {
 }
 
 function activeGroup(pathname: string) {
-  if (pathname === "/admin" || pathname === rosterWorkspace) return "league";
+  if (pathname === "/admin" || pathname === rosterWorkspace || pathname === "/admin/leagues/new") return "league";
 
   const matches = groups.flatMap((group) =>
     group.links

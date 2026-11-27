@@ -2,14 +2,15 @@ export const memberFeeCents = 1500;
 export const nonmemberFeeCents = 2500;
 export const payoutPercent = 15;
 export const maxPayingPlayers = 10000;
+export const defaultEntryFees = { memberCents: memberFeeCents, nonmemberCents: nonmemberFeeCents };
 
 export function isPaidPlayerCount(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= maxPayingPlayers;
 }
 
-export function calculateSessionRevenue(members: number, nonmembers: number) {
-  const memberRevenue = members * memberFeeCents;
-  const nonmemberRevenue = nonmembers * nonmemberFeeCents;
+export function calculateSessionRevenue(members: number, nonmembers: number, fees = defaultEntryFees) {
+  const memberRevenue = members * fees.memberCents;
+  const nonmemberRevenue = nonmembers * fees.nonmemberCents;
   const gross = memberRevenue + nonmemberRevenue;
   const sessionPayout = Math.round(gross * payoutPercent / 100);
   const seasonContribution = sessionPayout;
@@ -102,6 +103,20 @@ export function paidEntryMix(members: number, nonmembers: number) {
   if (!entries) return null;
   const memberTenths = Math.round(members * 1000 / entries);
   return { members: memberTenths / 10, nonmembers: (1000 - memberTenths) / 10 };
+}
+
+export type HistoricalPaidEntries = {
+  members: number;
+  nonmembers: number;
+  reports: number;
+  scope: "league" | "all";
+};
+
+export function estimatePaidEntries(total: number, history: HistoricalPaidEntries) {
+  const historicalTotal = history.members + history.nonmembers;
+  if (!historicalTotal || !isPaidPlayerCount(total)) return null;
+  const members = Math.round(total * history.members / historicalTotal);
+  return { members, nonmembers: total - members };
 }
 
 export function seasonRevenueCsv(league: string, season: string, sessions: SeasonRevenueSession[]) {

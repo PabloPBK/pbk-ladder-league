@@ -6,6 +6,7 @@ import { LeagueSeasonSelector } from "@/components/league-selectors/LeagueSeason
 import type { LeagueEventRecord } from "@/lib/data/events";
 import { leagueDate } from "@/lib/data/league-listings";
 import type { LeagueSessionOption } from "@/lib/data/league-session-schedule";
+import { SessionPayoutEstimate, type RevenueDraft } from "@/components/admin/LeagueSessionRevenue";
 
 type LeagueNightSetupProps = {
   selectedLeagueId: string;
@@ -26,6 +27,7 @@ type LeagueNightSetupProps = {
     sessionNote: string,
   ) => void;
   onStartLeagueNight: () => void;
+  payoutEstimate?: { draft: RevenueDraft; onChange: (draft: RevenueDraft) => void };
   sessionNavigation?: {
     isCheckingSession: boolean;
     selectedSession: LeagueSessionOption | null;
@@ -48,6 +50,7 @@ export function LeagueNightSetup({
   onSessionNumberChange,
   onSessionNoteChange,
   onStartLeagueNight,
+  payoutEstimate,
   sessionNavigation,
 }: LeagueNightSetupProps) {
   const [schedule, setSchedule] = useState<{ seasonId: string; sessions: LeagueSessionOption[]; error?: string }>();
@@ -235,6 +238,10 @@ export function LeagueNightSetup({
           </p>
         </div>
         </>
+        )}
+
+        {payoutEstimate && selectedSeasonId && eventDate && !booked && !loadingSchedule && (manual || selectedSession) && (
+          <SessionPayoutEstimate leagueId={selectedLeagueId} draft={payoutEstimate.draft} onChange={payoutEstimate.onChange} disabled={isStarting} />
         )}
 
         {errorMessage && (
