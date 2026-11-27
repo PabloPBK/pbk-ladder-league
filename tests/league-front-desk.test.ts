@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
-import { readLeagueRoster, rosterWarnings } from "../lib/data/league-roster";
+import { readLeagueRoster, resolveRosterReview, rosterWarnings } from "../lib/data/league-roster";
 import { isFrontDesk, isFrontDeskApi, isFrontDeskWorkspace } from "../lib/data/operations-role";
 import type { PreviewRow } from "../lib/data/playerImport";
 
@@ -27,6 +27,39 @@ test("the upload shows missing DUPR IDs and repeated identities while leaving ma
     player: { id: "abc", name: "Casey", dupr: 4, dupr_id: "Z99AB0" },
   };
   assert.deepEqual(rosterWarnings(rows, [knownPlayer])[1], ["Possible duplicate in this CSV"]);
+});
+
+test("clean matches leave the work list while verified choices stay in the eventual import", () => {
+  const input = [
+    { rowId: 1, name: "Casey", email: "casey@club.example", duprId: null, rating: 4 },
+    { rowId: 2, name: "Morgan", email: null, duprId: "M12345", rating: 3 },
+  ];
+  const previews: PreviewRow[] = [
+    { rowId: 1, status: "match", reason: "email", savesEmail: false,
+      player: { id: "casey", name: "Casey", dupr: 4, dupr_id: null } },
+    { rowId: 2, status: "match", reason: "dupr_id", savesEmail: false,
+      player: { id: "morgan", name: "Morgan", dupr: 3, dupr_id: "M12345" } },
+  ];
+
+  assert.deepEqual(resolveRosterReview(input, previews, {}).decisions, {
+    2: { action: "match", playerId: "morgan" },
+  });
+  input[0].duprId = "C12345";
+  previews[0].status = "review";
+  previews[0].reason = "verify_new_dupr_id";
+  assert.equal(resolveRosterReview(input, previews, {}).decisions[1], undefined);
+  assert.deepEqual(resolveRosterReview(input, previews, { 1: { action: "link", playerId: "casey" } }).decisions, {
+    1: { action: "link", playerId: "casey" },
+    2: { action: "match", playerId: "morgan" },
+  });
+
+  const duplicate = { ...input[1], rowId: 3 };
+  const duplicatePreview = { ...previews[1], rowId: 3 };
+  assert.equal(resolveRosterReview([...input, duplicate], [...previews, duplicatePreview], {}).decisions[2], undefined);
+  assert.deepEqual(resolveRosterReview([...input, duplicate], [...previews, duplicatePreview], { 3: { action: "skip" } }).decisions, {
+    2: { action: "match", playerId: "morgan" },
+    3: { action: "skip" },
+  });
 });
 
 test("front desk can run a league but cannot reach admin-only finance or cancel a session", () => {

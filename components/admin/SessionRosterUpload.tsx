@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 
 import { PlayerImportReview } from "@/components/admin/PlayerImportReview";
 import { useLeague } from "@/components/providers/LeagueProvider";
-import { readLeagueRoster, rosterWarnings } from "@/lib/data/league-roster";
+import { readLeagueRoster, resolveRosterReview } from "@/lib/data/league-roster";
 import {
   importPlayers, PlayerImportError, rosterSelectionError,
   type AppliedRow, type ImportDecision, type ImportRow, type PreviewRow,
@@ -13,7 +13,7 @@ import {
 type Review = {
   rows: ImportRow[];
   previews: PreviewRow[];
-  decisions: Record<number, ImportDecision>;
+  reviewed: Record<number, ImportDecision>;
   requestId: string;
   replace: boolean;
 };
@@ -39,26 +39,40 @@ export function SessionRosterUpload({
     onBusyChange(value || Boolean(review));
   }
 
-  async function preview(rows: ImportRow[], replace: boolean) {
+  async function preview(rows: ImportRow[], replace: boolean, editedRowId?: number, refreshReview = false) {
     setError("");
     setConflict(false);
     setRetryOnly(false);
     const previews = await importPlayers({ mode: "preview", rows });
-    const decisions: Record<number, ImportDecision> = {};
-    for (const row of previews) {
-      if (row.status === "match" && row.player) decisions[row.rowId] = { action: "match", playerId: row.player.id };
+    const reviewed: Review["reviewed"] = {};
+    if (review && (editedRowId !== undefined || refreshReview)) {
+      const previous = new Map(review.previews.map((row) => [row.rowId, row]));
+      for (const row of previews) {
+        const before = previous.get(row.rowId);
+        const decision = review.reviewed[row.rowId];
+        if (row.rowId !== editedRowId && before && decision
+          && (decision.action === "skip" || (before.status === row.status && before.reason === row.reason
+            && before.player?.id === row.player?.id))) {
+          reviewed[row.rowId] = decision;
+        }
+      }
     }
-    setDrafts({});
-    setReview({ rows, previews, decisions, requestId: crypto.randomUUID(), replace });
+    setDrafts((current) => {
+      if (editedRowId === undefined) return refreshReview ? current : {};
+      const next = { ...current };
+      delete next[editedRowId];
+      return next;
+    });
+    setReview({ rows, previews, reviewed, requestId: crypto.randomUUID(), replace });
     onBusyChange(true);
   }
 
-  async function load(getRows: () => Promise<ImportRow[]>, replace: boolean) {
+  async function load(getRows: () => Promise<ImportRow[]>, replace: boolean, editedRowId?: number, refreshReview = false) {
     if (busy || disabled) return;
     updateBusy(true);
     setSuccess("");
     try {
-      await preview(await getRows(), replace);
+      await preview(await getRows(), replace, editedRowId, refreshReview);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to check the roster.");
       setConflict(Boolean(review));
@@ -75,12 +89,15 @@ export function SessionRosterUpload({
     onBusyChange(false);
   }
 
+  const resolution = review && resolveRosterReview(review.rows, review.previews, review.reviewed);
+
   async function confirm() {
-    if (!review || busy || Object.keys(drafts).length || rosterSelectionError(review.rows, review.decisions)) return;
+    if (!review || !resolution || busy || Object.keys(drafts).length
+      || rosterSelectionError(review.rows, resolution.decisions)) return;
     try {
       updateBusy(true);
       setError("");
-      const rows = review.rows.map((row) => ({ ...row, decision: review.decisions[row.rowId] }));
+      const rows = review.rows.map((row) => ({ ...row, decision: resolution.decisions[row.rowId] }));
       if (rows.some(({ decision }) => !decision)) return;
       const applied = await importPlayers({ mode: "commit", rows, requestId: review.requestId });
       onApply(applied, review.replace);
@@ -132,23 +149,30 @@ export function SessionRosterUpload({
           <button type="submit" disabled={busy || disabled} className="rounded border border-zinc-600 px-3 py-2 disabled:opacity-50">Review walk-in</button>
         </form>
       </details>
-      {review && <PlayerImportReview
-        rows={review.rows} previews={review.previews} decisions={review.decisions}
+      {review && resolution && <PlayerImportReview
+        rows={review.rows} previews={review.previews} decisions={resolution.decisions}
+        focusPending reviewedRowIds={new Set(Object.keys(review.reviewed).map(Number))}
         players={players.flatMap((player) => {
           const id = playerDatabaseIds[player.id];
           return id ? [{ id, name: player.name, dupr: player.savedDupr ?? player.dupr, dupr_id: player.duprId ?? null }] : [];
         })}
         busy={busy} error={error} retryOnly={retryOnly}
-        canRefresh={conflict || Boolean(Object.keys(drafts).length)}
-        selectionError={Object.keys(drafts).length ? "Refresh matches to check the edited DUPR IDs." : rosterSelectionError(review.rows, review.decisions)}
-        warnings={rosterWarnings(review.rows, review.previews)}
+        canRefresh={conflict}
+        selectionError={Object.keys(drafts).length ? "Use Check DUPR ID on each edited row to continue." : rosterSelectionError(review.rows, resolution.decisions)}
+        warnings={resolution.warnings}
         editedDuprIds={drafts}
         onEditDuprId={(rowId, value) => setDrafts((current) => ({ ...current, [rowId]: value }))}
-        onDecision={(rowId, decision) => setReview({ ...review, decisions: { ...review.decisions, [rowId]: decision } })}
+        onCheckDuprId={(rowId) => void load(async () => review.rows.map((row) =>
+          row.rowId === rowId ? { ...row, duprId: drafts[rowId].trim() || null } : row,
+        ), review.replace, rowId)}
+        onDecision={(rowId, decision) => setReview({ ...review, reviewed: { ...review.reviewed, [rowId]: decision } })}
+        onUndoDecision={(rowId) => {
+          const reviewed = { ...review.reviewed };
+          delete reviewed[rowId];
+          setReview({ ...review, reviewed });
+        }}
         onClose={close}
-        onRefresh={() => void load(async () => review.rows.map((row) => ({
-          ...row, duprId: Object.hasOwn(drafts, row.rowId) ? drafts[row.rowId].trim() || null : row.duprId,
-        })), review.replace)}
+        onRefresh={() => void load(async () => review.rows, review.replace, undefined, true)}
         onConfirm={() => void confirm()}
       />}
     </section>

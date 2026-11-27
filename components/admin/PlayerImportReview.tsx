@@ -89,9 +89,13 @@ type ReviewProps = {
   selectionError: string;
   canRefresh: boolean;
   retryOnly: boolean;
+  focusPending?: boolean;
+  reviewedRowIds?: Set<number>;
   warnings?: Record<number, string[]>;
   editedDuprIds?: Record<number, string>;
   onEditDuprId?: (rowId: number, value: string) => void;
+  onCheckDuprId?: (rowId: number) => void;
+  onUndoDecision?: (rowId: number) => void;
   onDecision: (rowId: number, decision: ImportDecision) => void;
   onClose: () => void;
   onRefresh: () => void;
@@ -108,9 +112,13 @@ export function PlayerImportReview({
   selectionError,
   canRefresh,
   retryOnly,
+  focusPending = false,
+  reviewedRowIds,
   warnings,
   editedDuprIds,
   onEditDuprId,
+  onCheckDuprId,
+  onUndoDecision,
   onDecision,
   onClose,
   onRefresh,
@@ -128,6 +136,80 @@ export function PlayerImportReview({
   const byPlayer = new Map(players.map((player) => [player.id, player]));
   const pending = rows.filter(({ rowId }) => !decisions[rowId]).length;
   const selected = rows.filter(({ rowId }) => decisions[rowId] && decisions[rowId].action !== "skip").length;
+
+  const visibleRows = focusPending ? rows.filter(({ rowId }) => !decisions[rowId] || editedDuprIds?.[rowId] !== undefined) : rows;
+  const completedRows = focusPending ? rows.filter(({ rowId }) => decisions[rowId] && editedDuprIds?.[rowId] === undefined) : [];
+
+  function renderRow(row: ImportRow) {
+    const preview = byRow.get(row.rowId);
+    if (!preview) return null;
+    const decision = decisions[row.rowId];
+    const edited = editedDuprIds?.[row.rowId] !== undefined;
+    const candidate = preview.player;
+    const chosen = decision && "playerId" in decision
+      ? byPlayer.get(decision.playerId) ?? candidate
+      : null;
+    const choose = (choice: ImportDecision) => onDecision(row.rowId, choice);
+    return (
+      <section key={row.rowId} aria-label={`Row ${row.rowId}, ${row.name}`} className="rounded-xl border border-zinc-700 bg-zinc-950 p-3">
+        <h3 className="font-semibold">{row.name}</h3>
+        <p className="break-all text-sm text-zinc-400">
+          Row {row.rowId}{row.email && ` · ${row.email}`}{row.duprId && ` · DUPR ID ${row.duprId}`}
+        </p>
+        <p className={preview.status === "conflict" ? "mt-2 text-sm text-red-300" : "mt-2 text-sm text-zinc-300"}>
+          {messages[preview.reason]}{candidate && preview.status !== "conflict" && ` · ${candidate.name} (…${candidate.id.slice(-8)})`}
+          {preview.savesEmail && " · Save this email"}
+        </p>
+        {warnings?.[row.rowId]?.map((warning) => <p key={warning} className="mt-1 text-sm font-semibold text-amber-300">{warning}</p>)}
+        {onEditDuprId && (
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <label className="text-sm">
+              DUPR ID for {row.name}
+              <input value={editedDuprIds?.[row.rowId] ?? row.duprId ?? ""} maxLength={64}
+                onChange={(event) => onEditDuprId(row.rowId, event.target.value)}
+                className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1" />
+            </label>
+            {onCheckDuprId && edited && (
+              <button type="button" className={buttonStyle} onClick={() => onCheckDuprId(row.rowId)}>Check DUPR ID</button>
+            )}
+          </div>
+        )}
+        <fieldset disabled={edited} className="mt-2">
+          <div className="flex flex-wrap gap-2">
+            {preview.status === "match" && candidate && decision?.action !== "match" && (
+              <button type="button" className={buttonStyle} onClick={() => choose({ action: "match", playerId: candidate.id })}>Use match</button>
+            )}
+            {preview.status === "review" && candidate && (
+              <button type="button" className={buttonStyle} onClick={() => choose({ action: "link", playerId: candidate.id })}>Verify and link</button>
+            )}
+            {preview.status === "review" && !candidate && decision?.action !== "new" && (
+              <button type="button" className={buttonStyle} onClick={() => choose({ action: "new" })}>Confirm new player</button>
+            )}
+            {reviewedRowIds?.has(row.rowId) && onUndoDecision && (
+              <button type="button" className={buttonStyle} onClick={() => onUndoDecision(row.rowId)}>Undo decision</button>
+            )}
+            {decision?.action !== "skip" && (
+              <button type="button" className={buttonStyle} onClick={() => choose({ action: "skip" })}>Skip row</button>
+            )}
+          </div>
+          <PlayerPicker
+            players={players}
+            canLink={preview.status === "review" && !candidate && Boolean(row.email || row.duprId)}
+            onChoose={choose}
+          />
+        </fieldset>
+        {decision && (
+          <p className="mt-2 text-sm font-semibold text-blue-200">
+            {decision.action === "new" && "New player confirmed"}
+            {decision.action === "skip" && "Skipped"}
+            {decision.action === "link" && `Link to ${chosen?.name ?? "saved player"}${row.email || row.duprId ? " and save verified identifiers" : ""}`}
+            {decision.action === "check-in" && `Check in ${chosen?.name ?? "saved player"} without saving identifiers`}
+            {decision.action === "match" && `Use ${chosen?.name ?? "saved player"}`}
+          </p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <dialog
@@ -147,70 +229,21 @@ export function PlayerImportReview({
         <button type="button" className={buttonStyle} disabled={busy} onClick={onClose}>Close</button>
       </header>
       <fieldset disabled={busy || retryOnly} className="space-y-3">
-        {rows.map((row) => {
-          const preview = byRow.get(row.rowId);
-          if (!preview) return null;
-          const decision = decisions[row.rowId];
-          const candidate = preview.player;
-          const chosen = decision && "playerId" in decision
-            ? byPlayer.get(decision.playerId) ?? candidate
-            : null;
-          const choose = (choice: ImportDecision) => onDecision(row.rowId, choice);
-          return (
-            <section key={row.rowId} aria-label={`Row ${row.rowId}, ${row.name}`} className="rounded-xl border border-zinc-700 bg-zinc-950 p-3">
-              <h3 className="font-semibold">{row.name}</h3>
-              <p className="break-all text-sm text-zinc-400">
-                Row {row.rowId}{row.email && ` · ${row.email}`}{row.duprId && ` · DUPR ID ${row.duprId}`}
-              </p>
-              <p className={preview.status === "conflict" ? "mt-2 text-sm text-red-300" : "mt-2 text-sm text-zinc-300"}>
-                {messages[preview.reason]}{candidate && preview.status !== "conflict" && ` · ${candidate.name} (…${candidate.id.slice(-8)})`}
-                {preview.savesEmail && " · Save this email"}
-              </p>
-              {warnings?.[row.rowId]?.map((warning) => <p key={warning} className="mt-1 text-sm font-semibold text-amber-300">{warning}</p>)}
-              {onEditDuprId && (
-                <label className="mt-2 block text-sm">
-                  DUPR ID for {row.name}
-                  <input value={editedDuprIds?.[row.rowId] ?? row.duprId ?? ""} maxLength={64}
-                    onChange={(event) => onEditDuprId(row.rowId, event.target.value)}
-                    className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1" />
-                </label>
-              )}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {preview.status === "match" && candidate && decision?.action !== "match" && (
-                  <button type="button" className={buttonStyle} onClick={() => choose({ action: "match", playerId: candidate.id })}>Use match</button>
-                )}
-                {preview.status === "review" && candidate && (
-                  <button type="button" className={buttonStyle} onClick={() => choose({ action: "link", playerId: candidate.id })}>Verify and link</button>
-                )}
-                {preview.status === "review" && !candidate && decision?.action !== "new" && (
-                  <button type="button" className={buttonStyle} onClick={() => choose({ action: "new" })}>Confirm new player</button>
-                )}
-                {decision?.action !== "skip" && (
-                  <button type="button" className={buttonStyle} onClick={() => choose({ action: "skip" })}>Skip row</button>
-                )}
-              </div>
-              <PlayerPicker
-                players={players}
-                canLink={preview.status === "review" && !candidate && Boolean(row.email || row.duprId)}
-                onChoose={choose}
-              />
-              {decision && (
-                <p className="mt-2 text-sm font-semibold text-blue-200">
-                  {decision.action === "new" && "New player confirmed"}
-                  {decision.action === "skip" && "Skipped"}
-                  {decision.action === "link" && `Link to ${chosen?.name ?? "saved player"}${row.email || row.duprId ? " and save verified identifiers" : ""}`}
-                  {decision.action === "check-in" && `Check in ${chosen?.name ?? "saved player"} without saving identifiers`}
-                  {decision.action === "match" && `Use ${chosen?.name ?? "saved player"}`}
-                </p>
-              )}
-            </section>
-          );
-        })}
+        {visibleRows.map(renderRow)}
+        {focusPending && visibleRows.length === 0 && !selectionError && (
+          <p role="status" className="text-sm text-green-300">All roster rows have been reviewed.</p>
+        )}
+        {focusPending && completedRows.length > 0 && (
+          <details className="rounded-xl border border-zinc-700 p-3">
+            <summary className="cursor-pointer text-sm text-zinc-300">Show reviewed players ({completedRows.length})</summary>
+            <div className="mt-3 space-y-3">{completedRows.map(renderRow)}</div>
+          </details>
+        )}
       </fieldset>
       <footer className="sticky bottom-0 mt-4 space-y-2 border-t border-zinc-700 bg-zinc-900 pt-3">
-        {(selectionError || error) && <p role="alert" className="text-sm text-red-300">{selectionError || error}</p>}
+        {(selectionError || error) && <p role="alert" className="text-sm text-red-300">{error || selectionError}</p>}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-zinc-400">{selected} ready · {pending} need a decision</p>
+          <p role="status" className="text-sm text-zinc-400">{selected} ready · {pending} need a decision</p>
           <div className="flex gap-2">
             {canRefresh && <button type="button" className={buttonStyle} disabled={busy} onClick={onRefresh}>Refresh matches</button>}
             <button

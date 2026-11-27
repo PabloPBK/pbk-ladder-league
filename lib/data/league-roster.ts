@@ -1,5 +1,5 @@
 import { getPodPlayImportFields, parsePodPlayCsv } from "./podplayRoster";
-import type { ImportRow, PreviewRow } from "./playerImport";
+import type { ImportDecision, ImportRow, PreviewRow } from "./playerImport";
 
 export function readLeagueRoster(csv: string): ImportRow[] {
   const rows = parsePodPlayCsv(csv);
@@ -46,4 +46,19 @@ export function rosterWarnings(rows: ImportRow[], previews: PreviewRow[]) {
         : (names.get(name) ?? 0) > 1 ? ["This name appears more than once. Verify the players’ identities."] : []),
     ],
   ]));
+}
+
+export function resolveRosterReview(
+  rows: ImportRow[],
+  previews: PreviewRow[],
+  reviewed: Record<number, ImportDecision>,
+) {
+  const warnings = rosterWarnings(rows.filter(({ rowId }) => reviewed[rowId]?.action !== "skip"), previews);
+  const decisions = { ...reviewed };
+  for (const { rowId, status, player } of previews) {
+    if (!decisions[rowId] && status === "match" && player && !warnings[rowId]?.length) {
+      decisions[rowId] = { action: "match", playerId: player.id };
+    }
+  }
+  return { decisions, warnings };
 }
