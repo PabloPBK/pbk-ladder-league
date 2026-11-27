@@ -26,7 +26,7 @@ export function LeagueTvControls({ eventId }: { eventId: string }) {
       const result = await response.json() as { screens?: Screen[]; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Unable to load TVs.");
       const active = result.screens?.filter((screen) => screen.is_active) ?? [];
-      setScreens(active);
+      setScreens(active.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) || (a.location ?? "").localeCompare(b.location ?? "")));
       if (!active.length) setError("No active TVs are available.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to load TVs.");
