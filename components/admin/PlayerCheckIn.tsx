@@ -33,6 +33,9 @@ export function PlayerCheckIn({
   onRatingChange,
 }: PlayerCheckInProps) {
   const [showPreview, setShowPreview] = useState(false);
+  const [showRemove, setShowRemove] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [search, setSearch] = useState("");
   const checkedInPlayers = players.filter((player) => player.checkedIn);
   const checkedInCount = checkedInPlayers.length;
   const courtCount = Math.floor(checkedInCount / 4);
@@ -55,11 +58,26 @@ export function PlayerCheckIn({
           <p className="mt-1 text-sm text-zinc-400">Check players in, adjust tonight&apos;s rating if needed, and move players up/down. Every four checked-in players form the next court.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={isGenerating || !checkedInCount} onClick={() => { setSelected([]); setSearch(""); setShowRemove(true); }} className="min-h-12 rounded-xl border border-red-500 px-5 py-3 font-semibold text-red-300 disabled:opacity-40">Remove Players</button>
           <button type="button" disabled={checkedInCount < 4 || remainingPlayers !== 0} onClick={() => window.print()} className="min-h-12 rounded-xl border border-zinc-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Print Court List</button>
           <button type="button" disabled={!canGenerateFirstRound || roundIsGenerated} onClick={() => setShowPreview(true)} className="min-h-12 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400">{roundIsGenerated ? `Round ${currentRound} Generated ✓` : isGenerating ? "Saving Round 1..." : "Preview Round 1"}</button>
         </div>
       </section>
 
+      {showRemove && !roundIsGenerated && (
+        <section className="mb-6 rounded-xl border border-red-500/40 bg-zinc-900 p-4 no-print">
+          <h2 className="text-xl font-bold">Remove Players</h2>
+          <p className="text-sm text-zinc-400">Remove selected players from today's checked-in group only. Restore them by checking them in again below.</p>
+          <input aria-label="Search checked-in players" placeholder="Search players" value={search} onChange={e => setSearch(e.target.value)} className="my-3 w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3" />
+          <div className="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2">
+            {checkedInPlayers.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => <label key={p.id} className="flex gap-3 rounded-lg border border-zinc-700 p-3"><input type="checkbox" checked={selected.includes(p.id)} onChange={e => setSelected(old => e.target.checked ? [...old, p.id] : old.filter(id => id !== p.id))} />{p.name}</label>)}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button type="button" onClick={() => setShowRemove(false)} className="rounded-lg border border-zinc-600 px-4 py-3">Cancel</button>
+            <button type="button" disabled={isGenerating || !checkedInPlayers.some(p => selected.includes(p.id))} onClick={() => { checkedInPlayers.filter(p => selected.includes(p.id)).forEach(p => onTogglePlayer(p.id)); setSelected([]); setShowRemove(false); }} className="rounded-lg bg-red-700 px-4 py-3 font-bold disabled:opacity-40">Confirm removal ({checkedInPlayers.filter(p => selected.includes(p.id)).length})</button>
+          </div>
+        </section>
+      )}
       {showPreview && !roundIsGenerated && (
         <section className="mb-6 rounded-xl border border-blue-500/40 bg-zinc-900 p-4 no-print">
           <h2 className="text-xl font-bold text-white">Round 1 Court Preview</h2>
