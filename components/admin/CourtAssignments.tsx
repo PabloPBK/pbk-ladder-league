@@ -47,15 +47,9 @@ export function CourtAssignments({
             href="/walking"
             className="flex min-h-11 items-center justify-center rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black transition hover:bg-yellow-300"
           >
-            Start Runner Mode
+            Enter Teams & Scores
           </Link>
 
-          <Link
-            href="/admin/scores"
-            className="flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500"
-          >
-            Enter Round {currentRound} Scores
-          </Link>
 
           <button type="button" onClick={() => window.print()}
             className="min-h-11 rounded-xl border border-zinc-600 px-5 py-2.5 text-sm font-bold hover:bg-zinc-800">
