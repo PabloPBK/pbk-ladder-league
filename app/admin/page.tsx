@@ -946,8 +946,11 @@ function LeagueNight({ initialLeagueId, initialSeasonId, resumeEventId }: {
               selectionLocked={locked}
               rosterBusy={rosterBusy || (locked && !leagueContext)}
               rosterUpload={locked && leagueContext && (
-                <SessionRosterUpload key={`${eventDate}:${sessionNumber}`} onApply={applySessionRoster}
-                  onBusyChange={setRosterBusy} disabled={isStartingEvent} />
+                <>
+                  <SessionRosterUpload key={`${eventDate}:${sessionNumber}`} onApply={applySessionRoster}
+                    onBusyChange={setRosterBusy} disabled={isStartingEvent} />
+                  {rosterReviewed && !rosterBusy && <div role="status" className="mt-4 rounded-xl border border-green-500/40 bg-green-500/10 p-4 text-green-300"><strong>Roster Review Complete</strong><p>{sessionRoster.length} players reviewed. Continue to check-in and Round 1 court setup.</p></div>}
+                </>
               )}
               selectedLeagueId={selectedLeagueId}
               selectedSeasonId={selectedSeasonId}
