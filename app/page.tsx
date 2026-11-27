@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { LeagueMenu } from "@/components/navigation/LeagueMenu";
+import { useFrontDesk } from "@/components/auth/useFrontDesk";
 
 type Department = {
   title: string;
@@ -11,22 +11,18 @@ type Department = {
   icon: string;
   href?: string;
   color: string;
-  leagueMenu?: boolean;
   comingSoon?: boolean;
   links: { label: string; href: string }[];
 };
 
 const departments: Department[] = [
   {
-    title: "League Management",
+    title: "Leagues",
     description: "Players, scores, and standings.",
     icon: "🏆",
     color: "border-yellow-500/40",
-    leagueMenu: true,
-    links: [
-      { label: "Scores", href: "/walking" },
-      { label: "Standings", href: "/display" },
-    ],
+    href: "/leagues",
+    links: [],
   },
   {
     title: "Facility Operations",
@@ -125,6 +121,7 @@ const departments: Department[] = [
 ];
 
 export default function Home() {
+  const frontDesk = useFrontDesk();
   return (
     <AppLayout
       title="PBK Northwest"
@@ -141,12 +138,12 @@ export default function Home() {
           </h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            Select a department to access your tools.
+            {frontDesk ? "Open Leagues to run a session." : "Select a department to access your tools."}
           </p>
         </section>
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {departments.map((department) => (
+          {(frontDesk === false ? departments : departments.slice(0, 1)).map((department) => (
             <div
               key={department.title}
               className={`flex min-h-[190px] flex-col rounded-xl border ${department.color} bg-zinc-900/70 p-4 transition ${
@@ -202,9 +199,8 @@ export default function Home() {
                 </div>
               )}
 
-              {(department.leagueMenu || department.links.length > 0) && (
+              {department.links.length > 0 && (
                 <div className="mt-auto border-t border-zinc-700/70 pt-3">
-                  {department.leagueMenu && <div className="mb-2"><LeagueMenu /></div>}
                   <div className="flex flex-wrap gap-1.5">
                     {department.links.map((link) => (
                       <Link

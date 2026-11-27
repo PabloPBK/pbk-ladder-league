@@ -165,6 +165,7 @@ export default function LiveRostersPage() {
 function LiveRosters() {
   const searchParams = useSearchParams();
   const showCourts = searchParams.get("tab") === "courts";
+  const requestedEvent = searchParams.get("event");
   const [events, setEvents] = useState<RosterEvent[]>([]);
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [playersVersion, setPlayersVersion] = useState(0);
@@ -194,7 +195,7 @@ function LiveRosters() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const selectedEvent = events.find((event) => event.id === searchParams.get("event")) ?? events[0];
+  const selectedEvent = requestedEvent ? events.find((event) => event.id === requestedEvent) : events[0];
   const selectedEventId = selectedEvent?.id ?? "";
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [editingEvent, setEditingEvent] = useState(false);
@@ -752,7 +753,8 @@ async function deletePlayer(player: RosterPlayer) {
 
   return (
     <AppLayout
-      title="Partnered League Management"
+      title={requestedEvent && selectedEvent ? selectedEvent.name : "Partnered League Management"}
+      headerAside={requestedEvent && <Link href="/leagues" className="text-sm text-blue-300 underline">All leagues</Link>}
       description="Manage event rosters, ratings, CSV registrations, and Round 1 court assignments."
     >
       <div className="mx-auto max-w-6xl space-y-6">
@@ -787,7 +789,7 @@ async function deletePlayer(player: RosterPlayer) {
           </p>
         )}
 
-        {!showCourts && (
+        {!showCourts && !requestedEvent && (
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-xl font-bold">Create New Event</h2>
 
@@ -873,7 +875,8 @@ async function deletePlayer(player: RosterPlayer) {
         </section>
         )}
 
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        {requestedEvent && !loading && !selectedEvent && <p role="alert">That event is unavailable. Choose another from Leagues.</p>}
+        {!requestedEvent && <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold">Your Events</h2>
             <button
@@ -941,7 +944,7 @@ async function deletePlayer(player: RosterPlayer) {
               ))}
             </div>
           )}
-        </section>
+        </section>}
 
         {selectedEvent && (
           <>

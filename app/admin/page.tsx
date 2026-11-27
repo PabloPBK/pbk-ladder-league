@@ -7,7 +7,13 @@ import {
   useMemo,
   useState,
 } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useFrontDesk } from "@/components/auth/useFrontDesk";
+import { SessionRosterUpload } from "@/components/admin/SessionRosterUpload";
+import { LeagueTvControls } from "@/components/admin/LeagueTvControls";
+import { getActiveLeagues, getSeasonsForLeague } from "@/lib/data/leagues";
+import type { AppliedRow } from "@/lib/data/playerImport";
 
 import { ActiveLeagueCard } from "@/components/admin/ActiveLeagueCard";
 import { CompletionScreen } from "@/components/admin/CompletionScreen";
@@ -128,10 +134,14 @@ function LeagueNightFromUrl() {
   const requestedSeason = params.get("seasonId") ?? "";
   const leagueId = isUuid(requestedLeague) ? requestedLeague : "";
   const seasonId = leagueId && isUuid(requestedSeason) ? requestedSeason : "";
-  return <LeagueNight key={`${leagueId}:${seasonId}`} initialLeagueId={leagueId} initialSeasonId={seasonId} />;
+  const resume = params.get("resume") ?? "";
+  return <LeagueNight key={`${leagueId}:${seasonId}:${resume}`}
+    initialLeagueId={leagueId} initialSeasonId={seasonId} resumeEventId={resume} />;
 }
 
-function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: string; initialSeasonId: string }) {
+function LeagueNight({ initialLeagueId, initialSeasonId, resumeEventId }: {
+  initialLeagueId: string; initialSeasonId: string; resumeEventId: string;
+}) {
   const {
     players,
     setPlayers,
@@ -140,6 +150,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     currentRound,
     setCurrentRound,
     activeEvent: runningEvent,
+    prepareCheckIn,
     setActiveEvent,
     playerDatabaseIds,
     isLoadingPlayers,
@@ -151,7 +162,18 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     useState(initialLeagueId);
   const [selectedSeasonId, setSelectedSeasonId] =
     useState(initialSeasonId);
-  const activeEvent = initialLeagueId && runningEvent?.season_id !== selectedSeasonId ? null : runningEvent;
+  const frontDesk = useFrontDesk();
+  const locked = Boolean(initialLeagueId && initialSeasonId);
+  const returningEventId = locked && runningEvent?.season_id === initialSeasonId && runningEvent.id === resumeEventId
+    ? runningEvent.id : "";
+  const [openedEventId, setOpenedEventId] = useState(returningEventId);
+  const activeEvent = locked && runningEvent?.id !== openedEventId ? null : runningEvent;
+  const [leagueContext, setLeagueContext] = useState<{ name: string; season: string }>();
+  const [rosterBusy, setRosterBusy] = useState(false);
+  const [sessionRoster, setSessionRoster] = useState<AppliedRow[]>([]);
+  const [rosterReviewed, setRosterReviewed] = useState(false);
+  const [showAllPlayers, setShowAllPlayers] = useState(false);
+
   const activeSeasonFilter = initialLeagueId ? selectedSeasonId : undefined;
   const [eventDate, setEventDate] = useState(
     getLocalDateValue,
@@ -169,7 +191,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   const [isStartingEvent, setIsStartingEvent] =
     useState(false);
   const [isCheckingEvent, setIsCheckingEvent] =
-    useState(false);
+    useState(Boolean(returningEventId));
   const [isCalculatingSession, setIsCalculatingSession] = useState(false);
   const [isGenerating, setIsGenerating] =
     useState(false);
@@ -191,6 +213,19 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     useState<Awaited<ReturnType<typeof getActiveLeagueEvent>>>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] =
     useState(true);
+
+  useEffect(() => {
+    if (!locked) return;
+    let current = true;
+    void Promise.all([getActiveLeagues(), getSeasonsForLeague(initialLeagueId)]).then(([leagues, seasons]) => {
+      if (!current) return;
+      const league = leagues.find(({ id }) => id === initialLeagueId);
+      const season = seasons.find(({ id }) => id === initialSeasonId);
+      if (league && season) setLeagueContext({ name: league.name, season: season.name });
+      else setErrorMessage("That season doesn’t belong to an available league. Choose it again from Leagues.");
+    }).catch(() => { if (current) setErrorMessage("Unable to load this league. Return to Leagues and try again."); });
+    return () => { current = false; };
+  }, [initialLeagueId, initialSeasonId, locked]);
 
   const runtimePlayerIdByDatabaseId = useMemo(() => {
     const idMap = new Map<string, number>();
@@ -217,6 +252,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
 
   const canGenerateFirstRound =
     Boolean(activeEvent) &&
+    !isCheckingEvent &&
     checkedInCount >= 4 &&
     remainingPlayers === 0 &&
     !isGenerating &&
@@ -270,6 +306,21 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     ],
   );
 
+  useEffect(() => {
+    if (!returningEventId || isLoadingPlayers) return;
+    let cancelled = false;
+    void restoreEvent(returningEventId)
+      .catch(() => { if (!cancelled) setErrorMessage("Unable to restore the current round. Choose the session again from Leagues."); })
+      .finally(() => { if (!cancelled) setIsCheckingEvent(false); });
+    return () => { cancelled = true; };
+  }, [returningEventId, isLoadingPlayers, restoreEvent]);
+
+  function workspaceEvent(event: LeagueEventRecord): LeagueEventRecord {
+    if (!locked) return event;
+    const query = new URLSearchParams({ leagueId: initialLeagueId, seasonId: initialSeasonId, resume: event.id });
+    return { ...event, workspaceHref: `/admin?${query}` };
+  }
+
   const handleLeagueChange = useCallback(
     (leagueId: string) => {
       setSelectedLeagueId(leagueId);
@@ -298,15 +349,21 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   );
 
   function handleChooseSession(session: LeagueSessionOption | null) {
+    setSessionRoster([]);
+    setRosterReviewed(false);
     setSelectedSession(session);
     setEventDate(session?.date ?? getLocalDateValue());
     setSessionNumber(session?.number ?? 1);
     setSessionNote(session?.event?.session_note ?? "");
     setErrorMessage("");
+    if (locked && leagueContext && !isLoadingPlayers && session?.event && session.event.status !== "complete") {
+      void handleResumeLeagueNight(session.event);
+    }
   }
 
   useEffect(() => {
     if (
+      locked ||
       isLoadingPlayers ||
       runtimePlayerIdByDatabaseId.size === 0
     ) {
@@ -343,10 +400,10 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     return () => {
       cancelled = true;
     };
-  }, [isLoadingPlayers, runtimePlayerIdByDatabaseId, activeSeasonFilter]);
+  }, [isLoadingPlayers, runtimePlayerIdByDatabaseId, activeSeasonFilter, locked]);
 
   useEffect(() => {
-    if (!selectedSeasonId || !eventDate || activeEvent || selectedSession) {
+    if (!selectedSeasonId || !eventDate || activeEvent || selectedSession || locked) {
       setIsCalculatingSession(false);
       return;
     }
@@ -396,9 +453,9 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     return () => {
       cancelled = true;
     };
-  }, [selectedSeasonId, eventDate, activeEvent, selectedSession]);
+  }, [selectedSeasonId, eventDate, activeEvent, selectedSession, locked]);
 
-  async function handleResumeLeagueNight(session: LeagueEventRecord | null = availableActiveEvent) {
+  async function handleResumeLeagueNight(session: LeagueEventRecord | null = availableActiveEvent, preserveRoster = false) {
     if (!session || session.status === "complete") {
       return;
     }
@@ -408,7 +465,13 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       setErrorMessage("");
       setSuccessMessage("");
 
-      setActiveEvent(session);
+      if (locked && session.id !== runningEvent?.id && !preserveRoster) {
+        setPlayers((current) => current.map(resetPlayerForSetup));
+        setSessionRoster([]);
+        setRosterReviewed(false);
+      }
+      setActiveEvent(workspaceEvent(session));
+      setOpenedEventId(session.id);
       setSelectedSeasonId(session.season_id);
       setEventDate(session.event_date);
       setSessionNumber(
@@ -421,6 +484,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       await restoreEvent(session.id);
     } catch (error) {
       setActiveEvent(null);
+      setOpenedEventId("");
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -470,7 +534,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   }, [activeEvent, roundSaved]);
 
   async function handleStartLeagueNight() {
-    if (!selectedSeasonId || isStartingEvent) {
+    if (!selectedSeasonId || isStartingEvent || rosterBusy || (locked && !leagueContext)) {
       return;
     }
 
@@ -484,6 +548,9 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
         eventDate,
         sessionNumber,
         sessionNote,
+        name: leagueContext
+          ? `${leagueContext.name} · ${eventDate} · Session ${sessionNumber}${sessionNote.trim() ? ` · ${sessionNote.trim()}` : ""}`
+          : undefined,
       });
 
       if (event.status === "complete") {
@@ -493,15 +560,18 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       }
 
       if (existing) {
-        await handleResumeLeagueNight(event);
+        await handleResumeLeagueNight(event, locked && rosterReviewed);
+        if (locked && rosterReviewed) prepareCheckIn(sessionRoster, true);
         return;
       }
 
-      setActiveEvent(event);
+      setActiveEvent(workspaceEvent(event));
+      setOpenedEventId(event.id);
       setAvailableActiveEvent(event);
       setPlayers((currentPlayers) =>
         currentPlayers.map(resetPlayerForSetup),
       );
+      if (locked && rosterReviewed) prepareCheckIn(sessionRoster, true);
       clearRoundState();
 
       setSuccessMessage(
@@ -515,6 +585,21 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
       );
     } finally {
       setIsStartingEvent(false);
+    }
+  }
+
+  function applySessionRoster(rows: AppliedRow[], replace: boolean) {
+    const selected = rows.filter(({ player }) => player);
+    setSessionRoster((current) => {
+      if (replace) return selected;
+      const byPlayer = new Map(current.map((row) => [row.player?.id, row]));
+      for (const row of selected) byPlayer.set(row.player?.id, row);
+      return [...byPlayer.values()];
+    });
+    setRosterReviewed(true);
+    if (activeEvent) {
+      if (replace && !selected.length) setPlayers((current) => current.map(resetPlayerForSetup));
+      else prepareCheckIn(selected, replace);
     }
   }
 
@@ -570,7 +655,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
   }
 
   async function handleGenerateFirstRound() {
-    if (!activeEvent || roundIsGenerated) {
+    if (!activeEvent || roundIsGenerated || rosterBusy || isCheckingEvent) {
       return;
     }
 
@@ -766,8 +851,11 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
 
   function handleStartNewLeagueNight() {
     resetLeague();
-    setSelectedLeagueId("");
-    setSelectedSeasonId("");
+    setSelectedLeagueId(initialLeagueId);
+    setSelectedSeasonId(initialSeasonId);
+    setSessionRoster([]);
+    setRosterReviewed(false);
+    setShowAllPlayers(false);
     setSelectedSession(null);
     setEventDate(getLocalDateValue());
     setSessionNumber(1);
@@ -780,10 +868,14 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
     setSuccessMessage("");
   }
 
+  if (frontDesk && !locked) {
+    return <AppLayout title="Leagues"><Link className="text-blue-300 underline" href="/leagues">Choose a league and season</Link></AppLayout>;
+  }
+
   if (showCompletionScreen) {
     return (
       <AppLayout
-        title="League Night Complete"
+        title={locked ? `${leagueContext?.name ?? "League"} · Session Complete` : "League Night Complete"}
         description="The completed event is saved in History and the active session has been cleared."
       >
         <div className="mx-auto max-w-5xl space-y-6">
@@ -798,13 +890,14 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
 
   return (
     <AppLayout
-      title="Admin Dashboard"
-      description="Start a session, check players in, and run the ladder."
+      title={locked ? leagueContext?.name ?? "League Session" : "Admin Dashboard"}
+      description={locked ? leagueContext?.season : "Start a session, check players in, and run the ladder."}
+      headerAside={locked && <Link className="text-sm text-blue-300 underline" href="/leagues">All leagues</Link>}
     >
       <div className="mx-auto max-w-6xl">
         {!activeEvent && (
           <>
-            {isLoadingDashboard ? (
+            {!locked && (isLoadingDashboard ? (
               <div className="mb-6 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-blue-300">
                 Checking for an active league night...
               </div>
@@ -846,9 +939,16 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
                   </button>
                 </div>
               </section>
-            ) : null}
+            ) : null)}
 
             <LeagueNightSetup
+              leagueTitle={leagueContext?.season}
+              selectionLocked={locked}
+              rosterBusy={rosterBusy || (locked && !leagueContext)}
+              rosterUpload={locked && leagueContext && (
+                <SessionRosterUpload key={`${eventDate}:${sessionNumber}`} onApply={applySessionRoster}
+                  onBusyChange={setRosterBusy} disabled={isStartingEvent} />
+              )}
               selectedLeagueId={selectedLeagueId}
               selectedSeasonId={selectedSeasonId}
               eventDate={eventDate}
@@ -858,14 +958,14 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               errorMessage={errorMessage}
               onLeagueChange={handleLeagueChange}
               onSeasonChange={handleSeasonChange}
-              onEventDateChange={setEventDate}
-              onSessionNumberChange={setSessionNumber}
+              onEventDateChange={(date) => { setEventDate(date); setSessionRoster([]); setRosterReviewed(false); }}
+              onSessionNumberChange={(number) => { setSessionNumber(number); setSessionRoster([]); setRosterReviewed(false); }}
               onSessionNoteChange={setSessionNote}
               sessionNavigation={{
-                isCheckingSession: isCheckingEvent || isCalculatingSession,
+                isCheckingSession: isCheckingEvent || isCalculatingSession || (locked && (!leagueContext || isLoadingPlayers)),
                 selectedSession,
                 onChooseSession: handleChooseSession,
-                onResumeSession: (session) => void handleResumeLeagueNight(session),
+                onResumeSession: (session) => { if (!locked || leagueContext) void handleResumeLeagueNight(session); },
               }}
               onStartLeagueNight={() =>
                 void handleStartLeagueNight()
@@ -882,8 +982,18 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
 
         {activeEvent && (
           <>
+            {!roundIsGenerated && !isCheckingEvent && locked && (
+              <div className="mb-5 no-print">
+                <SessionRosterUpload onApply={applySessionRoster} onBusyChange={setRosterBusy} disabled={isGenerating || isCheckingEvent} />
+                <button type="button" className="mt-3 text-sm text-blue-300 underline" onClick={() => setShowAllPlayers((value) => !value)}>
+                  {showAllPlayers ? "Show roster only" : "Find a saved player"}
+                </button>
+              </div>
+            )}
+
             <ActiveLeagueCard
               event={activeEvent}
+              leagueTitle={locked ? leagueContext?.name : undefined}
               currentRound={currentRound}
               roundIsGenerated={roundIsGenerated}
             />
@@ -900,14 +1010,17 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               </div>
             )}
 
-            <PlayerCheckIn
+            {!roundIsGenerated && !isCheckingEvent && <PlayerCheckIn
               players={players}
+              rosterOnly={locked && !showAllPlayers}
+              rosterPlayerIds={new Set(sessionRoster.flatMap(({ player }) => player ? [player.id] : []))}
+              playerDatabaseIds={playerDatabaseIds}
               currentRound={currentRound}
               roundIsGenerated={roundIsGenerated}
               isLoadingPlayers={isLoadingPlayers}
               playerLoadError={playerLoadError}
               canGenerateFirstRound={
-                canGenerateFirstRound
+                canGenerateFirstRound && !rosterBusy
               }
               isGenerating={isGenerating}
               onTogglePlayer={togglePlayerCheckIn}
@@ -916,10 +1029,11 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
               }
               onMovePlayer={movePlayerInSetup}
               onRatingChange={updatePlayerRatingForTonight}
-            />
+            />}
 
             {roundIsGenerated && (
               <div className="mt-8">
+                <LeagueTvControls eventId={activeEvent.id} />
                 <RoundControls
                   currentRound={currentRound}
                   roundComplete={roundComplete}
@@ -939,12 +1053,13 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
 
                 <CourtAssignments
                   courts={courts}
+                  eventId={activeEvent.id}
                   currentRound={currentRound}
                 />
               </div>
             )}
 
-            <section className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/5 p-5">
+            {frontDesk === false && <section className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/5 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">
                 Session Controls
               </p>
@@ -972,7 +1087,7 @@ function LeagueNight({ initialLeagueId, initialSeasonId }: { initialLeagueId: st
                     : "Delete Session"}
                 </button>
               </div>
-            </section>
+            </section>}
           </>
         )}
       </div>

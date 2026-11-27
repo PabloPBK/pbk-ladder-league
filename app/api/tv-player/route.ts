@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getTVDatabase } from "@/lib/server/tv-database";
+import { getLeagueTvOverride, leagueTvRevision } from "@/lib/server/league-tv";
 import { buildRoundOneCourtSlide, isLiveRosterSlideType, roundOneSlideType } from "@/lib/data/tv-roster-slides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function getTVDatabase() {
-  const url = process.env.TV_SUPABASE_URL;
-  const key = process.env.TV_SUPABASE_SECRET_KEY;
-
-  if (!url || !key) {
-    throw new Error("TV_DATABASE_NOT_CONFIGURED");
-  }
-
-  return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
 
 type TVDatabase = ReturnType<typeof getTVDatabase>;
 
@@ -420,10 +405,11 @@ export async function GET(
       );
     }
 
+    const leagueSession = await getLeagueTvOverride(screen.id);
     const screenSettings = {
       id: screen.id,
       name: screen.name,
-      revision: screen.updated_at ?? null,
+      revision: leagueTvRevision(screen.updated_at ?? null, leagueSession),
 
       display_mode:
         screen.display_mode === "single"
@@ -442,6 +428,8 @@ export async function GET(
           ? screen.slide_duration
           : 10,
     };
+
+    if (leagueSession) return jsonResponse({ screen: screenSettings, leagueSession, presentation: null, slides: [] });
 
     if (!screen.presentation_id) {
       return jsonResponse({

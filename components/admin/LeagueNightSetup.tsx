@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { LeagueSeasonSelector } from "@/components/league-selectors/LeagueSeasonSelector";
 import type { LeagueEventRecord } from "@/lib/data/events";
 import { leagueDate } from "@/lib/data/league-listings";
 import type { LeagueSessionOption } from "@/lib/data/league-session-schedule";
 
 type LeagueNightSetupProps = {
+  leagueTitle?: string;
+  selectionLocked?: boolean;
+  rosterUpload?: ReactNode;
+  rosterBusy?: boolean;
   selectedLeagueId: string;
   selectedSeasonId: string;
   eventDate: string;
@@ -35,6 +39,7 @@ type LeagueNightSetupProps = {
 };
 
 export function LeagueNightSetup({
+  leagueTitle, selectionLocked, rosterUpload, rosterBusy,
   selectedLeagueId,
   selectedSeasonId,
   eventDate,
@@ -92,32 +97,27 @@ export function LeagueNightSetup({
     Number.isInteger(sessionNumber) &&
     sessionNumber >= 1 &&
     !isStarting &&
-    !isCheckingSession;
+    !isCheckingSession && !rosterBusy;
 
   return (
     <section className="mb-8 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
       <header className="border-b border-zinc-800 px-5 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">
-          League-night setup
-        </p>
-
         <h2 className="mt-1 text-2xl font-bold text-white">
-          Start a League Night
+          {selectionLocked ? "Session setup" : "Start a League Night"}
         </h2>
 
         <p className="mt-1 text-sm text-zinc-400">
-          Choose the league, season, date, and
-          session before checking players in.
+          {selectionLocked ? leagueTitle : "Choose the league, season, date, and session before checking players in."}
         </p>
       </header>
 
       <div className="p-5">
-        <LeagueSeasonSelector
+        {!selectionLocked && <LeagueSeasonSelector
           selectedLeagueId={selectedLeagueId}
           selectedSeasonId={selectedSeasonId}
           onLeagueChange={onLeagueChange}
           onSeasonChange={onSeasonChange}
-        />
+        />}
 
         {loadingSchedule && <p role="status" className="mt-5 text-sm text-zinc-400">Loading session dates…</p>}
         {seasonSchedule?.error && <p role="alert" className="mt-5 text-sm text-amber-300">{seasonSchedule.error}</p>}
@@ -132,7 +132,7 @@ export function LeagueNightSetup({
                 setManualSeasonId(value === "manual" ? selectedSeasonId : "");
                 onChooseSession?.(sessions.find(({ key }) => key === value) ?? null);
               }}
-              disabled={isStarting || isCheckingSession}
+              disabled={isStarting || isCheckingSession || rosterBusy}
               className="min-h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-white outline-none focus:border-blue-500"
             >
               <option value="">Choose a session date</option>
@@ -157,6 +157,7 @@ export function LeagueNightSetup({
             <input
               type="date"
               value={eventDate}
+              disabled={isStarting || rosterBusy}
               onChange={(event) =>
                 onEventDateChange(
                   event.target.value,
@@ -173,6 +174,7 @@ export function LeagueNightSetup({
 
             <input
               type="number"
+              disabled={isStarting || rosterBusy}
               min="1"
               step="1"
               value={sessionNumber}
@@ -196,6 +198,7 @@ export function LeagueNightSetup({
 
         {!booked && !loadingSchedule && (manual || selectedSession) && (
         <>
+        {rosterUpload}
         <label className="mt-4 block">
           <span className="mb-2 block text-sm font-semibold text-zinc-300">
             Session Note
@@ -248,7 +251,7 @@ export function LeagueNightSetup({
             View session results
           </Link>
         ) : booked ? (
-          <button type="button" disabled={isCheckingSession} onClick={() => onResumeSession?.(booked)}
+          <button type="button" disabled={isCheckingSession || rosterBusy} onClick={() => onResumeSession?.(booked)}
             className="mt-5 min-h-12 rounded-xl bg-green-600 px-6 font-bold text-white hover:bg-green-500 disabled:opacity-50">
             {isCheckingSession ? "Opening session…" : "Resume selected session"}
           </button>

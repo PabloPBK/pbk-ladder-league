@@ -45,6 +45,7 @@ type Slide = {
 };
 
 type PlayerData = {
+  leagueSession?: { eventId: string; mode: "courts" | "standings" };
   screen: {
     id: string;
     name: string;
@@ -553,7 +554,6 @@ const isPublicDisplay = Boolean(publicShortCode);
       if (cancelled || inFlight) return;
       const current = playerRef.current;
       if (!current) return;
-      if (current.slides.some(slide => isLiveRosterSlideType(slide.media_type))) return;
       try {
         const query = publicShortCode
           ? new URLSearchParams({short_code: publicShortCode})
@@ -561,9 +561,7 @@ const isPublicDisplay = Boolean(publicShortCode);
         const response = await fetch(`/api/tv-refresh?${query.toString()}`, {cache:"no-store"});
         if (!response.ok) return;
         const result = await response.json();
-        if (lastRevision === null) { lastRevision = result.revision; return; }
         if (lastRevision !== result.revision) {
-          lastRevision = result.revision;
           await loadPlayer();
         }
       } catch { /* Daily fallback still refreshes the presentation. */ }
@@ -640,7 +638,13 @@ const isPublicDisplay = Boolean(publicShortCode);
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-black text-white">
-      {player && (isSeasonStandings || isDailyStandings) ? (
+      {player?.leagueSession ? (
+        <iframe
+          src={`/tv/session/${encodeURIComponent(player.leagueSession.eventId)}?view=${player.leagueSession.mode}`}
+          title={player.leagueSession.mode === "courts" ? "Court Assignments" : "Session Live Standings"}
+          className="h-full w-full border-0"
+        />
+      ) : player && (isSeasonStandings || isDailyStandings) ? (
         <iframe
           src={isSeasonStandings ? "/display" : "/tv"}
           title={isSeasonStandings ? "DUPR Season Standings" : "Daily DUPR Standings"}

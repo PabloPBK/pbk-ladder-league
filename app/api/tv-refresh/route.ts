@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getTVDatabase } from "@/lib/server/tv-database";
+import { getLeagueTvOverride, leagueTvRevision } from "@/lib/server/league-tv";
 import { requireStaffUser } from "@/lib/server/require-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function db() {
-  const url = process.env.TV_SUPABASE_URL;
-  const key = process.env.TV_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("TV_DATABASE_NOT_CONFIGURED");
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
 
 // Lightweight revision check. Does not load slides, images, or signed URLs.
 export async function GET(request: NextRequest) {
@@ -21,12 +15,13 @@ export async function GET(request: NextRequest) {
   if (code && !/^tv[a-z0-9]{1,30}$/.test(code)) return NextResponse.json({error:"Invalid TV address"},{status:400});
   if (!code && (!/^[0-9a-f-]{36}$/i.test(id ?? "") || !/^[0-9a-f-]{36}$/i.test(token ?? ""))) return NextResponse.json({error:"Invalid credentials"},{status:400});
   try {
-    let query = db().from("tv_screens").select("updated_at").eq("is_active",true);
+    let query = getTVDatabase().from("tv_screens").select("id, updated_at").eq("is_active",true);
     query = code ? query.eq("short_code",code) : query.eq("id",id!).eq("display_token",token!);
     const {data,error} = await query.maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({error:"TV not found"},{status:404});
-    return NextResponse.json({revision:data.updated_at},{headers:{"Cache-Control":"no-store"}});
+    const assignment = await getLeagueTvOverride(data.id);
+    return NextResponse.json({revision:leagueTvRevision(data.updated_at, assignment)},{headers:{"Cache-Control":"no-store"}});
   } catch {
     return NextResponse.json({error:"Unable to check TV updates"},{status:500});
   }
@@ -42,7 +37,7 @@ export async function POST(request: NextRequest) {
         (typeof screenId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(screenId))) {
       return NextResponse.json({error:"Invalid screen ID"},{status:400});
     }
-    let query = db().from("tv_screens").update({updated_at:new Date().toISOString()}).select("id");
+    let query = getTVDatabase().from("tv_screens").update({updated_at:new Date().toISOString()}).select("id");
     if (screenId) query = query.eq("id",screenId);
     const {data,error} = await query;
     if (error) throw error;

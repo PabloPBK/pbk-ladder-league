@@ -952,6 +952,7 @@ async function handleCompleteSession() {
   return (
     <AppLayout
       title={`Round ${viewedRoundNumber} Runner Mode`}
+      headerAside={<Link href={activeEvent.workspaceHref ?? "/admin"} className="text-sm text-blue-300 underline">Back to session</Link>}
       description="Choose Team 1, enter scores, and correct mistakes without leaving Runner."
     >
       <div className="mx-auto max-w-[1500px]">

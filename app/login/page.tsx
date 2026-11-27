@@ -3,6 +3,7 @@
 
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isFrontDesk } from "@/lib/data/operations-role";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -29,7 +30,7 @@ export default function LoginPage() {
 
       const supabase = createClient();
 
-      const { error } =
+      const { data, error } =
         await supabase.auth.signInWithPassword({
           email,
           password,
@@ -50,7 +51,7 @@ export default function LoginPage() {
         requestedPath.startsWith("/") &&
         !requestedPath.startsWith("//")
           ? requestedPath
-          : "/admin";
+          : isFrontDesk(data.user) ? "/" : "/admin";
 
       router.replace(nextPath);
       router.refresh();

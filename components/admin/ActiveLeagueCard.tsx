@@ -2,12 +2,14 @@ import type { LeagueEventRecord } from "@/lib/data/events";
 
 type ActiveLeagueCardProps = {
   event: LeagueEventRecord;
+  leagueTitle?: string;
   currentRound: number;
   roundIsGenerated: boolean;
 };
 
 export function ActiveLeagueCard({
   event,
+  leagueTitle,
   currentRound,
   roundIsGenerated,
 }: ActiveLeagueCardProps) {
@@ -18,7 +20,7 @@ export function ActiveLeagueCard({
       </p>
 
       <h2 className="mt-2 text-2xl font-bold text-white">
-        {event.name}
+        {leagueTitle ?? event.name}
       </h2>
 
       <div className="mt-3 grid gap-2 text-sm text-zinc-300 sm:grid-cols-2">
@@ -40,17 +42,13 @@ export function ActiveLeagueCard({
         )}
       </div>
 
-      <p className="mt-3 break-all text-xs text-zinc-500">
-        Event ID: {event.id}
-      </p>
-
       {roundIsGenerated ? (
         <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-3 font-semibold text-green-300">
-          Round {currentRound} is saved in Supabase.
+          Round {currentRound} is ready.
         </div>
       ) : (
         <div className="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 font-semibold text-yellow-300">
-          League night started. Check players in and generate Round 1.
+          Check players in and generate Round 1.
         </div>
       )}
     </section>

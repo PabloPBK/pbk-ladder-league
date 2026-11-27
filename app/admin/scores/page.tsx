@@ -233,6 +233,7 @@ export default function ScoresPage() {
   return (
     <AppLayout
       title={`Match Center — Round ${roundNumber}`}
+      headerAside={<Link href={activeEvent.workspaceHref ?? "/admin"} className="text-sm text-blue-300 underline">Back to session</Link>}
       description="Compact score entry with live standings."
     >
       <div className="mx-auto max-w-[1500px]">

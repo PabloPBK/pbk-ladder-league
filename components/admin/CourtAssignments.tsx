@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 
 import type { GeneratedCourt } from "@/types/court";
@@ -5,11 +7,13 @@ import type { GeneratedCourt } from "@/types/court";
 type CourtAssignmentsProps = {
   courts: GeneratedCourt[];
   currentRound: number;
+  eventId: string;
 };
 
 export function CourtAssignments({
   courts,
   currentRound,
+  eventId,
 }: CourtAssignmentsProps) {
   if (courts.length === 0) {
     return null;
@@ -17,15 +21,25 @@ export function CourtAssignments({
 
   return (
     <section className="mt-8">
+      <section className="court-assignment-print hidden print:block">
+        <h1>Round {currentRound} Court Assignments</h1>
+        <p>{courts.length} courts</p>
+        <div className="print-court-grid">
+          {courts.map((court) => (
+            <div key={court.id} className="print-court-card">
+              <h2>Court {court.id}</h2>
+              <ol>{court.players.map((player) => <li key={player.id}><strong>{player.name}</strong></li>)}</ol>
+            </div>
+          ))}
+        </div>
+      </section>
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">
             Round {currentRound} Court Assignments
           </h2>
 
-          <p className="mt-1 text-sm text-zinc-400">
-            Current assignments saved in Supabase.
-          </p>
+
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -43,19 +57,21 @@ export function CourtAssignments({
             Enter Round {currentRound} Scores
           </Link>
 
+          <button type="button" onClick={() => window.print()}
+            className="min-h-11 rounded-xl border border-zinc-600 px-5 py-2.5 text-sm font-bold hover:bg-zinc-800">
+            Print Court List
+          </button>
+
           <Link
-            href="/live"
+            href={`/tv/session/${eventId}?view=standings`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex min-h-11 items-center justify-center rounded-xl bg-zinc-800 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-zinc-700"
           >
             Live Standings
           </Link>
 
-          <Link
-            href="/tv"
-            className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-zinc-800"
-          >
-            Open TV
-          </Link>
+
         </div>
       </div>
 

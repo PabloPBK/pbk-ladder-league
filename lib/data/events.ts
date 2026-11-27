@@ -8,6 +8,7 @@ export type LeagueEventRecord = {
   session_number: number;
   session_note: string | null;
   created_at?: string;
+  workspaceHref?: string;
 };
 
 type CreateLeagueEventInput = {

@@ -89,6 +89,9 @@ type ReviewProps = {
   selectionError: string;
   canRefresh: boolean;
   retryOnly: boolean;
+  warnings?: Record<number, string[]>;
+  editedDuprIds?: Record<number, string>;
+  onEditDuprId?: (rowId: number, value: string) => void;
   onDecision: (rowId: number, decision: ImportDecision) => void;
   onClose: () => void;
   onRefresh: () => void;
@@ -105,6 +108,9 @@ export function PlayerImportReview({
   selectionError,
   canRefresh,
   retryOnly,
+  warnings,
+  editedDuprIds,
+  onEditDuprId,
   onDecision,
   onClose,
   onRefresh,
@@ -160,6 +166,15 @@ export function PlayerImportReview({
                 {messages[preview.reason]}{candidate && preview.status !== "conflict" && ` · ${candidate.name} (…${candidate.id.slice(-8)})`}
                 {preview.savesEmail && " · Save this email"}
               </p>
+              {warnings?.[row.rowId]?.map((warning) => <p key={warning} className="mt-1 text-sm font-semibold text-amber-300">{warning}</p>)}
+              {onEditDuprId && (
+                <label className="mt-2 block text-sm">
+                  DUPR ID for {row.name}
+                  <input value={editedDuprIds?.[row.rowId] ?? row.duprId ?? ""} maxLength={64}
+                    onChange={(event) => onEditDuprId(row.rowId, event.target.value)}
+                    className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1" />
+                </label>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {preview.status === "match" && candidate && decision?.action !== "match" && (
                   <button type="button" className={buttonStyle} onClick={() => choose({ action: "match", playerId: candidate.id })}>Use match</button>

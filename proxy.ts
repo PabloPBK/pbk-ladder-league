@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isFrontDesk, isFrontDeskApi, isFrontDeskWorkspace } from "@/lib/data/operations-role";
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -49,7 +50,8 @@ export async function proxy(request: NextRequest) {
   const protectedRoute =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/walking") ||
-    pathname.startsWith("/setup");
+    pathname.startsWith("/setup") ||
+    pathname === "/leagues";
 
   if (protectedRoute && !user) {
     const loginUrl =
@@ -67,6 +69,15 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  if (isFrontDesk(user)) {
+    if (pathname.startsWith("/api/") && !isFrontDeskApi(pathname, request.method)) {
+      return NextResponse.json({ error: "This tool is outside your league workspace." }, { status: 403 });
+    }
+    if (protectedRoute && !isFrontDeskWorkspace(pathname)) {
+      return NextResponse.redirect(new URL("/leagues", request.url));
+    }
+  }
+
   /*
    * If someone is already logged in and
    * visits /login, send them to Admin.
@@ -78,7 +89,7 @@ export async function proxy(request: NextRequest) {
     const adminUrl =
       request.nextUrl.clone();
 
-    adminUrl.pathname = "/admin";
+    adminUrl.pathname = isFrontDesk(user) ? "/" : "/admin";
     adminUrl.search = "";
 
     return NextResponse.redirect(

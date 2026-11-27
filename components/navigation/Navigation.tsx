@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LeagueMenu } from "./LeagueMenu";
+import { useFrontDesk } from "@/components/auth/useFrontDesk";
 import { rosterWorkspace } from "@/lib/data/league-directory";
 
 type NavLink = {
@@ -37,14 +37,7 @@ const groups: NavGroup[] = [
     id: "league",
     label: "League Management",
     icon: "🏆",
-    links: [
-      { href: "/admin/players", label: "Import Players", icon: "👥" },
-      { href: "/walking", label: "Score Management", icon: "🏃" },
-      { href: "/tv", label: "Today's Standings", icon: "📺" },
-      { href: "/display", label: "Season Standings", icon: "🏆" },
-      { href: "/stats", label: "Stats", icon: "📈" },
-      { href: "/history", label: "History", icon: "📚" },
-    ],
+    links: [],
   },
   {
     id: "facility",
@@ -162,7 +155,7 @@ function isActive(pathname: string, href: string) {
 
 function activeGroup(pathname: string) {
   if (pathname === "/admin/revenue") return "administration";
-  if (pathname === "/admin" || pathname === rosterWorkspace || pathname === "/admin/leagues/new") return "league";
+  if (pathname === "/leagues" || pathname === "/admin" || pathname === rosterWorkspace || pathname === "/admin/leagues/new") return "league";
 
   const matches = groups.flatMap((group) =>
     group.links
@@ -181,6 +174,7 @@ function activeGroup(pathname: string) {
 export function Navigation() {
   const pathname = usePathname();
   const currentGroup = activeGroup(pathname);
+  const frontDesk = useFrontDesk();
 
   const [expanded, setExpanded] = useState<string[]>([currentGroup]);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -188,7 +182,7 @@ export function Navigation() {
   const administrationOpen = expanded.includes("administration");
 
   useEffect(() => {
-    if (!administrationOpen) return;
+    if (!administrationOpen || frontDesk !== false) return;
     const abort = new AbortController();
     void fetch("/api/league-revenue/access", { cache: "no-store", signal: abort.signal })
       .then((response) => {
@@ -196,7 +190,7 @@ export function Navigation() {
       })
       .catch(() => {});
     return () => abort.abort();
-  }, [administrationOpen]);
+  }, [administrationOpen, frontDesk]);
 
   useEffect(() => {
     setExpanded((previous) =>
@@ -217,7 +211,14 @@ export function Navigation() {
   }
 
   function renderGroups() {
-    return groups.map((group) => {
+    return (frontDesk === false ? groups : groups.filter(({ id }) => id === "league")).map((group) => {
+      if (group.id === "league") return (
+        <Link key={group.id} href="/leagues" onClick={() => setMobileOpen(false)}
+          aria-current={pathname === "/leagues" ? "page" : undefined}
+          className="mb-2 block rounded-xl px-3 py-3 text-sm font-bold text-zinc-200 hover:bg-zinc-800">
+          Leagues
+        </Link>
+      );
       const open = expanded.includes(group.id);
       const selected = currentGroup === group.id;
 
@@ -249,7 +250,6 @@ export function Navigation() {
               id={`nav-group-${group.id}`}
               className="mt-1 space-y-1 pl-2"
             >
-              {group.id === "league" && <LeagueMenu onNavigate={() => setMobileOpen(false)} />}
               {group.id === "administration" && revenueAllowed && (
                 <Link href="/admin/revenue" aria-current={pathname === "/admin/revenue" ? "page" : undefined}
                   onClick={() => setMobileOpen(false)}

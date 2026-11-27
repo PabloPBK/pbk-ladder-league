@@ -2,6 +2,9 @@ import type { Player } from "@/types/player";
 
 type PlayerCheckInProps = {
   players: Player[];
+  rosterOnly?: boolean;
+  rosterPlayerIds?: Set<string>;
+  playerDatabaseIds?: Record<number, string>;
   currentRound: number;
   roundIsGenerated: boolean;
   isLoadingPlayers: boolean;
@@ -16,6 +19,7 @@ type PlayerCheckInProps = {
 
 export function PlayerCheckIn({
   players,
+  rosterOnly, rosterPlayerIds, playerDatabaseIds,
   currentRound,
   roundIsGenerated,
   isLoadingPlayers,
@@ -55,8 +59,9 @@ export function PlayerCheckIn({
       </section>
 
       <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 no-print">
-        {players.map((player, index) => (
-          <article key={player.id} className={`rounded-xl border p-4 ${player.checkedIn ? "border-green-500/50 bg-green-500/10" : "border-zinc-800 bg-zinc-900"}`}>
+        {players.map((player, index) => {
+          if (rosterOnly && !player.checkedIn && !rosterPlayerIds?.has(playerDatabaseIds?.[player.id] ?? "")) return null;
+          return <article key={player.id} className={`rounded-xl border p-4 ${player.checkedIn ? "border-green-500/50 bg-green-500/10" : "border-zinc-800 bg-zinc-900"}`}>
             <div className="flex items-start justify-between gap-3">
               <button type="button" disabled={roundIsGenerated} onClick={() => onTogglePlayer(player.id)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
                 <h3 className="truncate font-semibold text-white">{player.name}</h3>
@@ -80,8 +85,8 @@ export function PlayerCheckIn({
                 </div>
               </div>
             )}
-          </article>
-        ))}
+          </article>;
+        })}
       </section>
 
       <section className="court-assignment-print hidden print:block">
